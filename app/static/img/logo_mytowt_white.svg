@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50" fill="none">
+  <!-- Sailboat icon compact -->
+  <g transform="translate(5, 3)">
+    <!-- Hull -->
+    <path d="M8 35 L13 42 L33 42 L38 35 Z" fill="white" opacity="0.9"/>
+    <!-- Main sail -->
+    <path d="M22 5 L22 33 L10 33 Z" fill="#87BD2B" opacity="0.9"/>
+    <!-- Jib sail -->
+    <path d="M24 9 L24 31 L36 31 Z" fill="white" opacity="0.6"/>
+    <!-- Mast -->
+    <line x1="23" y1="4" x2="23" y2="35" stroke="white" stroke-width="1.2"/>
+    <!-- Gear (small) -->
+    <g transform="translate(34, 22) scale(0.28)" fill="white" opacity="0.7">
+      <path d="M12 0L14.5 2.5L18 1.5L19.5 5L23 5.5L22.5 9L26 11L24.5 14L27 17L24 19L25 22.5L21.5 23.5L21 27L17.5 26L15 28.5L12 26.5L9 28.5L6.5 26L3 27L2.5 23.5L-1 22.5L0 19L-3 17L-0.5 14L-2 11L1.5 9L1 5.5L4.5 5L6 1.5L9.5 2.5Z"/>
+      <circle cx="12" cy="14" r="6.5" fill="#095561"/>
+    </g>
+    <!-- Wave -->
+    <path d="M4 44 Q12 40 20 44 Q28 48 36 44 Q44 40 46 42" fill="none" stroke="white" stroke-width="0.8" opacity="0.3"/>
+  </g>
+
+  <!-- "my_" light -->
+  <text x="52" y="28" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="300" fill="#87BD2B" letter-spacing="0.5">my</text>
+  <text x="76" y="28" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="300" fill="#87BD2B" opacity="0.4">_</text>
+
+  <!-- "TOWT" bold white -->
+  <text x="86" y="28" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="700" fill="white" letter-spacing="1.5">TOWT</text>
+
+  <!-- Subtitle -->
+  <text x="52" y="42" font-family="'Segoe UI', Arial, sans-serif" font-size="7" font-weight="400" fill="white" opacity="0.45" letter-spacing="3">OPERATIONS PLATFORM</text>
+</svg>

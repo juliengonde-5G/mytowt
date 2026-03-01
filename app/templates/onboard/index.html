@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+{% block title %}my_TOWT — On Board{% endblock %}
+{% block page_title %}🚢 On Board{% if vessel_obj %} — {{ vessel_obj.name }}{% endif %}{% endblock %}
+
+{% block topbar_actions %}
+{% if current_leg %}
+<a href="/escale?vessel={{ selected_vessel }}&leg_id={{ current_leg.id }}" class="btn btn-secondary btn-sm"><i data-lucide="anchor"></i> Escale</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- VESSEL SELECTOR -->
+<div class="ob-vessel-bar">
+    {% for v in vessels %}
+    <a href="/onboard?vessel={{ v.code }}" class="ob-vessel-pill {% if selected_vessel == v.code %}active{% endif %}">
+        <i data-lucide="ship" style="width:14px;height:14px;"></i> {{ v.name }}
+    </a>
+    {% endfor %}
+</div>
+
+<!-- LEG SELECTOR -->
+{% if legs %}
+<div class="ob-leg-bar">
+    {% for l in legs %}
+    {% set is_current = current_leg and current_leg.id == l.id %}
+    {% set is_active_leg = l.ata and not l.atd %}
+    <a href="/onboard?vessel={{ selected_vessel }}&leg_id={{ l.id }}"
+       class="ob-leg-chip {% if is_current %}active{% endif %} {% if l.atd %}past{% endif %} {% if is_active_leg %}in-port{% endif %}">
+        <strong>{{ l.leg_code }}</strong>
+        <span>{{ l.departure_port.locode }} → {{ l.arrival_port.locode }}</span>
+        {% if is_active_leg %}<span class="ob-leg-live">● EN ESCALE</span>{% endif %}
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if not current_leg %}
+<div style="text-align:center;padding:60px;color:#888;font-size:14px;">Aucun leg sélectionné. Choisissez un navire et un leg ci-dessus.</div>
+{% else %}
+
+<!-- LEG HEADER -->
+<div class="ob-header">
+    <div class="ob-leg-info">
+        <h2>{{ current_leg.leg_code }}</h2>
+        <span>{{ current_leg.departure_port.country_code|flag }} {{ current_leg.departure_port.name }} → {{ current_leg.arrival_port.country_code|flag }} {{ current_leg.arrival_port.name }}</span>
+        <span class="ob-dates">ETD {{ current_leg.etd.strftime('%d/%m/%Y') if current_leg.etd else '—' }} · ETA {{ current_leg.eta.strftime('%d/%m/%Y') if current_leg.eta else '—' }}</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+        {% if last_sof %}
+        <div class="ob-last-sof">
+            <span class="ob-sof-label">Dernier SOF</span>
+            <strong>{{ last_sof.event_label }}</strong>
+            <span>{{ last_sof.event_date.strftime('%d/%m') if last_sof.event_date else '' }} {{ last_sof.event_time or '' }}</span>
+        </div>
+        {% endif %}
+        <a href="/escale?vessel={{ selected_vessel }}&leg_id={{ current_leg.id }}" class="ob-escale-btn">
+            <i data-lucide="anchor" style="width:16px;height:16px;"></i> Voir l'escale
+        </a>
+    </div>
+</div>
+
+<!-- NOTIFICATIONS -->
+{% set unread = notifications|selectattr('is_read', 'false')|list %}
+{% if unread|length > 0 %}
+<div class="ob-notif-zone">
+    <div class="ob-notif-header">
+        🔔 {{ unread|length }} notification{{ 's' if unread|length > 1 }}
+        <form method="POST" action="/onboard/notifications/dismiss-all" style="display:inline;">
+            <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
+            <button type="submit" class="btn btn-sm btn-secondary" style="font-size:10px;padding:3px 10px;">Tout marquer lu</button>
+        </form>
+    </div>
+    {% for n in unread[:10] %}
+    <div class="ob-notif-item ob-notif-{{ n.category }}">
+        <span class="ob-notif-cat">{{ n.category }}</span>
+        <strong>{{ n.title }}</strong>
+        {% if n.detail %}<span class="ob-notif-detail">{{ n.detail }}</span>{% endif %}
+        <span class="ob-notif-time">{{ n.created_at.strftime('%d/%m %H:%M') }}</span>
+        <button class="ob-notif-dismiss" hx-post="/onboard/notifications/{{ n.id }}/dismiss" hx-swap="outerHTML" hx-target="closest .ob-notif-item">✕</button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- SECTIONS GRID -->
+<div class="ob-grid">
+    <div class="ob-card">
+        <h3>👥 Équipage <span class="ob-badge">{{ crew_onboard|length }}</span></h3>
+        {% if crew_onboard %}
+        <table class="ob-table">
+            <thead><tr><th>Nom</th><th>Rôle</th><th>Embarqué</th></tr></thead>
+            <tbody>
+            {% for ca in crew_onboard %}
+            <tr>
+                <td><strong>{{ ca.member.full_name }}</strong></td>
+                <td><span class="role-badge role-{{ ca.member.role }}">{{ ca.member.role_label }}</span></td>
+                <td style="font-size:11px;color:#888;">{{ ca.embark_date.strftime('%d/%m/%Y') if ca.embark_date else '—' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="ob-empty">Aucun équipage assigné.</p>
+        {% endif %}
+    </div>
+
+    <div class="ob-card">
+        <h3>📦 Cargo <span class="ob-badge">{{ cargo_summary.get('orders', 0) }} cmd.</span></h3>
+        {% if cargo_summary.get('orders', 0) > 0 %}
+        <div class="ob-stats-grid">
+            <div class="ob-stat"><span class="ob-stat-val">{{ cargo_summary.palettes_ordered }}</span><span class="ob-stat-lbl">Pal. cmdées</span></div>
+            <div class="ob-stat"><span class="ob-stat-val">{{ cargo_summary.palettes_batches }}</span><span class="ob-stat-lbl">Pal. batchs</span></div>
+            <div class="ob-stat"><span class="ob-stat-val">{{ "%.0f"|format(cargo_summary.weight_kg) }} kg</span><span class="ob-stat-lbl">Poids total</span></div>
+            <div class="ob-stat"><span class="ob-stat-val">{{ cargo_summary.batches_count }}</span><span class="ob-stat-lbl">Batchs</span></div>
+        </div>
+        {% if cargo_summary.goods_types %}
+        <div style="margin-top:8px;font-size:11px;color:#666;"><strong>Nature :</strong> {{ cargo_summary.goods_types|join(', ') }}</div>
+        {% endif %}
+        {% else %}
+        <p class="ob-empty">Aucune commande assignée.</p>
+        {% endif %}
+    </div>
+
+    <div class="ob-card ob-card-pax">
+        {% set all_pax = [] %}
+        {% for b in pax_bookings %}{% for p in b.passengers %}{% if all_pax.append(p) %}{% endif %}{% endfor %}{% endfor %}
+        <h3>🧳 Passagers <span class="ob-badge">{{ all_pax|length }}</span></h3>
+        {% if pax_bookings %}
+
+        <!-- Cabin overview -->
+        <div class="ob-cabin-grid">
+            {% for cab_num in [1,2,3,4] %}
+            {% set cab_bookings = pax_bookings|selectattr('cabin_number','equalto',cab_num)|list %}
+            <div class="ob-cabin {% if cab_bookings %}occupied{% endif %}">
+                <div class="ob-cabin-hdr">
+                    <strong>Cab. {{ cab_num }}</strong>
+                    <span>{{ '🛏️ Double' if cab_num <= 2 else '🛏️ Jumeaux' }}</span>
+                </div>
+                {% for b in cab_bookings %}
+                {% for p in b.passengers %}
+                <div class="ob-cabin-pax">
+                    <span>{{ p.full_name }}</span>
+                    <span class="ob-pax-nat">{{ p.nationality or '' }}</span>
+                </div>
+                {% endfor %}
+                {% endfor %}
+                {% if not cab_bookings %}
+                <div class="ob-cabin-pax empty">— Libre —</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Passenger list with doc status -->
+        <table class="ob-table" style="margin-top:12px;">
+            <thead><tr><th>Passager</th><th>Cab.</th><th>Passeport</th><th>Documents</th><th>Statut</th></tr></thead>
+            <tbody>
+            {% for b in pax_bookings %}
+            {% for p in b.passengers %}
+            {% set docs_total = p.documents|length %}
+            {% set docs_ok = p.documents|selectattr('status','equalto','validated')|list|length %}
+            {% set docs_missing = p.documents|selectattr('status','equalto','missing')|list|length %}
+            <tr>
+                <td>
+                    <strong>{{ p.full_name }}</strong>
+                    <br><span style="font-size:10px;color:#888;">{{ p.nationality or '' }} {% if p.date_of_birth %}· {{ p.date_of_birth.strftime('%d/%m/%Y') }}{% endif %}</span>
+                </td>
+                <td><span class="cabin-badge cabin-{{ b.cabin_number }}">{{ b.cabin_number }}</span></td>
+                <td style="font-family:monospace;font-size:11px;">{{ p.passport_number or '—' }}</td>
+                <td>
+                    {% if docs_total > 0 %}
+                    <div class="ob-doc-bar">
+                        <div class="ob-doc-fill" style="width:{{ (docs_ok / docs_total * 100)|int }}%"></div>
+                    </div>
+                    <span style="font-size:10px;color:#888;">{{ docs_ok }}/{{ docs_total }}</span>
+                    {% if docs_missing > 0 %}<span style="font-size:10px;color:#D97706;"> · {{ docs_missing }} manquant(s)</span>{% endif %}
+                    {% endif %}
+                </td>
+                <td><span class="status-pill st-{{ b.status }}">{{ b.status }}</span></td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Emergency contacts -->
+        <details style="margin-top:10px;">
+            <summary style="cursor:pointer;font-size:11px;font-weight:600;color:#888;">🆘 Contacts d'urgence</summary>
+            <div style="margin-top:6px;">
+            {% for b in pax_bookings %}
+            {% for p in b.passengers %}
+            {% if p.emergency_contact_name %}
+            <div style="font-size:11px;padding:4px 0;border-bottom:1px solid #f5f5f5;">
+                <strong>{{ p.full_name }}</strong> → {{ p.emergency_contact_name }} · {{ p.emergency_contact_phone or '—' }}
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% endfor %}
+            </div>
+        </details>
+
+        {% else %}
+        <p class="ob-empty">Aucun passager pour cette traversée.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- SOF -->
+<div class="ob-section" id="sof">
+    <div class="ob-section-header">
+        <h3>📋 Statement of Facts (SOF)</h3>
+        <div style="display:flex;gap:6px;">
+            <a href="/onboard/sof/{{ current_leg.id }}/excel" class="btn btn-secondary btn-sm"><i data-lucide="file-spreadsheet"></i> Excel</a>
+            <a href="/onboard/sof/{{ current_leg.id }}/pdf" class="btn btn-secondary btn-sm"><i data-lucide="file-text"></i> PDF</a>
+        </div>
+    </div>
+
+    {% if sof_events %}
+    <table class="ob-table sof-table">
+        <thead><tr><th style="width:40%;">Événement</th><th>Date</th><th>Heure (LT)</th><th>Remarques</th><th></th></tr></thead>
+        <tbody>
+        {% for evt in sof_events %}
+        <tr>
+            <td><strong>{{ evt.event_label }}</strong></td>
+            <td>{{ evt.event_date.strftime('%d/%m/%Y') if evt.event_date else '' }}</td>
+            <td>{{ evt.event_time or '' }}</td>
+            <td style="font-size:11px;color:#666;">{{ evt.remarks or '' }}</td>
+            <td style="white-space:nowrap;">
+                <button class="btn-icon" hx-delete="/onboard/sof/{{ evt.id }}" hx-confirm="Supprimer ?" hx-target="closest tr" hx-swap="outerHTML"><i data-lucide="trash-2" style="width:14px;height:14px;color:#dc2626;"></i></button>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="ob-empty">Aucun événement SOF enregistré.</p>
+    {% endif %}
+
+    <form method="POST" action="/onboard/sof/add" class="sof-add-form">
+        <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
+        <div class="sof-add-grid">
+            <select name="event_type" id="sof-type" required onchange="var o=this.options[this.selectedIndex]; document.getElementById('sof-label').value=o.text;">
+                <option value="">— Événement —</option>
+                <optgroup label="🚢 Navigation & Pilotage">
+                {% for code, label in sof_event_types %}
+                {% if code in ('EOSP','SOSP','FREE_PRATIQUE','NOR_RETENDERED','PILOT_ONBOARD','PILOT_OFF','TUG_FAST','TUG_CAST_OFF','TUG_FREE','FIRST_LINE','ALL_FAST','COMMENCE_UNMOORING','ALL_CLEAR','ANCHORED','ANCHOR_AWEIGH','GANGWAY_RIGGED') %}
+                <option value="{{ code }}">{{ label }}</option>
+                {% endif %}
+                {% endfor %}
+                </optgroup>
+                <optgroup label="📦 Cargo Operations">
+                {% for code, label in sof_event_types %}
+                {% if code in ('HOLDS_INSPECTION','HATCH_OPEN_CLOSE','COMMENCE_LOADING','COMPLETED_LOADING','LOADING_SUSPENDED','LOADING_RESUMED') %}
+                <option value="{{ code }}">{{ label }}</option>
+                {% endif %}
+                {% endfor %}
+                </optgroup>
+                <optgroup label="🧳 Passenger Operations">
+                {% for code, label in sof_event_types %}
+                {% if code in ('PAX_EMBARK','PAX_DISEMBARK','PAX_SAFETY_DRILL','PAX_MUSTER') %}
+                <option value="{{ code }}">{{ label }}</option>
+                {% endif %}
+                {% endfor %}
+                </optgroup>
+                <option value="CUSTOM">Autre (texte libre)</option>
+            </select>
+            <input type="text" name="event_label" id="sof-label" placeholder="Libellé (auto ou libre)">
+            <input type="date" name="event_date" id="sof-date">
+            <input type="time" name="event_time" id="sof-time">
+            <input type="text" name="remarks" placeholder="Remarques">
+            <button type="submit" class="btn btn-primary btn-sm">＋</button>
+        </div>
+    </form>
+</div>
+
+<!-- DOCUMENTS CARGO -->
+<div class="ob-section">
+    <div class="ob-section-header">
+        <h3>📄 Documents cargo</h3>
+    </div>
+    <div class="ob-doc-grid">
+        {% for code, label in cargo_doc_types %}
+        <a href="/onboard/doc/{{ current_leg.id }}/{{ code }}" class="ob-doc-btn">
+            <span class="ob-doc-icon">📄</span>
+            <span class="ob-doc-name">{{ label }}</span>
+            <span class="ob-doc-actions">
+                <i data-lucide="pencil" style="width:12px;height:12px;"></i>
+            </span>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+{% endif %}
+
+<style>
+    .ob-vessel-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;padding:6px;background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow)}
+    .ob-vessel-pill{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius);font-size:13px;font-weight:500;color:var(--towt-gray);text-decoration:none;border:1px solid transparent;transition:all 0.15s}
+    .ob-vessel-pill:hover{background:var(--towt-light);border-color:#ddd}
+    .ob-vessel-pill.active{background:var(--towt-blue);color:white;border-color:var(--towt-blue)}
+    .ob-leg-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;padding:6px;background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow-x:auto}
+    .ob-leg-chip{display:flex;flex-direction:column;padding:8px 14px;border-radius:var(--radius);font-size:11px;color:#555;text-decoration:none;border:1px solid #eee;transition:all 0.15s;min-width:100px}
+    .ob-leg-chip strong{font-size:12px;font-family:monospace;color:var(--towt-blue)}
+    .ob-leg-chip span{color:#888}
+    .ob-leg-chip:hover{border-color:var(--towt-blue);background:#f0f7f8}
+    .ob-leg-chip.active{background:var(--towt-blue);border-color:var(--towt-blue);color:white}
+    .ob-leg-chip.active strong,.ob-leg-chip.active span{color:white}
+    .ob-leg-chip.past{opacity:0.5}.ob-leg-chip.past:hover{opacity:0.8}
+    .ob-leg-chip.in-port{border-left:3px solid #87BD2B}
+    .ob-leg-live{font-size:9px;font-weight:700;color:#87BD2B}
+    .ob-leg-chip.active .ob-leg-live{color:#d4ff88}
+    .ob-header{display:flex;justify-content:space-between;align-items:center;background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px}
+    .ob-leg-info h2{margin:0;font-size:18px;color:var(--towt-blue);font-family:monospace}
+    .ob-leg-info span{font-size:13px;color:#555;display:block;margin-top:2px}.ob-dates{font-size:11px !important;color:#888 !important}
+    .ob-last-sof{text-align:right;font-size:12px;background:rgba(9,85,97,0.06);padding:10px 14px;border-radius:8px}
+    .ob-last-sof .ob-sof-label{font-size:10px;color:#888;text-transform:uppercase;display:block}
+    .ob-last-sof strong{color:var(--towt-blue);display:block}
+    .ob-escale-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;background:rgba(135,189,43,0.1);border:1px solid rgba(135,189,43,0.3);border-radius:8px;color:#5a8010;font-size:12px;font-weight:600;text-decoration:none}
+    .ob-escale-btn:hover{background:rgba(135,189,43,0.2)}
+    .ob-notif-zone{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:12px 16px;margin-bottom:16px;border-left:4px solid #F59E0B}
+    .ob-notif-header{font-size:13px;font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+    .ob-notif-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f5f5f5;font-size:12px;position:relative}
+    .ob-notif-cat{font-size:9px;padding:2px 6px;border-radius:100px;font-weight:600;text-transform:uppercase;flex-shrink:0}
+    .ob-notif-crew .ob-notif-cat{background:rgba(99,102,241,0.1);color:#6366F1}
+    .ob-notif-escale .ob-notif-cat{background:rgba(245,158,11,0.1);color:#D97706}
+    .ob-notif-cargo .ob-notif-cat{background:rgba(34,197,94,0.1);color:#16a34a}
+    .ob-notif-detail{color:#888;flex:1}.ob-notif-time{color:#aaa;font-size:10px;flex-shrink:0}
+    .ob-notif-dismiss{background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:2px 6px}.ob-notif-dismiss:hover{color:#dc2626}
+    .ob-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+    @media(max-width:1100px){.ob-grid{grid-template-columns:1fr}}
+    .ob-card{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px}
+    .ob-card h3{font-size:14px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+    .ob-card-muted{opacity:0.5}
+    .ob-card-pax{grid-column:1/-1}
+    .ob-cabin-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:4px}
+    @media(max-width:800px){.ob-cabin-grid{grid-template-columns:repeat(2,1fr)}}
+    .ob-cabin{border:1px solid #eee;border-radius:8px;padding:8px 10px;font-size:11px}
+    .ob-cabin.occupied{border-color:rgba(9,85,97,0.2);background:rgba(9,85,97,0.02)}
+    .ob-cabin-hdr{margin-bottom:4px}.ob-cabin-hdr strong{color:var(--towt-blue);font-size:12px}.ob-cabin-hdr span{font-size:10px;color:#888;display:block}
+    .ob-cabin-pax{padding:2px 0;display:flex;justify-content:space-between;align-items:center}
+    .ob-cabin-pax.empty{color:#ccc;font-style:italic}
+    .ob-pax-nat{font-size:9px;color:#888;background:#f5f5f5;padding:1px 6px;border-radius:100px}
+    .ob-doc-bar{width:50px;height:5px;background:#f0f0f0;border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle}
+    .ob-doc-fill{height:100%;background:#87BD2B;border-radius:3px}
+    .cabin-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:600}
+    .cabin-1,.cabin-2{background:rgba(168,85,247,0.1);color:#A855F7}
+    .cabin-3,.cabin-4{background:rgba(96,165,250,0.1);color:#2563EB}
+    .status-pill{font-size:9px;padding:2px 6px;border-radius:100px;font-weight:600}
+    .st-draft{background:#f3f4f6;color:#6B7280}.st-confirmed{background:rgba(59,130,246,0.1);color:#2563EB}
+    .st-paid{background:rgba(34,197,94,0.1);color:#16a34a}.st-embarked{background:rgba(135,189,43,0.1);color:#5a8010}
+    .ob-badge{font-size:11px;background:rgba(9,85,97,0.1);color:var(--towt-blue);padding:2px 8px;border-radius:100px;font-weight:500}
+    .ob-table{width:100%;border-collapse:collapse;font-size:12px}
+    .ob-table th{text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:#888;border-bottom:2px solid #f0f0f0}
+    .ob-table td{padding:6px 8px;border-bottom:1px solid #f8f8f8}
+    .ob-empty{font-size:12px;color:#aaa;text-align:center;padding:20px}
+    .role-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:600}
+    .role-capitaine{background:rgba(220,38,38,0.1);color:#DC2626}.role-second{background:rgba(99,102,241,0.1);color:#6366F1}
+    .role-chef_mecanicien{background:rgba(245,158,11,0.1);color:#D97706}.role-cook{background:rgba(34,197,94,0.1);color:#16a34a}
+    .role-lieutenant{background:rgba(96,165,250,0.1);color:#2563EB}.role-bosco{background:rgba(168,85,247,0.1);color:#A855F7}
+    .role-marin{background:rgba(107,114,128,0.1);color:#6B7280}
+    .ob-stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+    .ob-stat{background:#f8fafb;padding:10px;border-radius:8px;text-align:center}
+    .ob-stat-val{font-size:18px;font-weight:700;color:var(--towt-blue);display:block}
+    .ob-stat-lbl{font-size:10px;color:#888;text-transform:uppercase}
+    .ob-section{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px}
+    .ob-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .ob-section-header h3{margin:0;font-size:15px}
+    .sof-table td:first-child{font-weight:500}
+    .sof-add-form{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0}
+    .sof-add-grid{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .sof-add-grid select,.sof-add-grid input{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px}
+    .sof-add-grid select{min-width:200px}.sof-add-grid input[type="text"]{flex:1;min-width:100px}
+    .sof-add-grid input[type="date"],.sof-add-grid input[type="time"]{width:130px}
+    .ob-doc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+    .ob-doc-btn{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f8fafb;border:1px solid #eee;border-radius:8px;text-decoration:none;color:#333;font-size:12px;font-weight:500;transition:all 0.15s}
+    .ob-doc-btn:hover{background:#eef4f6;border-color:var(--towt-blue)}
+    .ob-doc-icon{font-size:18px;flex-shrink:0}.ob-doc-name{flex:1}
+    .ob-doc-actions{color:#aaa;flex-shrink:0}.ob-doc-btn:hover .ob-doc-actions{color:var(--towt-blue)}
+    .btn-icon{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px}.btn-icon:hover{background:#fee2e2}
+</style>
+<script>
+// Pre-fill SOF date and time with current values
+(function(){
+    var now = new Date();
+    var d = document.getElementById('sof-date');
+    var t = document.getElementById('sof-time');
+    if(d) d.value = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+    if(t) t.value = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+})();
+</script>
+{% endblock %}

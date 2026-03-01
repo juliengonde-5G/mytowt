@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  app:
+    build: .
+    container_name: towt-app-v2
+    ports:
+      - "8081:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-towt_admin}:${POSTGRES_PASSWORD:-towt_secure_2025}@db:5432/${POSTGRES_DB:-towt_planning}
+      - SECRET_KEY=${SECRET_KEY:-towt_secret_key_change_in_production_2025}
+      - APP_ENV=${APP_ENV:-production}
+      - DEBUG=${DEBUG:-false}
+    volumes:
+      - ./app:/app/app
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: towt-db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-towt_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-towt_secure_2025}
+      - POSTGRES_DB=${POSTGRES_DB:-towt_planning}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-towt_admin}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

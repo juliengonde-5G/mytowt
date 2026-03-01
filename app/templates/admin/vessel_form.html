@@ -1,0 +1,32 @@
+<div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal" style="max-width:450px;">
+        <div class="modal-header">
+            <h3>{{ vessel.name }}</h3>
+            <button class="modal-close" onclick="closeModal()"><i data-lucide="x"></i></button>
+        </div>
+        <form method="POST" action="/admin/vessels/{{ vessel.id }}/edit">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Nom</label>
+                    <input type="text" name="name" class="form-input" value="{{ vessel.name }}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Capacité (palettes)</label>
+                    <input type="number" name="capacity_palettes" class="form-input" value="{{ vessel.capacity_palettes or 0 }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Vitesse par défaut (nœuds)</label>
+                    <input type="text" name="default_speed" class="form-input" value="{{ vessel.default_speed }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Coefficient d'élongation</label>
+                    <input type="text" name="default_elongation" class="form-input" value="{{ vessel.default_elongation }}">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i data-lucide="check"></i> Enregistrer</button>
+            </div>
+        </form>
+    </div>
+</div>

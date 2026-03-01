@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160" fill="none">
+  <defs>
+    <!-- Gradient for ocean -->
+    <linearGradient id="ocean" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#095561"/>
+      <stop offset="100%" stop-color="#0a7a8a"/>
+    </linearGradient>
+    <!-- Gradient for sail -->
+    <linearGradient id="sail" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#87BD2B"/>
+      <stop offset="100%" stop-color="#6fa020"/>
+    </linearGradient>
+    <!-- Wind gradient -->
+    <linearGradient id="wind" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#87BD2B" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#87BD2B" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ═══ ICON: Sailboat + Dashboard ═══ -->
+  <!-- Circle background -->
+  <circle cx="75" cy="75" r="72" fill="#095561"/>
+  <circle cx="75" cy="75" r="68" fill="none" stroke="#87BD2B" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.4"/>
+
+  <!-- Sailboat hull -->
+  <path d="M38 100 L50 115 L100 115 L112 100 Z" fill="white" opacity="0.95"/>
+
+  <!-- Main sail (tall triangle) -->
+  <path d="M72 28 L72 96 L42 96 Z" fill="url(#sail)" opacity="0.9"/>
+
+  <!-- Jib sail (front triangle) -->
+  <path d="M76 38 L76 92 L105 92 Z" fill="white" opacity="0.7"/>
+
+  <!-- Mast -->
+  <line x1="74" y1="25" x2="74" y2="100" stroke="white" stroke-width="2"/>
+
+  <!-- Wind lines -->
+  <line x1="18" y1="48" x2="42" y2="48" stroke="url(#wind)" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="14" y1="58" x2="40" y2="58" stroke="url(#wind)" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="20" y1="68" x2="40" y2="68" stroke="url(#wind)" stroke-width="1.2" stroke-linecap="round"/>
+
+  <!-- Waves under hull -->
+  <path d="M30 118 Q42 112 54 118 Q66 124 78 118 Q90 112 102 118 Q114 124 126 118" fill="none" stroke="white" stroke-width="1.5" opacity="0.4"/>
+
+  <!-- Small gear/cog (ERP symbol) bottom-right of boat -->
+  <g transform="translate(103, 68) scale(0.55)" fill="white" opacity="0.85">
+    <path d="M12 0L14.5 2.5L18 1.5L19.5 5L23 5.5L22.5 9L26 11L24.5 14L27 17L24 19L25 22.5L21.5 23.5L21 27L17.5 26L15 28.5L12 26.5L9 28.5L6.5 26L3 27L2.5 23.5L-1 22.5L0 19L-3 17L-0.5 14L-2 11L1.5 9L1 5.5L4.5 5L6 1.5L9.5 2.5Z"/>
+    <circle cx="12" cy="14" r="6" fill="#095561"/>
+    <!-- Mini bar chart inside gear -->
+    <rect x="8" y="15" width="2.5" height="5" rx="0.5" fill="white" opacity="0.9"/>
+    <rect x="11.5" y="12" width="2.5" height="8" rx="0.5" fill="white" opacity="0.9"/>
+    <rect x="15" y="14" width="2.5" height="6" rx="0.5" fill="white" opacity="0.9"/>
+  </g>
+
+  <!-- Small compass rose top-left -->
+  <g transform="translate(32, 28) scale(0.4)" opacity="0.6">
+    <line x1="0" y1="-10" x2="0" y2="10" stroke="white" stroke-width="2"/>
+    <line x1="-10" y1="0" x2="10" y2="0" stroke="white" stroke-width="2"/>
+    <polygon points="0,-10 3,-2 -3,-2" fill="#87BD2B"/>
+  </g>
+
+  <!-- ═══ TEXT ═══ -->
+  <!-- "my" in green, lighter weight -->
+  <text x="165" y="72" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="42" font-weight="300" fill="#87BD2B" letter-spacing="1">my</text>
+
+  <!-- Underscore connector -->
+  <text x="222" y="72" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="42" font-weight="300" fill="#87BD2B" opacity="0.5">_</text>
+
+  <!-- "towt" in dark blue, bold -->
+  <text x="244" y="72" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="52" font-weight="700" fill="#095561" letter-spacing="3">TOWT</text>
+
+  <!-- Tagline -->
+  <text x="167" y="100" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="400" fill="#095561" opacity="0.6" letter-spacing="4">TRANSPORT À LA VOILE</text>
+
+  <!-- Sub-tagline ERP -->
+  <text x="167" y="122" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="500" fill="#87BD2B" letter-spacing="5.5">OPERATIONS PLATFORM</text>
+
+  <!-- Thin decorative line -->
+  <line x1="167" y1="85" x2="480" y2="85" stroke="#095561" stroke-width="0.5" opacity="0.15"/>
+</svg>

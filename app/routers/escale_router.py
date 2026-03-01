@@ -1,0 +1,599 @@
+from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query
+from fastapi.responses import HTMLResponse, RedirectResponse
+from app.templating import templates
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
+from typing import Optional
+from datetime import datetime, timedelta, timezone, date
+
+from app.database import get_db
+from app.auth import get_current_user
+from app.models.user import User
+from app.models.vessel import Vessel
+from app.models.leg import Leg
+from app.models.operation import EscaleOperation, DockerShift
+from app.models.crew import CrewMember, CrewAssignment
+
+router = APIRouter(prefix="/escale", tags=["escale"])
+
+OPERATION_TYPES = [
+    {"value": "relations_externes", "label": "Relations Externes", "icon": "\U0001f4e2", "color": "#16a34a"},
+    {"value": "technique", "label": "Technique", "icon": "\U0001f527", "color": "#F59E0B"},
+    {"value": "armement", "label": "Armement", "icon": "\U0001f6e1", "color": "#60A5FA"},
+]
+
+ACTIONS_BY_TYPE = {
+    "relations_externes": [
+        {"value": "relation_presse", "label": "Relation Presse"},
+        {"value": "relation_client", "label": "Relation Client"},
+        {"value": "relation_prospect", "label": "Relation Prospect"},
+    ],
+    "technique": [
+        {"value": "soutage", "label": "Soutage"},
+        {"value": "intervention_technique", "label": "Intervention technique"},
+        {"value": "inspection_technique", "label": "Inspection technique"},
+    ],
+    "armement": [
+        {"value": "embarquement", "label": "Embarquement"},
+        {"value": "debarquement", "label": "D\u00e9barquement"},
+        {"value": "medicale", "label": "Visite m\u00e9dicale"},
+        {"value": "avitaillement", "label": "Avitaillement"},
+        {"value": "inspection_armement", "label": "Inspection armement"},
+    ],
+}
+
+CREW_ACTIONS = {"embarquement", "debarquement"}
+
+PORT_STATUSES = [
+    {"value": "pilote_arrivee", "label": "Pilote \u00e0 bord \u2014 Arriv\u00e9e", "icon": "\U0001f6a2", "vessel_status": "en_mer"},
+    {"value": "a_quai", "label": "\u00c0 quai", "icon": "\u2693", "vessel_status": "a_quai"},
+    {"value": "pilote_depart", "label": "Pilote \u00e0 bord \u2014 D\u00e9part", "icon": "\u26f5", "vessel_status": "en_mer"},
+]
+
+ACTION_LABELS = {}
+for cat_actions in ACTIONS_BY_TYPE.values():
+    for a in cat_actions:
+        ACTION_LABELS[a["value"]] = a["label"]
+
+
+def parse_float(val, default=None):
+    if val is None or (isinstance(val, str) and val.strip() == ""):
+        return default
+    try:
+        return float(val)
+    except Exception:
+        return default
+
+
+def parse_int(val, default=None):
+    if val is None or (isinstance(val, str) and val.strip() == ""):
+        return default
+    try:
+        return int(val)
+    except Exception:
+        return default
+
+
+def parse_datetime(val):
+    if val is None or (isinstance(val, str) and val.strip() == ""):
+        return None
+    try:
+        return datetime.fromisoformat(val)
+    except Exception:
+        return None
+
+
+def get_quay_bounds(leg):
+    quay_start = leg.ata or leg.eta
+    quay_end = leg.atd
+    if not quay_end and quay_start:
+        quay_end = quay_start + timedelta(days=leg.port_stay_days or 3)
+    return quay_start, quay_end
+
+
+def compute_port_status(leg):
+    if leg.atd:
+        return "pilote_depart"
+    elif leg.ata:
+        return "a_quai"
+    else:
+        return "pilote_arrivee"
+
+
+def is_leg_terminated(leg):
+    return bool(leg.atd)
+
+
+def is_leg_locked(leg):
+    return leg.status == "completed"
+
+
+async def propagate_from_leg(db: AsyncSession, leg: Leg):
+    result = await db.execute(
+        select(Leg).options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
+        .where(Leg.vessel_id == leg.vessel_id, Leg.year == leg.year, Leg.sequence > leg.sequence)
+        .order_by(Leg.sequence)
+    )
+    subsequent = result.scalars().all()
+    prev_eta = leg.ata or leg.eta
+    for nleg in subsequent:
+        if prev_eta and not nleg.atd:
+            nleg.etd = prev_eta + timedelta(days=nleg.port_stay_days or 3)
+        if nleg.etd and nleg.distance_nm:
+            speed = nleg.speed_knots or 8.0
+            elong = nleg.elongation_coeff or 1.25
+            hours = (nleg.distance_nm * elong) / speed
+            nleg.eta = nleg.etd + timedelta(hours=hours)
+            nleg.computed_distance = round(nleg.distance_nm * elong, 1)
+            nleg.estimated_duration_hours = round(hours, 1)
+        prev_eta = nleg.ata or nleg.eta
+    await db.flush()
+
+
+async def handle_crew_assignment(db: AsyncSession, op: EscaleOperation, crew_ids: list):
+    if not crew_ids or op.action not in CREW_ACTIONS:
+        return
+    leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == op.leg_id))
+    leg = leg_result.scalar_one_or_none()
+    if not leg:
+        return
+    op_date = (op.actual_start or op.planned_start or datetime.now(timezone.utc)).date()
+    for cid in crew_ids:
+        if op.action == "embarquement":
+            db.add(CrewAssignment(
+                member_id=cid, vessel_id=leg.vessel_id,
+                embark_date=op_date, embark_leg_id=leg.id, status="active",
+            ))
+        elif op.action == "debarquement":
+            result = await db.execute(
+                select(CrewAssignment).where(
+                    CrewAssignment.member_id == cid,
+                    CrewAssignment.vessel_id == leg.vessel_id,
+                    CrewAssignment.status == "active",
+                ).order_by(CrewAssignment.embark_date.desc()).limit(1)
+            )
+            assignment = result.scalar_one_or_none()
+            if assignment:
+                assignment.disembark_date = op_date
+                assignment.disembark_leg_id = leg.id
+                assignment.status = "completed"
+    await db.flush()
+
+
+# === ESCALE HOME ===
+@router.get("", response_class=HTMLResponse)
+async def escale_home(
+    request: Request,
+    vessel: Optional[int] = Query(None),
+    year: Optional[int] = Query(None),
+    leg_id: Optional[int] = Query(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    current_year = year or datetime.now().year
+    years = list(range(2025, datetime.now().year + 2))
+    vessels_result = await db.execute(select(Vessel).where(Vessel.is_active == True).order_by(Vessel.code))
+    vessels = vessels_result.scalars().all()
+    selected_vessel = vessel or (vessels[0].code if vessels else None)
+
+    vessel_obj = None
+    if selected_vessel:
+        v_result = await db.execute(select(Vessel).where(Vessel.code == selected_vessel))
+        vessel_obj = v_result.scalar_one_or_none()
+
+    legs = []
+    if vessel_obj:
+        legs_result = await db.execute(
+            select(Leg).options(selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
+            .where(Leg.vessel_id == vessel_obj.id, Leg.year == current_year)
+            .order_by(Leg.sequence)
+        )
+        legs = legs_result.scalars().all()
+
+    selected_leg = None
+    operations = []
+    docker_shifts = []
+    vessel_status = "en_mer"
+    port_status = "pilote_arrivee"
+    quay_start_str = ""
+    quay_end_str = ""
+    leg_terminated = False
+    leg_locked = False
+
+    if leg_id:
+        leg_result = await db.execute(
+            select(Leg).options(
+                selectinload(Leg.vessel),
+                selectinload(Leg.departure_port),
+                selectinload(Leg.arrival_port),
+            ).where(Leg.id == leg_id)
+        )
+        selected_leg = leg_result.scalar_one_or_none()
+        if selected_leg:
+            ops_result = await db.execute(
+                select(EscaleOperation).where(EscaleOperation.leg_id == leg_id)
+                .order_by(EscaleOperation.planned_start.asc().nulls_last(), EscaleOperation.id)
+            )
+            operations = ops_result.scalars().all()
+            ds_result = await db.execute(
+                select(DockerShift).where(DockerShift.leg_id == leg_id)
+                .order_by(DockerShift.planned_start.asc().nulls_last())
+            )
+            docker_shifts = ds_result.scalars().all()
+            port_status = compute_port_status(selected_leg)
+            vessel_status = "a_quai" if port_status == "a_quai" else "en_mer"
+            qs, qe = get_quay_bounds(selected_leg)
+            if qs:
+                quay_start_str = qs.strftime('%Y-%m-%dT%H:%M')
+            if qe:
+                quay_end_str = qe.strftime('%Y-%m-%dT%H:%M')
+            leg_terminated = is_leg_terminated(selected_leg)
+            leg_locked = is_leg_locked(selected_leg)
+
+    return templates.TemplateResponse("escale/index.html", {
+        "request": request, "user": user,
+        "vessels": vessels, "selected_vessel": selected_vessel, "vessel_obj": vessel_obj,
+        "current_year": current_year, "years": years,
+        "legs": legs, "selected_leg": selected_leg, "leg_id": leg_id,
+        "operations": operations, "docker_shifts": docker_shifts,
+        "vessel_status": vessel_status, "port_status": port_status,
+        "port_statuses": PORT_STATUSES,
+        "quay_start": quay_start_str, "quay_end": quay_end_str,
+        "leg_terminated": leg_terminated, "leg_locked": leg_locked,
+        "operation_types": OPERATION_TYPES, "actions_by_type": ACTIONS_BY_TYPE,
+        "active_module": "escale",
+    })
+
+
+# === PORT STATUS (button progression) ===
+@router.post("/legs/{lid}/port-status", response_class=HTMLResponse)
+async def update_port_status(
+    lid: int, request: Request,
+    new_status: str = Form(...),
+    status_time: Optional[str] = Form(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Leg).options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
+        .where(Leg.id == lid)
+    )
+    leg = result.scalar_one_or_none()
+    if not leg:
+        raise HTTPException(404)
+
+    now = parse_datetime(status_time) or datetime.now(timezone.utc)
+
+    if new_status == "a_quai":
+        leg.ata = now
+        await propagate_from_leg(db, leg)
+    elif new_status == "pilote_depart":
+        if not leg.ata:
+            leg.ata = now - timedelta(hours=1)
+        leg.atd = now
+        await propagate_from_leg(db, leg)
+
+    await db.flush()
+    url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={lid}"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# === LOCK / UNLOCK ===
+@router.post("/legs/{lid}/lock", response_class=HTMLResponse)
+async def lock_leg(lid: int, request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == lid))
+    leg = result.scalar_one_or_none()
+    if not leg:
+        raise HTTPException(404)
+    leg.status = "completed"
+    await db.flush()
+    url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={lid}"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.post("/legs/{lid}/unlock", response_class=HTMLResponse)
+async def unlock_leg(lid: int, request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == lid))
+    leg = result.scalar_one_or_none()
+    if not leg:
+        raise HTTPException(404)
+    leg.status = "planned"
+    await db.flush()
+    url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={lid}"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# === PDF EXPORT ===
+@router.get("/legs/{lid}/pdf", response_class=HTMLResponse)
+async def escale_pdf(lid: int, request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    leg_result = await db.execute(
+        select(Leg).options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
+        .where(Leg.id == lid)
+    )
+    leg = leg_result.scalar_one_or_none()
+    if not leg:
+        raise HTTPException(404)
+    ops_result = await db.execute(
+        select(EscaleOperation).where(EscaleOperation.leg_id == lid)
+        .order_by(EscaleOperation.planned_start.asc().nulls_last())
+    )
+    operations = ops_result.scalars().all()
+    ds_result = await db.execute(
+        select(DockerShift).where(DockerShift.leg_id == lid)
+        .order_by(DockerShift.planned_start.asc().nulls_last())
+    )
+    docker_shifts = ds_result.scalars().all()
+    return templates.TemplateResponse("escale/pdf_export.html", {
+        "request": request, "leg": leg, "operations": operations, "docker_shifts": docker_shifts,
+        "action_labels": ACTION_LABELS, "now": datetime.now(timezone.utc),
+    })
+
+
+# === CREATE OPERATION ===
+@router.get("/operations/create", response_class=HTMLResponse)
+async def operation_create_form(
+    request: Request, leg_id: int = Query(...),
+    cat: Optional[str] = Query(None),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    leg_result = await db.execute(select(Leg).where(Leg.id == leg_id))
+    leg = leg_result.scalar_one_or_none()
+    if leg and is_leg_locked(leg):
+        raise HTTPException(403, detail="Escale verrouill\u00e9e")
+    quay_start_str = ""
+    quay_end_str = ""
+    if leg:
+        qs, qe = get_quay_bounds(leg)
+        if qs:
+            quay_start_str = qs.strftime('%Y-%m-%dT%H:%M')
+        if qe:
+            quay_end_str = qe.strftime('%Y-%m-%dT%H:%M')
+    crew_result = await db.execute(
+        select(CrewMember).where(CrewMember.is_active == True).order_by(CrewMember.role, CrewMember.last_name)
+    )
+    crew_members = crew_result.scalars().all()
+    return templates.TemplateResponse("escale/operation_form.html", {
+        "request": request, "user": user,
+        "edit_op": None, "leg_id": leg_id,
+        "operation_types": OPERATION_TYPES, "actions_by_type": ACTIONS_BY_TYPE,
+        "quay_start": quay_start_str, "quay_end": quay_end_str, "error": None,
+        "preselect_cat": cat,
+        "crew_members": crew_members, "selected_crew_ids": set(),
+    })
+
+
+@router.post("/operations/create", response_class=HTMLResponse)
+async def operation_create_submit(
+    request: Request,
+    leg_id: str = Form(...), operation_type: str = Form(...), action: str = Form(...),
+    planned_start: Optional[str] = Form(None),
+    actual_start: Optional[str] = Form(None),
+    intervenant: Optional[str] = Form(None), description: Optional[str] = Form(None),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    _leg_id = int(leg_id)
+    op = EscaleOperation(
+        leg_id=_leg_id, operation_type=operation_type, action=action,
+        planned_start=parse_datetime(planned_start),
+        actual_start=parse_datetime(actual_start),
+        intervenant=intervenant.strip() if intervenant else None,
+        description=description.strip() if description else None,
+    )
+    db.add(op)
+    await db.flush()
+    form = await request.form()
+    crew_ids = [int(x) for x in form.getlist("crew_ids") if x]
+    if crew_ids:
+        await handle_crew_assignment(db, op, crew_ids)
+    leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == _leg_id))
+    leg = leg_result.scalar_one_or_none()
+    url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={_leg_id}" if leg else "/escale"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# === EDIT OPERATION ===
+@router.get("/operations/{op_id}/edit", response_class=HTMLResponse)
+async def operation_edit_form(
+    op_id: int, request: Request,
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(EscaleOperation).where(EscaleOperation.id == op_id))
+    op = result.scalar_one_or_none()
+    if not op:
+        raise HTTPException(404)
+    leg_result = await db.execute(select(Leg).where(Leg.id == op.leg_id))
+    leg = leg_result.scalar_one_or_none()
+    quay_start_str = ""
+    quay_end_str = ""
+    if leg:
+        qs, qe = get_quay_bounds(leg)
+        if qs:
+            quay_start_str = qs.strftime('%Y-%m-%dT%H:%M')
+        if qe:
+            quay_end_str = qe.strftime('%Y-%m-%dT%H:%M')
+    crew_result = await db.execute(
+        select(CrewMember).where(CrewMember.is_active == True).order_by(CrewMember.role, CrewMember.last_name)
+    )
+    crew_members = crew_result.scalars().all()
+    return templates.TemplateResponse("escale/operation_form.html", {
+        "request": request, "user": user,
+        "edit_op": op, "leg_id": op.leg_id,
+        "operation_types": OPERATION_TYPES, "actions_by_type": ACTIONS_BY_TYPE,
+        "quay_start": quay_start_str, "quay_end": quay_end_str, "error": None,
+        "preselect_cat": None,
+        "crew_members": crew_members, "selected_crew_ids": set(),
+    })
+
+
+@router.post("/operations/{op_id}/edit", response_class=HTMLResponse)
+async def operation_edit_submit(
+    op_id: int, request: Request,
+    operation_type: str = Form(...), action: str = Form(...),
+    planned_start: Optional[str] = Form(None),
+    actual_start: Optional[str] = Form(None),
+    intervenant: Optional[str] = Form(None), description: Optional[str] = Form(None),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(EscaleOperation).where(EscaleOperation.id == op_id))
+    op = result.scalar_one_or_none()
+    if not op:
+        raise HTTPException(404)
+    op.operation_type = operation_type
+    op.action = action
+    op.planned_start = parse_datetime(planned_start)
+    op.actual_start = parse_datetime(actual_start)
+    op.intervenant = intervenant.strip() if intervenant else None
+    op.description = description.strip() if description else None
+    await db.flush()
+    form = await request.form()
+    crew_ids = [int(x) for x in form.getlist("crew_ids") if x]
+    if crew_ids:
+        await handle_crew_assignment(db, op, crew_ids)
+    leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == op.leg_id))
+    leg = leg_result.scalar_one_or_none()
+    url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={op.leg_id}" if leg else "/escale"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# === DELETE OPERATION ===
+@router.delete("/operations/{op_id}", response_class=HTMLResponse)
+async def operation_delete(op_id: int, request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(EscaleOperation).where(EscaleOperation.id == op_id))
+    op = result.scalar_one_or_none()
+    if not op:
+        raise HTTPException(404)
+    leg_id = op.leg_id
+    await db.delete(op)
+    await db.flush()
+    leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == leg_id))
+    leg = leg_result.scalar_one_or_none()
+    url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={leg_id}" if leg else "/escale"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# === DOCKER SHIFTS (keep duration/end) ===
+@router.get("/dockers/create", response_class=HTMLResponse)
+async def docker_create_form(request: Request, leg_id: int = Query(...), user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    leg_result = await db.execute(select(Leg).where(Leg.id == leg_id))
+    leg = leg_result.scalar_one_or_none()
+    if leg and is_leg_locked(leg):
+        raise HTTPException(403)
+    quay_start_str = ""
+    quay_end_str = ""
+    if leg:
+        qs, qe = get_quay_bounds(leg)
+        if qs:
+            quay_start_str = qs.strftime('%Y-%m-%dT%H:%M')
+        if qe:
+            quay_end_str = qe.strftime('%Y-%m-%dT%H:%M')
+    return templates.TemplateResponse("escale/docker_form.html", {
+        "request": request, "user": user, "edit_ds": None, "leg_id": leg_id,
+        "quay_start": quay_start_str, "quay_end": quay_end_str, "error": None,
+    })
+
+
+@router.post("/dockers/create", response_class=HTMLResponse)
+async def docker_create_submit(
+    request: Request, leg_id: str = Form(...), hold: str = Form(...),
+    planned_start: Optional[str] = Form(None), planned_end: Optional[str] = Form(None),
+    planned_palettes: Optional[str] = Form(None), notes: Optional[str] = Form(None),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    _leg_id = int(leg_id)
+    ds = DockerShift(
+        leg_id=_leg_id, hold=hold,
+        planned_start=parse_datetime(planned_start),
+        planned_end=parse_datetime(planned_end),
+        planned_palettes=parse_int(planned_palettes),
+        notes=notes.strip() if notes else None,
+    )
+    db.add(ds)
+    await db.flush()
+    leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == _leg_id))
+    leg = leg_result.scalar_one_or_none()
+    url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={_leg_id}" if leg else "/escale"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.get("/dockers/{ds_id}/edit", response_class=HTMLResponse)
+async def docker_edit_form(ds_id: int, request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(DockerShift).where(DockerShift.id == ds_id))
+    ds = result.scalar_one_or_none()
+    if not ds:
+        raise HTTPException(404)
+    leg_result = await db.execute(select(Leg).where(Leg.id == ds.leg_id))
+    leg = leg_result.scalar_one_or_none()
+    quay_start_str = ""
+    quay_end_str = ""
+    if leg:
+        qs, qe = get_quay_bounds(leg)
+        if qs:
+            quay_start_str = qs.strftime('%Y-%m-%dT%H:%M')
+        if qe:
+            quay_end_str = qe.strftime('%Y-%m-%dT%H:%M')
+    return templates.TemplateResponse("escale/docker_form.html", {
+        "request": request, "user": user, "edit_ds": ds, "leg_id": ds.leg_id,
+        "quay_start": quay_start_str, "quay_end": quay_end_str, "error": None,
+    })
+
+
+@router.post("/dockers/{ds_id}/edit", response_class=HTMLResponse)
+async def docker_edit_submit(
+    ds_id: int, request: Request, hold: str = Form(...),
+    planned_start: Optional[str] = Form(None), planned_end: Optional[str] = Form(None),
+    actual_start: Optional[str] = Form(None), actual_end: Optional[str] = Form(None),
+    planned_palettes: Optional[str] = Form(None), actual_palettes: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(DockerShift).where(DockerShift.id == ds_id))
+    ds = result.scalar_one_or_none()
+    if not ds:
+        raise HTTPException(404)
+    ds.hold = hold
+    ds.planned_start = parse_datetime(planned_start)
+    ds.planned_end = parse_datetime(planned_end)
+    ds.actual_start = parse_datetime(actual_start)
+    ds.actual_end = parse_datetime(actual_end)
+    ds.planned_palettes = parse_int(planned_palettes)
+    ds.actual_palettes = parse_int(actual_palettes)
+    ds.notes = notes.strip() if notes else None
+    await db.flush()
+    leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == ds.leg_id))
+    leg = leg_result.scalar_one_or_none()
+    url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={ds.leg_id}" if leg else "/escale"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.delete("/dockers/{ds_id}", response_class=HTMLResponse)
+async def docker_delete(ds_id: int, request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(DockerShift).where(DockerShift.id == ds_id))
+    ds = result.scalar_one_or_none()
+    if not ds:
+        raise HTTPException(404)
+    leg_id = ds.leg_id
+    await db.delete(ds)
+    await db.flush()
+    leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == leg_id))
+    leg = leg_result.scalar_one_or_none()
+    url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={leg_id}" if leg else "/escale"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)

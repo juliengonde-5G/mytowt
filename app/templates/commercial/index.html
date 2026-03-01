@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}TOWT - Commercial{% endblock %}
+{% block page_title %}Ordres de transport{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary btn-sm" onclick="openOrderModal()"><i data-lucide="plus"></i> Nouveau</button>
+{% endblock %}
+
+{% block content %}
+<div class="commercial-page">
+    <div class="status-tabs" style="margin-bottom:16px;display:flex;gap:6px;flex-wrap:wrap;">
+        <a href="/commercial" class="status-tab {% if not selected_status %}active{% endif %}">Tous</a>
+        {% for k, v in statuses.items() %}
+        <a href="/commercial?status={{ k }}" class="status-tab {% if selected_status == k %}active{% endif %}">{{ v }}</a>
+        {% endfor %}
+    </div>
+
+    {% if orders %}
+    <div class="table-container">
+        <table class="data-table">
+            <thead><tr>
+                <th>Réf.</th><th>Client</th><th>Palettes</th><th>Format</th><th>Frais</th><th>Total</th>
+                <th>Route souhaitée</th><th>Affectation</th><th>Statut</th><th>PJ</th><th style="text-align:right;">Actions</th>
+            </tr></thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td><strong style="font-family:monospace;color:var(--towt-blue);">{{ order.reference }}</strong></td>
+                    <td>{{ order.client_name }}{% if order.client_contact %}<br><span style="font-size:10px;color:#888;">{{ order.client_contact }}</span>{% endif %}</td>
+                    <td>{{ order.quantity_palettes }}{% if order.palette_format and order.palette_format != 'EPAL' %}<br><span style="font-size:10px;color:#888;">≡ {{ order.equivalent_epal }} EPAL</span>{% endif %}</td>
+                    <td><span class="palette-badge {{ order.palette_format or 'EPAL' }}">{{ order.palette_format or 'EPAL' }}</span></td>
+                    <td style="font-size:11px;">
+                        {% if order.booking_fee %}B: {{ order.booking_fee|eur }}€{% endif %}
+                        {% if order.documentation_fee %}{% if order.booking_fee %}<br>{% endif %}D: {{ order.documentation_fee|eur }}€{% endif %}
+                        {% if not order.booking_fee and not order.documentation_fee %}—{% endif %}
+                    </td>
+                    <td style="font-weight:500;">{{ (order.total_price or 0)|eur }} €</td>
+                    <td style="font-size:11px;">
+                        {% if order.departure_locode or order.arrival_locode %}
+                        {{ order.departure_locode or '?' }} → {{ order.arrival_locode or '?' }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td style="font-size:11px;">
+                        {% if order.leg %}
+                        <span style="color:var(--towt-blue);font-weight:500;">{{ order.leg.vessel.name }}</span><br>
+                        <span style="font-family:monospace;">{{ order.leg.leg_code }}</span>
+                        {% else %}
+                        <span style="color:#ccc;">—</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge badge-{{ order.status }}">{{ statuses.get(order.status, order.status) }}</span></td>
+                    <td>
+                        {% if order.attachment_filename %}
+                        <a href="/commercial/orders/{{ order.id }}/attachment" target="_blank" title="{{ order.attachment_filename }}" style="font-size:11px;">
+                            📎 {{ order.attachment_filename[:15] }}{% if order.attachment_filename|length > 15 %}…{% endif %}
+                        </a>
+                        {% else %}
+                        <span style="color:#ccc;font-size:11px;">—</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align:right;">
+                        <div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap;">
+                            <button class="btn btn-sm btn-secondary" onclick="openEditOrderModal({{ order.id }})"><i data-lucide="pencil"></i></button>
+                            <button class="btn btn-sm btn-secondary" onclick="openAssignModal({{ order.id }})" title="Affecter"><i data-lucide="link"></i></button>
+                            <button class="btn btn-sm btn-secondary" onclick="openUploadModal({{ order.id }})" title="Pièce jointe"><i data-lucide="paperclip"></i></button>
+                            {% if order.leg %}
+                            <form method="POST" action="/cargo/create" style="display:inline;">
+                                <input type="hidden" name="order_id" value="{{ order.id }}">
+                                <button type="submit" class="btn btn-sm btn-secondary" title="Packing List"><i data-lucide="file-box"></i></button>
+                            </form>
+                            {% endif %}
+                            <button class="btn btn-sm btn-danger" hx-delete="/commercial/orders/{{ order.id }}" hx-confirm="Supprimer {{ order.reference }} ?"><i data-lucide="trash-2"></i></button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i data-lucide="package" style="width:48px;height:48px;color:var(--towt-sky);"></i>
+        <h3>Aucun ordre de transport</h3>
+    </div>
+    {% endif %}
+</div>
+
+<div id="modal-container"></div>
+
+<!-- Upload modal (inline) -->
+<div id="upload-modal-container"></div>
+
+<style>
+    .status-tab{padding:6px 16px;border-radius:100px;font-size:12px;font-weight:500;color:#888;border:1px solid #eee;background:white;}
+    .status-tab:hover{border-color:var(--towt-sky);}.status-tab.active{background:var(--towt-blue);color:white;border-color:var(--towt-blue);}
+    .palette-badge{padding:2px 8px;border-radius:100px;font-size:10px;font-weight:600;}
+    .palette-badge.EPAL{background:rgba(9,85,97,0.1);color:var(--towt-blue);}
+    .palette-badge.USPAL{background:rgba(245,158,11,0.1);color:#D97706;}
+    .palette-badge.PORTPAL{background:rgba(139,92,246,0.1);color:#7C3AED;}
+</style>
+
+<script>
+    function openOrderModal() { loadModal('/commercial/orders/create'); }
+    function openEditOrderModal(id) { loadModal('/commercial/orders/' + id + '/edit'); }
+    function openAssignModal(id) { loadModal('/commercial/orders/' + id + '/assign'); }
+
+    function openUploadModal(oid) {
+        var html = '<div class="modal-overlay" onclick="if(event.target===this) closeUploadModal()">';
+        html += '<div class="modal" style="max-width:500px;"><div class="modal-header"><h3>📎 Pièce jointe</h3>';
+        html += '<button class="modal-close" onclick="closeUploadModal()"><i data-lucide="x"></i></button></div>';
+        html += '<form method="POST" action="/commercial/orders/' + oid + '/upload" enctype="multipart/form-data" id="upload-form">';
+        html += '<div class="modal-body">';
+        html += '<div class="form-group"><label class="form-label">Fichier (PDF ou Word)</label>';
+        html += '<input type="file" name="file" accept=".pdf,.doc,.docx" class="form-input" required></div>';
+        html += '<div id="preview-area" style="margin-top:12px;display:none;border:1px solid #eee;border-radius:8px;overflow:hidden;"></div>';
+        html += '</div>';
+        html += '<div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeUploadModal()">Annuler</button>';
+        html += '<button type="submit" class="btn btn-primary"><i data-lucide="upload"></i> Envoyer</button></div>';
+        html += '</form></div></div>';
+        document.getElementById('upload-modal-container').innerHTML = html;
+        lucide.createIcons();
+
+        // File preview
+        document.querySelector('#upload-form input[type=file]').addEventListener('change', function(e) {
+            var file = e.target.files[0];
+            var area = document.getElementById('preview-area');
+            if (!file) { area.style.display='none'; return; }
+            if (file.type === 'application/pdf') {
+                area.innerHTML = '<iframe src="' + URL.createObjectURL(file) + '" style="width:100%;height:300px;border:none;"></iframe>';
+                area.style.display = 'block';
+            } else {
+                area.innerHTML = '<div style="padding:20px;text-align:center;color:#888;"><i data-lucide="file-text" style="width:32px;height:32px;"></i><p style="margin-top:8px;">' + file.name + ' (' + (file.size/1024).toFixed(0) + ' Ko)</p></div>';
+                area.style.display = 'block';
+                lucide.createIcons();
+            }
+        });
+
+        document.getElementById('upload-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            var formData = new FormData(this);
+            fetch(this.action, { method: 'POST', body: formData })
+                .then(function(r) { window.location.href = '/commercial'; })
+                .catch(function() { window.location.reload(); });
+        });
+    }
+    function closeUploadModal() { document.getElementById('upload-modal-container').innerHTML = ''; }
+    window.closeModal = function() { document.getElementById('modal-container').innerHTML = ''; };
+
+    function loadModal(url) {
+        fetch(url).then(function(r){return r.text();}).then(function(html){
+            document.getElementById('modal-container').innerHTML = html;
+            lucide.createIcons();
+            document.getElementById('modal-container').querySelectorAll('script').forEach(function(s){
+                var ns = document.createElement('script'); ns.textContent = s.textContent;
+                document.body.appendChild(ns); document.body.removeChild(ns);
+            });
+            initFormSubmit();
+        });
+    }
+
+    window.initFormSubmit = function() {
+        var form = document.getElementById('order-form') || document.getElementById('assign-form');
+        if (!form) return;
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            fetch(form.action, { method: 'POST', body: new FormData(form) })
+                .then(function(r){ if(r.redirected) window.location.href=r.url; else window.location.href='/commercial'; })
+                .catch(function(){ window.location.reload(); });
+        });
+    };
+</script>
+{% endblock %}
