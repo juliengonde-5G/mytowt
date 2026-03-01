@@ -15,6 +15,7 @@ from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.order import Order, OrderAssignment, PALETTE_FORMATS, PALETTE_COEFF
 from app.models.kpi import LegKPI
+from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/commercial", tags=["commercial"])
 
@@ -152,6 +153,7 @@ async def order_create_submit(
     order.compute_total()
     db.add(order)
     await db.flush()
+    await log_activity(db, user, "commercial", "create", "Order", order.id, f"Commande {order.reference}")
 
     # Auto-match leg
     matching = await find_matching_leg(db, order)
@@ -217,6 +219,8 @@ async def order_edit_submit(
     order.description = description.strip() if description else None
     if status: order.status = status
     order.compute_total()
+    await db.flush()
+    await log_activity(db, user, "commercial", "update", "Order", oid, f"Modification commande {order.reference}")
     url = "/commercial"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
@@ -233,7 +237,10 @@ async def order_delete(
     result = await db.execute(select(Order).where(Order.id == oid))
     order = result.scalar_one_or_none()
     if not order: raise HTTPException(404)
+    ref = order.reference
     await db.delete(order)
+    await db.flush()
+    await log_activity(db, user, "commercial", "delete", "Order", oid, f"Suppression commande {ref}")
     url = "/commercial"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
@@ -296,6 +303,7 @@ async def order_assign_submit(
     else:
         order.status = "non_affecte"
     await db.flush()
+    await log_activity(db, user, "commercial", "assign", "Order", oid, f"Affectation commande {order.reference}")
 
     url = "/commercial"
     if request.headers.get("HX-Request"):
@@ -337,6 +345,7 @@ async def order_upload_attachment(
     order.attachment_filename = file.filename
     order.attachment_path = filepath
     await db.flush()
+    await log_activity(db, user, "commercial", "upload", "Order", oid, f"Pièce jointe commande {order.reference}")
 
     url = "/commercial"
     if request.headers.get("HX-Request"):
@@ -376,6 +385,8 @@ async def order_delete_attachment(
         os.remove(order.attachment_path)
     order.attachment_filename = None
     order.attachment_path = None
+    await db.flush()
+    await log_activity(db, user, "commercial", "delete_attachment", "Order", oid, f"Suppression PJ commande {order.reference}")
     url = "/commercial"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})

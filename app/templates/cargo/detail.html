@@ -7,6 +7,7 @@
 <a href="/cargo/{{ pl.id }}/history" class="btn btn-secondary btn-sm"><i data-lucide="history"></i> Historique</a>
 <a href="/cargo/{{ pl.id }}/excel" class="btn btn-secondary btn-sm"><i data-lucide="file-spreadsheet"></i> Excel</a>
 <a href="/cargo/{{ pl.id }}/bol" class="btn btn-secondary btn-sm"><i data-lucide="file-text"></i> Bill of Lading</a>
+<a href="/cargo/{{ pl.id }}/arrival-notice" class="btn btn-secondary btn-sm"><i data-lucide="ship"></i> Arrival Notice</a>
 {% if not pl.is_locked %}
 <button class="btn btn-secondary btn-sm" onclick="toggleEditMode()" id="edit-toggle-btn"><i data-lucide="pencil"></i> Modifier</button>
 <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-modal').style.display='flex'"><i data-lucide="upload"></i> Import Excel</button>
@@ -84,16 +85,33 @@
                 <div class="field-row"><span class="fl">Client</span><span class="fv view-val {% if not batch.customer_name %}missing{% endif %}">{{ batch.customer_name or '⚠' }}</span><input type="text" name="{{ p }}customer_name" value="{{ batch.customer_name or '' }}" class="form-input edit-input"></div>
                 <div class="field-row"><span class="fl">Transitaire</span><span class="fv view-val">{{ batch.freight_forwarder or '—' }}</span><input type="text" name="{{ p }}freight_forwarder" value="{{ batch.freight_forwarder or '' }}" class="form-input edit-input"></div>
                 <div class="field-row"><span class="fl">Code trans.</span><span class="fv view-val">{{ batch.code_transitaire or '—' }}</span><input type="text" name="{{ p }}code_transitaire" value="{{ batch.code_transitaire or '' }}" class="form-input edit-input"></div>
-                <div class="field-row"><span class="fl">Expéditeur</span><span class="fv view-val {% if not batch.shipper_name %}missing{% endif %}">{{ batch.shipper_name or '⚠' }}</span><input type="text" name="{{ p }}shipper_name" value="{{ batch.shipper_name or '' }}" class="form-input edit-input"></div>
-                <div class="field-row"><span class="fl">Adr. expéd.</span><span class="fv view-val {% if not batch.shipper_address %}missing{% endif %}">{{ batch.shipper_address or '⚠' }}</span><input type="text" name="{{ p }}shipper_address" value="{{ batch.shipper_address or '' }}" class="form-input edit-input"></div>
                 <div class="field-row"><span class="fl">N° PO</span><span class="fv view-val">{{ batch.po_number or '—' }}</span><input type="text" name="{{ p }}po_number" value="{{ batch.po_number or '' }}" class="form-input edit-input"></div>
-                <div class="field-row"><span class="fl">Notify</span><span class="fv view-val">{{ batch.notify_address or '—' }}</span><input type="text" name="{{ p }}notify_address" value="{{ batch.notify_address or '' }}" class="form-input edit-input"></div>
-                <div class="field-row"><span class="fl">Consignee</span><span class="fv view-val {% if not batch.consignee_address %}missing{% endif %}">{{ batch.consignee_address or '⚠' }}</span><input type="text" name="{{ p }}consignee_address" value="{{ batch.consignee_address or '' }}" class="form-input edit-input"></div>
+            </div>
+            <div class="batch-section">
+                <h5>📤 Expéditeur</h5>
+                <div class="field-row"><span class="fl">Nom</span><span class="fv view-val {% if not batch.shipper_name %}missing{% endif %}">{{ batch.shipper_name or '⚠' }}</span><input type="text" name="{{ p }}shipper_name" value="{{ batch.shipper_name or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">Adresse</span><span class="fv view-val {% if not batch.shipper_address %}missing{% endif %}">{{ batch.shipper_address or '⚠' }}</span><input type="text" name="{{ p }}shipper_address" value="{{ batch.shipper_address or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">CP</span><span class="fv view-val {% if not batch.shipper_postal %}missing{% endif %}">{{ batch.shipper_postal or '⚠' }}</span><input type="text" name="{{ p }}shipper_postal" value="{{ batch.shipper_postal or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">Ville</span><span class="fv view-val {% if not batch.shipper_city %}missing{% endif %}">{{ batch.shipper_city or '⚠' }}</span><input type="text" name="{{ p }}shipper_city" value="{{ batch.shipper_city or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">Pays</span><span class="fv view-val {% if not batch.shipper_country %}missing{% endif %}">{{ batch.shipper_country or '⚠' }}</span><input type="text" name="{{ p }}shipper_country" value="{{ batch.shipper_country or '' }}" class="form-input edit-input"></div>
+                <h5 style="margin-top:10px;">🔔 Notify</h5>
+                <div class="field-row"><span class="fl">Nom</span><span class="fv view-val {% if not batch.notify_name %}missing{% endif %}">{{ batch.notify_name or '⚠' }}</span><input type="text" name="{{ p }}notify_name" value="{{ batch.notify_name or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">Adresse</span><span class="fv view-val {% if not batch.notify_address %}missing{% endif %}">{{ batch.notify_address or '⚠' }}</span><input type="text" name="{{ p }}notify_address" value="{{ batch.notify_address or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">CP</span><span class="fv view-val {% if not batch.notify_postal %}missing{% endif %}">{{ batch.notify_postal or '⚠' }}</span><input type="text" name="{{ p }}notify_postal" value="{{ batch.notify_postal or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">Ville</span><span class="fv view-val {% if not batch.notify_city %}missing{% endif %}">{{ batch.notify_city or '⚠' }}</span><input type="text" name="{{ p }}notify_city" value="{{ batch.notify_city or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">Pays</span><span class="fv view-val {% if not batch.notify_country %}missing{% endif %}">{{ batch.notify_country or '⚠' }}</span><input type="text" name="{{ p }}notify_country" value="{{ batch.notify_country or '' }}" class="form-input edit-input"></div>
+                <h5 style="margin-top:10px;">📥 Consignee</h5>
+                <div class="field-row"><span class="fl">Nom</span><span class="fv view-val {% if not batch.consignee_name %}missing{% endif %}">{{ batch.consignee_name or '⚠' }}</span><input type="text" name="{{ p }}consignee_name" value="{{ batch.consignee_name or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">Adresse</span><span class="fv view-val {% if not batch.consignee_address %}missing{% endif %}">{{ batch.consignee_address or '⚠' }}</span><input type="text" name="{{ p }}consignee_address" value="{{ batch.consignee_address or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">CP</span><span class="fv view-val {% if not batch.consignee_postal %}missing{% endif %}">{{ batch.consignee_postal or '⚠' }}</span><input type="text" name="{{ p }}consignee_postal" value="{{ batch.consignee_postal or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">Ville</span><span class="fv view-val {% if not batch.consignee_city %}missing{% endif %}">{{ batch.consignee_city or '⚠' }}</span><input type="text" name="{{ p }}consignee_city" value="{{ batch.consignee_city or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">Pays</span><span class="fv view-val {% if not batch.consignee_country %}missing{% endif %}">{{ batch.consignee_country or '⚠' }}</span><input type="text" name="{{ p }}consignee_country" value="{{ batch.consignee_country or '' }}" class="form-input edit-input"></div>
             </div>
             <div class="batch-section">
                 <h5>📦 Marchandise</h5>
                 <div class="field-row"><span class="fl">Palette</span><span class="fv view-val">{{ batch.pallet_type or '—' }}</span><input type="text" name="{{ p }}pallet_type" value="{{ batch.pallet_type or '' }}" class="form-input edit-input"></div>
                 <div class="field-row"><span class="fl">Nature</span><span class="fv view-val {% if not batch.type_of_goods %}missing{% endif %}">{{ batch.type_of_goods or '⚠' }}</span><input type="text" name="{{ p }}type_of_goods" value="{{ batch.type_of_goods or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">Description</span><span class="fv view-val">{{ batch.description_of_goods or '—' }}</span><input type="text" name="{{ p }}description_of_goods" value="{{ batch.description_of_goods or '' }}" class="form-input edit-input"></div>
                 <div class="field-row"><span class="fl">Bio</span><span class="fv view-val">{{ batch.bio_products or '—' }}</span><input type="text" name="{{ p }}bio_products" value="{{ batch.bio_products or '' }}" class="form-input edit-input"></div>
                 <div class="field-row"><span class="fl">Nb palettes</span><span class="fv view-val {% if not batch.pallet_quantity %}missing{% endif %}">{{ batch.pallet_quantity or '⚠' }}</span><input type="number" name="{{ p }}pallet_quantity" value="{{ batch.pallet_quantity or '' }}" class="form-input edit-input"></div>
                 <div class="field-row"><span class="fl">IMO</span><span class="fv view-val">{{ batch.imo_product_class or '—' }}</span><input type="text" name="{{ p }}imo_product_class" value="{{ batch.imo_product_class or '' }}" class="form-input edit-input"></div>
@@ -139,7 +157,7 @@
     .batch-card.locked{border-left:4px solid var(--towt-green)}
     .batch-header{padding:14px 20px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between}
     .batch-header h4{margin:0;font-size:14px}
-    .batch-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0}
+    .batch-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0}
     @media(max-width:1000px){.batch-grid{grid-template-columns:1fr}}
     .batch-section{padding:16px 20px;border-right:1px solid #f5f5f5}.batch-section:last-child{border-right:none}
     .batch-section h5{font-size:12px;color:var(--towt-blue);margin:0 0 10px;display:flex;align-items:center;gap:6px}

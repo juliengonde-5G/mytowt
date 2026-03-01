@@ -11,6 +11,7 @@ from app.models.crew import CrewMember, CrewAssignment
 from app.models.packing_list import PackingList, PackingListBatch, PackingListAudit
 from app.models.onboard import SofEvent, OnboardNotification, CargoDocument
 from app.models.passenger import Passenger, PassengerBooking, PassengerPayment, PassengerDocument, CabinPriceGrid, PreBoardingForm
+from app.models.activity import ActivityLog
 
 __all__ = [
     "User", "Port", "Vessel", "Leg",
@@ -22,4 +23,5 @@ __all__ = [
     "PackingList", "PackingListBatch", "PackingListAudit",
     "SofEvent", "OnboardNotification", "CargoDocument",
     "Passenger", "PassengerBooking", "PassengerPayment", "PassengerDocument", "CabinPriceGrid",
+    "ActivityLog",
 ]

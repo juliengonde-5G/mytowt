@@ -21,6 +21,7 @@ from app.models.onboard import (
     SofEvent, OnboardNotification, CargoDocument,
     SOF_EVENT_TYPES, CARGO_DOC_TYPES,
 )
+from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/onboard", tags=["onboard"])
 
@@ -209,6 +210,7 @@ async def sof_add_event(
     )
     db.add(evt)
     await db.flush()
+    await log_activity(db, user, "onboard", "create", "SofEvent", evt.id, f"SOF: {label}")
 
     # Find vessel for redirect
     leg = await db.get(Leg, leg_id)
@@ -237,6 +239,7 @@ async def sof_edit_event(
     evt.event_time = event_time or evt.event_time
     evt.remarks = remarks if remarks is not None else evt.remarks
     await db.flush()
+    await log_activity(db, user, "onboard", "update", "SofEvent", event_id, "Modification SOF")
 
     leg = await db.get(Leg, evt.leg_id)
     vessel_obj = await db.get(Vessel, leg.vessel_id) if leg else None
@@ -254,6 +257,7 @@ async def sof_delete_event(
     if evt:
         await db.delete(evt)
         await db.flush()
+        await log_activity(db, user, "onboard", "delete", "SofEvent", event_id, "Suppression SOF")
     return HTMLResponse(content="", status_code=200)
 
 
@@ -809,6 +813,7 @@ async def cargo_doc_save(
         )
         db.add(doc)
     await db.flush()
+    await log_activity(db, user, "onboard", "save_doc", "CargoDocument", doc.id if doc else None, f"Document {doc_type}")
 
     # Redirect back to the document form so export buttons become available
     saved_doc_id = doc.id if doc else None

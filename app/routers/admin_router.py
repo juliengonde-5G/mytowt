@@ -17,6 +17,7 @@ from app.models.port import Port
 from app.models.leg import Leg
 from app.models.finance import OpexParameter, PortConfig
 from app.models.emission_parameter import EmissionParameter
+from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -178,6 +179,7 @@ async def user_create_submit(
     new_user = User(username=username, email=email, hashed_password=pwd_hash, full_name=full_name, role=role)
     db.add(new_user)
     await db.flush()
+    await log_activity(db, user, "admin", "create", "User", new_user.id, f"Création utilisateur {username}")
     return RedirectResponse(url="/admin/users", status_code=303)
 
 
@@ -214,6 +216,7 @@ async def user_edit_submit(
     if password and password.strip():
         edit_user.hashed_password = _hp(password)
     await db.flush()
+    await log_activity(db, user, "admin", "update", "User", uid, f"Modification utilisateur {edit_user.username}")
     return RedirectResponse(url="/admin/users", status_code=303)
 
 
@@ -226,8 +229,10 @@ async def user_delete(
     result = await db.execute(select(User).where(User.id == uid))
     u = result.scalar_one_or_none()
     if u and u.id != user.id:
+        uname = u.username
         await db.delete(u)
         await db.flush()
+        await log_activity(db, user, "admin", "delete", "User", uid, f"Suppression utilisateur {uname}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/users"})
     return RedirectResponse(url="/admin/users", status_code=303)
@@ -268,6 +273,7 @@ async def vessel_edit_submit(
     vessel.default_speed = pf(default_speed, 8)
     vessel.default_elongation = pf(default_elongation, 1.25)
     await db.flush()
+    await log_activity(db, user, "admin", "update", "Vessel", vid, f"Modification navire {vessel.name}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
     return RedirectResponse(url="/admin/settings", status_code=303)
@@ -294,6 +300,7 @@ async def opex_update(
         )
         db.add(param)
     await db.flush()
+    await log_activity(db, user, "admin", "update_opex", "OpexParameter", None, f"OPEX → {pf(opex_daily_rate, 11600)} €/j")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
     return RedirectResponse(url="/admin/settings", status_code=303)
@@ -314,6 +321,7 @@ async def lock_completed_legs(
         leg.status = "completed"
         count += 1
     await db.flush()
+    await log_activity(db, user, "admin", "lock_legs", None, None, f"Verrouillage {count} legs terminés")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": f"/admin/settings?locked={count}"})
     return RedirectResponse(url="/admin/settings", status_code=303)
@@ -330,6 +338,7 @@ async def unlock_leg(
     if leg:
         leg.status = "planned"
         await db.flush()
+        await log_activity(db, user, "admin", "unlock_leg", "Leg", lid, f"Déverrouillage leg {leg.leg_code}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
     return RedirectResponse(url="/admin/settings", status_code=303)
@@ -385,6 +394,7 @@ async def update_language(
     if language in SUPPORTED_LANGUAGES:
         user.language = language
         await db.flush()
+        await log_activity(db, user, "admin", "update_language", "User", user.id, f"Langue → {language}")
     url = "/admin/settings"
     response = RedirectResponse(url=url, status_code=303)
     response.set_cookie("towt_lang", language, max_age=365*24*3600)
@@ -415,6 +425,7 @@ async def pricing_add(
     )
     db.add(entry)
     await db.flush()
+    await log_activity(db, user, "admin", "create", "CabinPricing", entry.id, f"Tarif cabine {cabin_type} {origin_locode}→{destination_locode}")
     return RedirectResponse(url="/admin/settings#pricing", status_code=303)
 
 
@@ -436,6 +447,7 @@ async def pricing_edit(
         entry.notes = notes.strip() or None
         entry.is_active = is_active == "on"
         await db.flush()
+        await log_activity(db, user, "admin", "update", "CabinPricing", price_id, f"Modification tarif cabine")
     return RedirectResponse(url="/admin/settings#pricing", status_code=303)
 
 
@@ -450,4 +462,80 @@ async def pricing_delete(
     if entry:
         await db.delete(entry)
         await db.flush()
+        await log_activity(db, user, "admin", "delete", "CabinPricing", price_id, "Suppression tarif cabine")
     return HTMLResponse("", status_code=200)
+
+
+# ─── ACTIVITY LOG ───────────────────────────────────────────
+@router.get("/activity-log", response_class=HTMLResponse)
+async def activity_log_page(
+    request: Request,
+    module: Optional[str] = Query(None),
+    username: Optional[str] = Query(None),
+    page: int = Query(1),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.activity import ActivityLog
+    PAGE_SIZE = 50
+    query = select(ActivityLog).order_by(ActivityLog.timestamp.desc())
+    if module:
+        query = query.where(ActivityLog.module == module)
+    if username:
+        query = query.where(ActivityLog.username.ilike(f"%{username}%"))
+
+    count_q = select(func.count(ActivityLog.id))
+    if module:
+        count_q = count_q.where(ActivityLog.module == module)
+    if username:
+        count_q = count_q.where(ActivityLog.username.ilike(f"%{username}%"))
+    total = (await db.execute(count_q)).scalar() or 0
+
+    offset = (page - 1) * PAGE_SIZE
+    result = await db.execute(query.offset(offset).limit(PAGE_SIZE))
+    entries = result.scalars().all()
+    total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+
+    modules_result = await db.execute(
+        select(ActivityLog.module).distinct().order_by(ActivityLog.module)
+    )
+    modules = [r[0] for r in modules_result.all()]
+
+    return templates.TemplateResponse("admin/activity_log.html", {
+        "request": request, "user": user,
+        "entries": entries,
+        "modules": modules,
+        "selected_module": module,
+        "search_username": username or "",
+        "page": page, "total_pages": total_pages, "total": total,
+        "active_module": "settings",
+    })
+
+
+@router.get("/activity-log/export/csv", response_class=StreamingResponse)
+async def activity_log_export(
+    module: Optional[str] = Query(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.activity import ActivityLog
+    query = select(ActivityLog).order_by(ActivityLog.timestamp.desc())
+    if module:
+        query = query.where(ActivityLog.module == module)
+    result = await db.execute(query.limit(5000))
+    entries = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow(["Date/Heure", "Utilisateur", "Module", "Action", "Type", "ID", "Détail"])
+    for e in entries:
+        writer.writerow([
+            e.timestamp.strftime("%d/%m/%Y %H:%M") if e.timestamp else "",
+            e.username or "", e.module or "", e.action or "",
+            e.resource_type or "", e.resource_id or "", e.detail or "",
+        ])
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]), media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=activity_log_towt.csv"},
+    )

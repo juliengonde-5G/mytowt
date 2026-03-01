@@ -13,6 +13,7 @@ from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.crew import CrewMember, CrewAssignment, CREW_ROLES, REQUIRED_ROLES
+from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/crew", tags=["crew"])
 
@@ -134,6 +135,7 @@ async def member_create_submit(
     )
     db.add(member)
     await db.flush()
+    await log_activity(db, user, "crew", "create", "CrewMember", member.id, f"Marin {member.first_name} {member.last_name}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
     return RedirectResponse(url="/crew", status_code=303)
@@ -177,6 +179,7 @@ async def member_edit_submit(
     member.email = email
     member.notes = notes.strip() if notes else None
     await db.flush()
+    await log_activity(db, user, "crew", "update", "CrewMember", mid, f"Modification marin {member.first_name} {member.last_name}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
     return RedirectResponse(url="/crew", status_code=303)
@@ -193,8 +196,10 @@ async def member_delete(
     member = result.scalar_one_or_none()
     if not member:
         raise HTTPException(status_code=404)
+    name = f"{member.first_name} {member.last_name}"
     await db.delete(member)
     await db.flush()
+    await log_activity(db, user, "crew", "delete", "CrewMember", mid, f"Suppression marin {name}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
     return RedirectResponse(url="/crew", status_code=303)
@@ -238,6 +243,7 @@ async def assign_submit(
     )
     db.add(assignment)
     await db.flush()
+    await log_activity(db, user, "crew", "assign", "CrewAssignment", assignment.id, f"Affectation marin")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
     return RedirectResponse(url="/crew", status_code=303)
@@ -255,6 +261,7 @@ async def assignment_delete(
         raise HTTPException(status_code=404)
     await db.delete(assignment)
     await db.flush()
+    await log_activity(db, user, "crew", "delete", "CrewAssignment", aid, "Suppression affectation")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
     return RedirectResponse(url="/crew", status_code=303)

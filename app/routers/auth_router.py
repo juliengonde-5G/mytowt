@@ -6,6 +6,7 @@ from sqlalchemy import select
 from app.database import get_db
 from app.models.user import User
 from app.auth import verify_password, create_session_token, COOKIE_NAME
+from app.utils.activity import log_activity
 
 router = APIRouter(tags=["auth"])
 
@@ -36,6 +37,9 @@ async def login_submit(
             "request": request,
             "error": "Identifiant ou mot de passe incorrect",
         })
+
+    # Log activity
+    await log_activity(db, user, "auth", "login", "User", user.id, f"Connexion {user.username}")
 
     # Create session
     token = create_session_token(user.id)
