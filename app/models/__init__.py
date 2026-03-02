@@ -12,6 +12,7 @@ from app.models.packing_list import PackingList, PackingListBatch, PackingListAu
 from app.models.onboard import SofEvent, OnboardNotification, CargoDocument
 from app.models.passenger import Passenger, PassengerBooking, PassengerPayment, PassengerDocument, CabinPriceGrid, PreBoardingForm
 from app.models.activity import ActivityLog
+from app.models.mrv import MrvEvent, MrvParameter
 
 __all__ = [
     "User", "Port", "Vessel", "Leg",
@@ -24,4 +25,5 @@ __all__ = [
     "SofEvent", "OnboardNotification", "CargoDocument",
     "Passenger", "PassengerBooking", "PassengerPayment", "PassengerDocument", "CabinPriceGrid",
     "ActivityLog",
+    "MrvEvent", "MrvParameter",
 ]

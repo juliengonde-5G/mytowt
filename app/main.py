@@ -22,6 +22,7 @@ from app.routers.cargo_router import router as cargo_router, ext_router as cargo
 from app.routers.onboard_router import router as onboard_router
 from app.routers.passenger_router import router as passenger_router
 from app.routers.passenger_ext_router import ext_router as passenger_ext_router
+from app.routers.mrv_router import router as mrv_router
 
 settings = get_settings()
 
@@ -105,3 +106,4 @@ app.include_router(cargo_ext_router)
 app.include_router(onboard_router, dependencies=[Depends(require_permission("captain", "C"))])
 app.include_router(passenger_router, dependencies=[Depends(require_permission("captain", "C"))])
 app.include_router(passenger_ext_router)
+app.include_router(mrv_router, dependencies=[Depends(require_permission("mrv", "C"))])

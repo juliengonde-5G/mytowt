@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}MRV Fuel Reporting{% endblock %}
+{% block page_title %}MRV — Fuel Reporting{% endblock %}
+
+{% block topbar_actions %}
+<div style="display:flex;gap:8px;align-items:center;">
+    <form method="get" action="/mrv" style="display:flex;gap:6px;align-items:center;">
+        <select name="year" onchange="this.form.submit()" class="form-input" style="width:90px;">
+            {% for y in years %}
+            <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+        {% if selected_vessel %}<input type="hidden" name="vessel" value="{{ selected_vessel }}">{% endif %}
+    </form>
+    {% if can_edit_mrv %}
+    <a href="/mrv/export/dnv-csv?vessel={{ selected_vessel or '' }}&year={{ current_year }}"
+       class="btn btn-secondary" style="font-size:0.8rem;">
+        <i data-lucide="download" style="width:14px;height:14px;"></i> Export DNV CSV
+    </a>
+    <a href="/mrv/export/carbon-report?vessel={{ selected_vessel or '' }}&year={{ current_year }}"
+       class="btn btn-primary" style="font-size:0.8rem;">
+        <i data-lucide="file-text" style="width:14px;height:14px;"></i> Carbon Report
+    </a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+    .vessel-pills{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;}
+    .vessel-pill{padding:6px 16px;border-radius:20px;font-size:0.85rem;font-weight:500;
+        text-decoration:none;color:var(--text-secondary);background:var(--bg-secondary);
+        border:1px solid var(--border-color);transition:all .2s;}
+    .vessel-pill:hover{border-color:var(--primary);}
+    .vessel-pill.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+
+    .mrv-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px;}
+    .mrv-card{background:var(--bg-primary);border-radius:10px;padding:16px;border:1px solid var(--border-color);}
+    .mrv-card .label{font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;}
+    .mrv-card .value{font-size:1.4rem;font-weight:700;color:var(--text-primary);}
+    .mrv-card .unit{font-size:0.75rem;color:var(--text-secondary);margin-left:4px;}
+
+    .quality-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.7rem;font-weight:600;text-transform:uppercase;}
+    .quality-ok{background:#dcfce7;color:#166534;}
+    .quality-warning{background:#fef3c7;color:#92400e;}
+    .quality-error{background:#fecaca;color:#991b1b;}
+    .quality-pending{background:#e5e7eb;color:#6b7280;}
+
+    .legs-table{width:100%;border-collapse:collapse;}
+    .legs-table th{text-align:left;padding:10px 12px;font-size:0.75rem;text-transform:uppercase;
+        letter-spacing:0.5px;color:var(--text-secondary);border-bottom:2px solid var(--border-color);}
+    .legs-table td{padding:10px 12px;border-bottom:1px solid var(--border-color);font-size:0.85rem;}
+    .legs-table tr:hover{background:var(--bg-secondary);}
+    .legs-table a{color:var(--primary);text-decoration:none;font-weight:500;}
+    .legs-table a:hover{text-decoration:underline;}
+
+    .params-panel{background:var(--bg-primary);border-radius:10px;padding:16px;border:1px solid var(--border-color);margin-top:24px;}
+    .params-panel h3{font-size:0.9rem;margin-bottom:12px;color:var(--text-primary);}
+    .params-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;}
+    .params-grid .form-group{margin-bottom:0;}
+    .params-grid label{font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:3px;}
+    .params-grid input{width:100%;padding:6px 8px;border:1px solid var(--border-color);border-radius:6px;font-size:0.85rem;}
+</style>
+
+<!-- Vessel pills -->
+<div class="vessel-pills">
+    {% for v in vessels %}
+    <a href="/mrv?vessel={{ v.code }}&year={{ current_year }}"
+       class="vessel-pill {% if v.code == selected_vessel %}active{% endif %}">
+        {{ v.name }}
+    </a>
+    {% endfor %}
+</div>
+
+<!-- Summary cards -->
+<div class="mrv-summary">
+    <div class="mrv-card">
+        <div class="label">Total MDO Consumption</div>
+        <div class="value">{{ summary.total_consumption }}<span class="unit">mt</span></div>
+    </div>
+    <div class="mrv-card">
+        <div class="label">Total CO&#8322; Emissions</div>
+        <div class="value">{{ summary.total_co2 }}<span class="unit">mt</span></div>
+    </div>
+    <div class="mrv-card">
+        <div class="label">MRV Events</div>
+        <div class="value">{{ summary.events_count }}</div>
+    </div>
+    <div class="mrv-card">
+        <div class="label">Data Quality</div>
+        <div class="value" style="font-size:0.85rem;">
+            {% if summary.quality_error > 0 %}
+            <span class="quality-badge quality-error">{{ summary.quality_error }} Errors</span>
+            {% endif %}
+            {% if summary.quality_warning > 0 %}
+            <span class="quality-badge quality-warning">{{ summary.quality_warning }} Warnings</span>
+            {% endif %}
+            {% if summary.quality_ok > 0 %}
+            <span class="quality-badge quality-ok">{{ summary.quality_ok }} OK</span>
+            {% endif %}
+            {% if summary.events_count == 0 %}
+            <span class="quality-badge quality-pending">No data</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Legs table -->
+{% if legs_data %}
+<div class="mrv-card">
+    <table class="legs-table">
+        <thead>
+            <tr>
+                <th>Leg</th>
+                <th>Route</th>
+                <th>Events</th>
+                <th>Consumption (mt)</th>
+                <th>CO&#8322; (mt)</th>
+                <th>Quality</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in legs_data %}
+            <tr>
+                <td><a href="/mrv/leg/{{ item.leg.id }}">{{ item.leg.leg_code }}</a></td>
+                <td>
+                    {{ item.leg.departure_port.name if item.leg.departure_port else item.leg.departure_port_locode }}
+                    &rarr;
+                    {{ item.leg.arrival_port.name if item.leg.arrival_port else item.leg.arrival_port_locode }}
+                </td>
+                <td>{{ item.events_count }}</td>
+                <td>{{ item.consumption_mt }}</td>
+                <td>{{ item.co2_mt }}</td>
+                <td>
+                    <span class="quality-badge quality-{{ item.worst_quality }}">
+                        {{ item.worst_quality|upper }}
+                    </span>
+                </td>
+                <td><a href="/mrv/leg/{{ item.leg.id }}">Voir</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="mrv-card" style="text-align:center;padding:40px;color:var(--text-secondary);">
+    <i data-lucide="fuel" style="width:48px;height:48px;margin-bottom:12px;opacity:0.3;"></i>
+    <p>Aucun leg pour {{ vessel_obj.name if vessel_obj else 'ce navire' }} en {{ current_year }}</p>
+</div>
+{% endif %}
+
+<!-- MRV Parameters panel (admin only) -->
+{% if can_edit_mrv %}
+<div class="params-panel">
+    <h3><i data-lucide="settings" style="width:16px;height:16px;vertical-align:middle;"></i> MRV Parameters</h3>
+    <form method="POST" action="/mrv/params/save">
+        <div class="params-grid">
+            <div class="form-group">
+                <label>Avg MDO Density (t/m³)</label>
+                <input type="number" name="avg_mdo_density" step="0.001" min="0.82" max="0.87"
+                       value="{{ params.avg_mdo_density }}">
+            </div>
+            <div class="form-group">
+                <label>MDO Admissible Deviation (mt)</label>
+                <input type="number" name="mdo_admissible_deviation" step="0.1" min="0.1"
+                       value="{{ params.mdo_admissible_deviation }}">
+            </div>
+            <div class="form-group">
+                <label>CO&#8322; Emission Factor (t CO&#8322;/t fuel)</label>
+                <input type="number" name="co2_emission_factor" step="0.001"
+                       value="{{ params.co2_emission_factor }}">
+            </div>
+            <div class="form-group" style="display:flex;align-items:flex-end;">
+                <button type="submit" class="btn btn-primary" style="font-size:0.8rem;">Save Parameters</button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+{% endblock %}

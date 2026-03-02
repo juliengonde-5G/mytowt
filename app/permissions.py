@@ -36,6 +36,7 @@ _MATRIX = {
     ("administrateur", "captain"):     {"C", "M", "S"},
     ("administrateur", "crew"):        {"C", "M", "S"},
     ("administrateur", "cargo"):       {"C", "M", "S"},
+    ("administrateur", "mrv"):         {"C", "M", "S"},
 
     # ─── OPERATION ───────────────────────────────────────
     ("operation", "planning"):    {"C", "M"},
@@ -46,6 +47,7 @@ _MATRIX = {
     ("operation", "captain"):     {"C"},
     ("operation", "crew"):        {"C"},
     ("operation", "cargo"):       {"C", "M", "S"},
+    ("operation", "mrv"):         {"C", "M"},
 
     # ─── ARMEMENT ────────────────────────────────────────
     ("armement", "planning"):    {"C"},
@@ -56,6 +58,7 @@ _MATRIX = {
     ("armement", "captain"):     {"C"},
     ("armement", "crew"):        {"C", "M", "S"},
     # cargo: no access
+    ("armement", "mrv"):         {"C"},
 
     # ─── TECHNIQUE ───────────────────────────────────────
     ("technique", "planning"):    {"C"},
@@ -66,6 +69,7 @@ _MATRIX = {
     ("technique", "captain"):     {"C"},
     ("technique", "crew"):        {"C"},
     # cargo: no access
+    ("technique", "mrv"):         {"C", "M"},
 
     # ─── DATA ANALYST ────────────────────────────────────
     ("data_analyst", "planning"):    {"C"},
@@ -76,6 +80,7 @@ _MATRIX = {
     ("data_analyst", "captain"):     {"C"},
     ("data_analyst", "crew"):        {"C"},
     ("data_analyst", "cargo"):       {"C"},
+    ("data_analyst", "mrv"):         {"C", "M"},
 
     # ─── MARINS ──────────────────────────────────────────
     ("marins", "planning"):    {"C"},
@@ -86,6 +91,7 @@ _MATRIX = {
     ("marins", "captain"):     {"C", "M", "S"},
     ("marins", "crew"):        {"C"},
     ("marins", "cargo"):       {"C"},
+    ("marins", "mrv"):         {"C"},
 }
 
 # Legacy role mapping (old roles → new roles)
@@ -109,7 +115,7 @@ ROLES = [
 # All modules
 MODULES = [
     "planning", "commercial", "escale", "finance",
-    "kpi", "captain", "crew", "cargo",
+    "kpi", "captain", "crew", "cargo", "mrv",
 ]
 
 # Module display names
@@ -122,6 +128,7 @@ MODULE_NAMES = {
     "captain": "Capitaine",
     "crew": "Équipage",
     "cargo": "Cargo Docs",
+    "mrv": "MRV Fuel",
 }
 
 
