@@ -4,8 +4,8 @@ services:
   app:
     build: .
     container_name: towt-app-v2
-    ports:
-      - "8081:8000"
+    expose:
+      - "8000"
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-towt_admin}:${POSTGRES_PASSWORD:-towt_secure_2025}@db:5432/${POSTGRES_DB:-towt_planning}
       - SECRET_KEY=${SECRET_KEY:-towt_secret_key_change_in_production_2025}
@@ -16,6 +16,17 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: towt-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
     restart: unless-stopped
 
   db:
