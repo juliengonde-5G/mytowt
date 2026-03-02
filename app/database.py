@@ -37,6 +37,19 @@ async def get_db():
 
 
 async def init_db():
-    """Create all tables."""
+    """Create all tables (skip if they already exist)."""
+    from sqlalchemy import inspect
+
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        def _create_tables(sync_conn):
+            inspector = inspect(sync_conn)
+            existing = set(inspector.get_table_names())
+            # Only create tables that don't exist yet
+            tables_to_create = [
+                t for t in Base.metadata.sorted_tables
+                if t.name not in existing
+            ]
+            if tables_to_create:
+                Base.metadata.create_all(sync_conn, tables=tables_to_create)
+
+        await conn.run_sync(_create_tables)
