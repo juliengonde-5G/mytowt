@@ -73,10 +73,10 @@ git push -u origin main
 
 ```bash
 # Se connecter en SSH au VPS
-ssh user@51.178.59.174
+ssh ubuntu@51.178.59.174
 
 # Le code est déjà sur le VPS
-cd /home/user/mytowt
+cd /home/ubuntu/mytowt
 git pull origin main
 ```
 
@@ -135,8 +135,8 @@ git push
 
 **Option simple — Pull sur le VPS :**
 ```bash
-ssh user@51.178.59.174
-cd /home/user/mytowt
+ssh ubuntu@51.178.59.174
+cd /home/ubuntu/mytowt
 git pull origin main
 docker restart towt-app-v2
 ```
@@ -146,7 +146,7 @@ docker restart towt-app-v2
 #!/bin/bash
 # deploy.sh — sur le VPS OVH
 set -e
-cd /home/user/mytowt
+cd /home/ubuntu/mytowt
 git pull origin main
 docker restart towt-app-v2
 echo "✅ Déployé $(git log --oneline -1)"

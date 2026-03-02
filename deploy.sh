@@ -4,7 +4,7 @@
 # ═══════════════════════════════════════════════════════════════
 #
 # Usage:
-#   1. cd /home/user/mytowt
+#   1. cd /home/ubuntu/mytowt
 #   2. chmod +x deploy.sh
 #   3. ./deploy.sh
 #

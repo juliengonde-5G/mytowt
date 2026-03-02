@@ -21,13 +21,13 @@ mytowt-deploy/
 ### 1. Se connecter au VPS
 
 ```bash
-ssh user@51.178.59.174
+ssh ubuntu@51.178.59.174
 ```
 
 ### 2. Déployer
 
 ```bash
-cd /home/user/mytowt
+cd /home/ubuntu/mytowt
 git pull origin main
 chmod +x deploy.sh backup.sh restore.sh
 ./deploy.sh
@@ -104,7 +104,7 @@ Pour des sauvegardes quotidiennes sur le VPS :
 
 ```bash
 # Ajouter au crontab (crontab -e)
-0 2 * * * /home/user/mytowt/backup.sh /home/user/mytowt/backups >> /var/log/towt-backup.log 2>&1
+0 2 * * * /home/ubuntu/mytowt/backup.sh /home/ubuntu/mytowt/backups >> /var/log/towt-backup.log 2>&1
 ```
 
 ### Restauration
