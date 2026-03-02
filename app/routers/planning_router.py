@@ -791,21 +791,25 @@ async def pdf_commercial(
             legs_by_vessel[vname] = []
         legs_by_vessel[vname].append(leg)
 
-    # Group by route (dep → arr)
+    # Group by route (dep → arr), sorted by date within each route
     legs_by_route = {}
     for leg in legs:
         route = f"{leg.departure_port.name} → {leg.arrival_port.name}"
         if route not in legs_by_route:
             legs_by_route[route] = []
         legs_by_route[route].append(leg)
+    for route in legs_by_route:
+        legs_by_route[route].sort(key=lambda l: l.etd or l.eta or datetime.max)
 
-    # Group by destination port
+    # Group by destination port, sorted by date
     legs_by_dest = {}
     for leg in legs:
         dest = leg.arrival_port.name
         if dest not in legs_by_dest:
             legs_by_dest[dest] = []
         legs_by_dest[dest].append(leg)
+    for dest in legs_by_dest:
+        legs_by_dest[dest].sort(key=lambda l: l.etd or l.eta or datetime.max)
 
     # All unique ports for the selectors
     all_destinations = sorted(set(

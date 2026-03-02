@@ -13,8 +13,8 @@ async def log_activity(
 ):
     """Record an activity in the global journal."""
     entry = ActivityLog(
-        user_id=user.id if user else None,
-        username=(user.full_name or user.username) if user else "Système",
+        user_id=user.id if user and hasattr(user, "id") else None,
+        username=(user.full_name or user.username) if user and hasattr(user, "username") else (user if isinstance(user, str) else "Système"),
         module=module,
         action=action,
         resource_type=resource_type,

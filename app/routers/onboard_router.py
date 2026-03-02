@@ -274,6 +274,7 @@ async def dismiss_notification(
     if notif:
         notif.is_read = True
         await db.flush()
+        await log_activity(db, user, "onboard", "dismiss", "Notification", notif_id, "Notification acquittée")
     return HTMLResponse(content="", status_code=200)
 
 
@@ -291,6 +292,7 @@ async def dismiss_all_notifications(
         .values(is_read=True)
     )
     await db.flush()
+    await log_activity(db, user, "onboard", "dismiss_all", "Notification", leg_id, "Toutes notifications acquittées")
     leg = await db.get(Leg, leg_id)
     vessel_obj = await db.get(Vessel, leg.vessel_id) if leg else None
     vc = vessel_obj.code if vessel_obj else ""

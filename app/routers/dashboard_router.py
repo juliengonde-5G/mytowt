@@ -16,6 +16,7 @@ from app.models.order import Order
 from app.models.finance import LegFinance
 from app.models.operation import EscaleOperation
 from app.models.packing_list import PackingList
+from app.utils.activity import log_activity
 
 router = APIRouter(tags=["dashboard"])
 
@@ -280,6 +281,7 @@ async def dismiss_cargo_notification(
     if pl and pl.status == "submitted":
         pl.status = "reviewed"
     await db.flush()
+    await log_activity(db, user, "dashboard", "dismiss", "PackingList", pl_id, "Notification cargo acquittée")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/"})
     return RedirectResponse(url="/", status_code=303)

@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.templating import templates
 from app.database import get_db
+from app.utils.activity import log_activity
 from app.models.leg import Leg
 from app.models.passenger import (
     PassengerBooking, Passenger, PassengerDocument, PreBoardingForm,
@@ -103,6 +104,7 @@ async def upload_document(
     doc.file_path = file_path
     doc.status = "uploaded"
     await db.flush()
+    await log_activity(db, "Passager (portail)", "passengers", "upload_doc", "PassengerDocument", doc_id, f"Upload document {doc.doc_type}")
 
     return RedirectResponse(url=f"/passenger/{token}#docs", status_code=303)
 
@@ -137,6 +139,7 @@ async def external_pax_update(
     pax.emergency_contact_name = emergency_contact_name.strip() or None
     pax.emergency_contact_phone = emergency_contact_phone.strip() or None
     await db.flush()
+    await log_activity(db, "Passager (portail)", "passengers", "update", "Passenger", pax_id, f"Mise à jour passager {pax.first_name} {pax.last_name}")
 
     return RedirectResponse(url=f"/passenger/{token}", status_code=303)
 
@@ -282,4 +285,5 @@ async def submit_questionnaire(
         db.add(form)
 
     await db.flush()
+    await log_activity(db, "Passager (portail)", "passengers", "questionnaire", "PreBoardingForm", pax_id, "Questionnaire pré-embarquement soumis")
     return RedirectResponse(url=f"/passenger/{token}#questionnaire", status_code=303)
