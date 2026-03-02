@@ -34,6 +34,7 @@
         .form-input,.form-select,.form-textarea{padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;transition:border-color 0.2s}
         .form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:#095561;box-shadow:0 0 0 2px rgba(9,85,97,0.1)}
         .form-textarea{resize:vertical;min-height:60px}
+        .field-help{font-size:10px;color:#888;font-style:italic;margin-top:2px}
         .btn{padding:10px 24px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
         .btn-primary{background:#095561;color:white}.btn-primary:hover{background:#0a6b79}
         .btn-secondary{background:#e5e7eb;color:#555}.btn-secondary:hover{background:#d1d5db}
@@ -65,6 +66,14 @@
 
         {% if request.query_params.get('saved') %}
         <div class="saved-banner">✅ {{ t('pl_saved_msg', lang) }}</div>
+        {% endif %}
+
+        {% if request.query_params.get('error') == 'no_file' %}
+        <div class="locked-banner">No file selected.</div>
+        {% elif request.query_params.get('error') == 'invalid_file' %}
+        <div class="locked-banner">Invalid Excel file. Please use the TOWT template.</div>
+        {% elif request.query_params.get('error') == 'invalid_format' %}
+        <div class="locked-banner">Invalid format. Please use the TOWT Packing List template.</div>
         {% endif %}
 
         <!-- Info bar -->
@@ -111,15 +120,38 @@
                     <!-- Client editable fields -->
                     <div class="section-title">👤 {{ t('pl_shipper_section', lang) }}</div>
                     <div class="form-grid">
-                        <div class="form-group"><label class="form-label">{{ t('f_customer_name', lang) }} *</label><input type="text" name="{{ p }}customer_name" class="form-input" value="{{ batch.customer_name or '' }}"></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_customer_name', lang) }} *</label><input type="text" name="{{ p }}customer_name" class="form-input" value="{{ batch.customer_name or '' }}" required></div>
                         <div class="form-group"><label class="form-label">{{ t('f_freight_forwarder', lang) }}</label><input type="text" name="{{ p }}freight_forwarder" class="form-input" value="{{ batch.freight_forwarder or '' }}"></div>
                         <div class="form-group"><label class="form-label">{{ t('f_code_transitaire', lang) }}</label><input type="text" name="{{ p }}code_transitaire" class="form-input" value="{{ batch.code_transitaire or '' }}"></div>
-                        <div class="form-group"><label class="form-label">{{ t('f_shipper_name', lang) }} *</label><input type="text" name="{{ p }}shipper_name" class="form-input" value="{{ batch.shipper_name or '' }}"></div>
-                        <div class="form-group full"><label class="form-label">{{ t('f_shipper_address', lang) }} *</label><textarea name="{{ p }}shipper_address" class="form-textarea">{{ batch.shipper_address or '' }}</textarea></div>
                         <div class="form-group"><label class="form-label">{{ t('f_po_number', lang) }}</label><input type="text" name="{{ p }}po_number" class="form-input" value="{{ batch.po_number or '' }}"></div>
                         <div class="form-group"><label class="form-label">{{ t('f_batch_id', lang) }}</label><input type="text" name="{{ p }}customer_batch_id" class="form-input" value="{{ batch.customer_batch_id or '' }}"></div>
-                        <div class="form-group full"><label class="form-label">{{ t('f_notify_address', lang) }}</label><textarea name="{{ p }}notify_address" class="form-textarea">{{ batch.notify_address or '' }}</textarea></div>
-                        <div class="form-group full"><label class="form-label">{{ t('f_consignee_address', lang) }} *</label><textarea name="{{ p }}consignee_address" class="form-textarea">{{ batch.consignee_address or '' }}</textarea></div>
+                    </div>
+
+                    <div class="section-title">📤 Shipper (Expéditeur)</div>
+                    <div class="form-grid">
+                        <div class="form-group"><label class="form-label">{{ t('f_shipper_name', lang) }} *</label><input type="text" name="{{ p }}shipper_name" class="form-input" value="{{ batch.shipper_name or '' }}" required></div>
+                        <div class="form-group full"><label class="form-label">Address *</label><input type="text" name="{{ p }}shipper_address" class="form-input" value="{{ batch.shipper_address or '' }}" required placeholder="Street address"></div>
+                        <div class="form-group"><label class="form-label">Postal code *</label><input type="text" name="{{ p }}shipper_postal" class="form-input" value="{{ batch.shipper_postal or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">City *</label><input type="text" name="{{ p }}shipper_city" class="form-input" value="{{ batch.shipper_city or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">Country *</label><input type="text" name="{{ p }}shipper_country" class="form-input" value="{{ batch.shipper_country or '' }}" required></div>
+                    </div>
+
+                    <div class="section-title">🔔 Notify Party</div>
+                    <div class="form-grid">
+                        <div class="form-group"><label class="form-label">Name *</label><input type="text" name="{{ p }}notify_name" class="form-input" value="{{ batch.notify_name or '' }}" required></div>
+                        <div class="form-group full"><label class="form-label">Address *</label><input type="text" name="{{ p }}notify_address" class="form-input" value="{{ batch.notify_address or '' }}" required placeholder="Street address"></div>
+                        <div class="form-group"><label class="form-label">Postal code *</label><input type="text" name="{{ p }}notify_postal" class="form-input" value="{{ batch.notify_postal or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">City *</label><input type="text" name="{{ p }}notify_city" class="form-input" value="{{ batch.notify_city or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">Country *</label><input type="text" name="{{ p }}notify_country" class="form-input" value="{{ batch.notify_country or '' }}" required></div>
+                    </div>
+
+                    <div class="section-title">📥 Consignee (Destinataire)</div>
+                    <div class="form-grid">
+                        <div class="form-group"><label class="form-label">Name *</label><input type="text" name="{{ p }}consignee_name" class="form-input" value="{{ batch.consignee_name or '' }}" required></div>
+                        <div class="form-group full"><label class="form-label">Address *</label><input type="text" name="{{ p }}consignee_address" class="form-input" value="{{ batch.consignee_address or '' }}" required placeholder="Street address"></div>
+                        <div class="form-group"><label class="form-label">Postal code *</label><input type="text" name="{{ p }}consignee_postal" class="form-input" value="{{ batch.consignee_postal or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">City *</label><input type="text" name="{{ p }}consignee_city" class="form-input" value="{{ batch.consignee_city or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">Country *</label><input type="text" name="{{ p }}consignee_country" class="form-input" value="{{ batch.consignee_country or '' }}" required></div>
                     </div>
 
                     <div class="section-title">📦 {{ t('pl_goods_section', lang) }}</div>
@@ -134,6 +166,7 @@
                             </select>
                         </div>
                         <div class="form-group"><label class="form-label">Nature des marchandises *</label><input type="text" name="{{ p }}type_of_goods" class="form-input" value="{{ batch.type_of_goods or '' }}" placeholder="ex: Vin, café, cosmétiques..."></div>
+                        <div class="form-group full"><label class="form-label">Description of the goods</label><textarea name="{{ p }}description_of_goods" class="form-textarea" placeholder="Full description for Bill of Lading">{{ batch.description_of_goods or '' }}</textarea></div>
                         <div class="form-group"><label class="form-label">Produits bio</label>
                             <select name="{{ p }}bio_products" class="form-select">
                                 <option value="">—</option>
@@ -157,10 +190,10 @@
 
                     <div class="section-title">📐 {{ t('pl_dimensions_section', lang) }}</div>
                     <div class="form-grid">
-                        <div class="form-group"><label class="form-label">Longueur (cm)</label><input type="text" name="{{ p }}length_cm" class="form-input" value="{{ batch.length_cm or '' }}"></div>
-                        <div class="form-group"><label class="form-label">Largeur (cm)</label><input type="text" name="{{ p }}width_cm" class="form-input" value="{{ batch.width_cm or '' }}"></div>
-                        <div class="form-group"><label class="form-label">Hauteur (cm)</label><input type="text" name="{{ p }}height_cm" class="form-input" value="{{ batch.height_cm or '' }}"></div>
-                        <div class="form-group"><label class="form-label">Poids brut (kg) *</label><input type="text" name="{{ p }}weight_kg" class="form-input" value="{{ batch.weight_kg or '' }}"></div>
+                        <div class="form-group"><label class="form-label">Longueur (cm) *</label><input type="text" name="{{ p }}length_cm" class="form-input" value="{{ batch.length_cm or '' }}" required><span class="field-help">Outer pallet length incl. packaging</span></div>
+                        <div class="form-group"><label class="form-label">Largeur (cm) *</label><input type="text" name="{{ p }}width_cm" class="form-input" value="{{ batch.width_cm or '' }}" required><span class="field-help">Outer pallet width incl. packaging</span></div>
+                        <div class="form-group"><label class="form-label">Hauteur (cm) *</label><input type="text" name="{{ p }}height_cm" class="form-input" value="{{ batch.height_cm or '' }}" required><span class="field-help">Total height from floor to top of goods, pallet included</span></div>
+                        <div class="form-group"><label class="form-label">Poids brut (kg) *</label><input type="text" name="{{ p }}weight_kg" class="form-input" value="{{ batch.weight_kg or '' }}" required><span class="field-help">Gross weight per pallet: goods + pallet + wrapping</span></div>
                     </div>
                     {% endif %}
                 </div>
@@ -169,13 +202,32 @@
 
             {% if not pl.is_locked %}
             <div class="actions-bar">
-                <form method="POST" action="/p/{{ pl.token }}/batch/add">
-                    <button type="submit" class="btn btn-add">＋ {{ t('pl_add_batch', lang) }}</button>
-                </form>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                    <form method="POST" action="/p/{{ pl.token }}/batch/add" style="display:inline;">
+                        <button type="submit" class="btn btn-add" style="width:auto;padding:10px 20px;">＋ {{ t('pl_add_batch', lang) }}</button>
+                    </form>
+                    <a href="/p/{{ pl.token }}/template" class="btn btn-secondary">📥 Download Excel template</a>
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='flex'">📤 Import Excel</button>
+                </div>
                 <button type="submit" class="btn btn-primary">💾 {{ t('save', lang) }}</button>
             </div>
             {% endif %}
         </form>
+    </div>
+
+    <!-- Import Excel Modal -->
+    <div id="import-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;" onclick="if(event.target===this) this.style.display='none'">
+        <div style="background:white;border-radius:12px;padding:24px;max-width:500px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+            <h3 style="margin-bottom:8px;color:#095561;">📤 Import Excel Template</h3>
+            <p style="font-size:12px;color:#888;margin-bottom:16px;">Upload your filled Packing List template. Existing batch data will be updated with the imported values.</p>
+            <form method="POST" action="/p/{{ pl.token }}/import" enctype="multipart/form-data">
+                <input type="file" name="file" accept=".xlsx,.xls" class="form-input" required style="margin-bottom:16px;">
+                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='none'">Cancel</button>
+                    <button type="submit" class="btn btn-primary">📤 Import</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <div class="footer">

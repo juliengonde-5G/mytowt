@@ -12,6 +12,7 @@ from app.templating import templates
 from app.database import get_db
 from app.auth import get_current_user
 from app.models.user import User
+from app.utils.activity import log_activity
 from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.passenger import (
@@ -201,6 +202,7 @@ async def booking_create_submit(
             db.add(PassengerDocument(passenger_id=pax2.id, doc_type=doc_code, status="missing"))
 
     await db.flush()
+    await log_activity(db, user, "passengers", "create", "Booking", booking.id, f"Réservation {booking.reference}")
     return RedirectResponse(url=f"/passengers/{booking.id}", status_code=303)
 
 
@@ -265,6 +267,7 @@ async def booking_update_status(
         raise HTTPException(404)
     booking.status = status
     await db.flush()
+    await log_activity(db, user, "passengers", "status", "Booking", booking_id, f"Statut → {status}")
     return RedirectResponse(url=f"/passengers/{booking_id}", status_code=303)
 
 
@@ -295,6 +298,7 @@ async def passenger_update(
     pax.emergency_contact_name = emergency_contact_name.strip() or None
     pax.emergency_contact_phone = emergency_contact_phone.strip() or None
     await db.flush()
+    await log_activity(db, user, "passengers", "update", "Passenger", pax_id, f"Passager {pax.first_name} {pax.last_name}")
     return RedirectResponse(url=f"/passengers/{pax.booking_id}", status_code=303)
 
 
@@ -338,6 +342,7 @@ async def add_passenger(
     for doc_code, _ in DOCUMENT_TYPES:
         db.add(PassengerDocument(passenger_id=pax.id, doc_type=doc_code, status="missing"))
     await db.flush()
+    await log_activity(db, user, "passengers", "add_passenger", "Booking", booking_id, f"Passager {pax.first_name} {pax.last_name}")
     return RedirectResponse(url=f"/passengers/{booking_id}", status_code=303)
 
 
@@ -376,6 +381,7 @@ async def add_payment(
         booking.status = "confirmed"
 
     await db.flush()
+    await log_activity(db, user, "passengers", "add_payment", "Booking", booking_id, f"Paiement {payment_type} {amount}€")
     return RedirectResponse(url=f"/passengers/{booking_id}#payments", status_code=303)
 
 
@@ -393,6 +399,7 @@ async def update_payment_status(
     if status == "received":
         payment.paid_date = date.today()
     await db.flush()
+    await log_activity(db, user, "passengers", "payment_status", "Payment", payment_id, f"Statut paiement → {status}")
 
     # Auto-update booking status if all payments received
     if status == "received":
@@ -431,6 +438,7 @@ async def update_doc_status(
         doc.reviewed_by = user.full_name
         doc.reviewed_at = func.now()
     await db.flush()
+    await log_activity(db, user, "passengers", "doc_status", "Document", doc_id, f"Statut doc → {status}")
     pax = await db.get(Passenger, doc.passenger_id)
     return RedirectResponse(url=f"/passengers/{pax.booking_id}#documents", status_code=303)
 

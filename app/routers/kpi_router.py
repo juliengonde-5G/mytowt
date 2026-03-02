@@ -17,6 +17,7 @@ from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.kpi import LegKPI
 from app.models.emission_parameter import EmissionParameter
+from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/kpi", tags=["kpi"])
 
@@ -209,6 +210,7 @@ async def update_cargo(
         db.add(kpi)
 
     await db.flush()
+    await log_activity(db, user, "kpi", "update_cargo", "LegKPI", leg_id, f"Tonnage cargo → {_tons}t")
 
     # Redirect back
     leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == leg_id))

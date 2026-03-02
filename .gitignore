@@ -7,14 +7,14 @@ __pycache__/
 dist/
 build/
 *.egg
+.eggs/
 
-# Virtual environments
+# Environment
+.env
+.env.local
+.env.production
 venv/
 .venv/
-env/
-
-# Environment variables
-.env
 
 # IDE
 .vscode/
@@ -27,11 +27,13 @@ env/
 .DS_Store
 Thumbs.db
 
-# Docker
+# Docker volumes
 postgres_data/
 
-# Logs
+# Logs & temp
 *.log
+*.bak
+/tmp/
 
 # Uploads & generated files
 app/static/uploads/

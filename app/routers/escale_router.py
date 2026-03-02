@@ -14,6 +14,7 @@ from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.operation import EscaleOperation, DockerShift
 from app.models.crew import CrewMember, CrewAssignment
+from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/escale", tags=["escale"])
 
@@ -275,6 +276,7 @@ async def update_port_status(
         await propagate_from_leg(db, leg)
 
     await db.flush()
+    await log_activity(db, user, "escale", "port_status", "Leg", lid, f"Statut port → {new_status}")
     url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={lid}"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
@@ -290,6 +292,7 @@ async def lock_leg(lid: int, request: Request, user: User = Depends(get_current_
         raise HTTPException(404)
     leg.status = "completed"
     await db.flush()
+    await log_activity(db, user, "escale", "lock", "Leg", lid, "Verrouillage escale")
     url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={lid}"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
@@ -304,6 +307,7 @@ async def unlock_leg(lid: int, request: Request, user: User = Depends(get_curren
         raise HTTPException(404)
     leg.status = "planned"
     await db.flush()
+    await log_activity(db, user, "escale", "unlock", "Leg", lid, "Déverrouillage escale")
     url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={lid}"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
@@ -388,6 +392,7 @@ async def operation_create_submit(
     )
     db.add(op)
     await db.flush()
+    await log_activity(db, user, "escale", "create", "Operation", op.id, f"Opération {action}")
     form = await request.form()
     crew_ids = [int(x) for x in form.getlist("crew_ids") if x]
     if crew_ids:
@@ -454,6 +459,7 @@ async def operation_edit_submit(
     op.intervenant = intervenant.strip() if intervenant else None
     op.description = description.strip() if description else None
     await db.flush()
+    await log_activity(db, user, "escale", "update", "Operation", op_id, f"Modification opération {action}")
     form = await request.form()
     crew_ids = [int(x) for x in form.getlist("crew_ids") if x]
     if crew_ids:
@@ -474,8 +480,10 @@ async def operation_delete(op_id: int, request: Request, user: User = Depends(ge
     if not op:
         raise HTTPException(404)
     leg_id = op.leg_id
+    saved_action = op.action
     await db.delete(op)
     await db.flush()
+    await log_activity(db, user, "escale", "delete", "Operation", op_id, "Suppression opération")
     leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == leg_id))
     leg = leg_result.scalar_one_or_none()
     url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={leg_id}" if leg else "/escale"
@@ -522,6 +530,7 @@ async def docker_create_submit(
     )
     db.add(ds)
     await db.flush()
+    await log_activity(db, user, "escale", "create", "DockerShift", ds.id, f"Docker shift cale {hold}")
     leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == _leg_id))
     leg = leg_result.scalar_one_or_none()
     url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={_leg_id}" if leg else "/escale"
@@ -574,6 +583,7 @@ async def docker_edit_submit(
     ds.actual_palettes = parse_int(actual_palettes)
     ds.notes = notes.strip() if notes else None
     await db.flush()
+    await log_activity(db, user, "escale", "update", "DockerShift", ds_id, f"Modification docker shift cale {hold}")
     leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == ds.leg_id))
     leg = leg_result.scalar_one_or_none()
     url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={ds.leg_id}" if leg else "/escale"
@@ -591,6 +601,7 @@ async def docker_delete(ds_id: int, request: Request, user: User = Depends(get_c
     leg_id = ds.leg_id
     await db.delete(ds)
     await db.flush()
+    await log_activity(db, user, "escale", "delete", "DockerShift", ds_id, "Suppression docker shift")
     leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == leg_id))
     leg = leg_result.scalar_one_or_none()
     url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={leg_id}" if leg else "/escale"

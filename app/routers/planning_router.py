@@ -16,6 +16,7 @@ from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg, LegStatus
 from app.models.port import Port
+from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/planning", tags=["planning"])
 
@@ -419,6 +420,7 @@ async def leg_create_submit(
 
     db.add(leg)
     await db.flush()
+    await log_activity(db, user, "planning", "create", "Leg", leg.id, f"Création leg {leg.leg_code}")
 
     # Resequence all legs
     await resequence_and_recalc(db, _vessel_id, _year)
@@ -545,6 +547,7 @@ async def leg_edit_submit(
         leg.eta = compute_eta(leg.etd, leg.distance_nm, _speed, _elongation)
 
     await db.flush()
+    await log_activity(db, user, "planning", "update", "Leg", leg_id, f"Modification leg {leg.leg_code}")
 
     # Resequence and recalculate chain
     await resequence_and_recalc(db, _vessel_id, _year)
@@ -572,9 +575,11 @@ async def leg_delete(
     vessel_code = leg.vessel.code
     vessel_id = leg.vessel_id
     year = leg.year
+    leg_code = leg.leg_code
 
     await db.delete(leg)
     await db.flush()
+    await log_activity(db, user, "planning", "delete", "Leg", leg_id, f"Suppression leg {leg_code}")
     await resequence_and_recalc(db, vessel_id, year)
 
     if request.headers.get("HX-Request"):

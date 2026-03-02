@@ -16,6 +16,7 @@ from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.order import Order, OrderAssignment
 from app.models.finance import LegFinance, PortConfig, OpexParameter
+from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 
@@ -299,6 +300,7 @@ async def finance_edit_submit(
     fin.notes = notes.strip() if notes else None
     fin.compute()
     await db.flush()
+    await log_activity(db, user, "finance", "update", "LegFinance", leg_id, "Modification finances")
 
     leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == leg_id))
     leg = leg_result.scalar_one_or_none()
@@ -391,6 +393,7 @@ async def port_config_edit_submit(
         )
         db.add(config)
     await db.flush()
+    await log_activity(db, user, "finance", "update_port", "PortConfig", None, f"Config port {locode}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/finance/ports"})
     return RedirectResponse(url="/finance/ports", status_code=303)
