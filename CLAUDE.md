@@ -4,7 +4,7 @@
 
 **my_TOWT** is a maritime operations management platform for TOWT (Transport à la Voile), a French sailing cargo company. It manages vessel planning, commercial orders, cargo logistics, port calls, onboard operations, crew scheduling, passenger bookings, and financial tracking.
 
-**Production URL**: http://towt-planning.synology.me:8081
+**Production URL**: http://51.178.59.174 (VPS OVH)
 **Default login**: admin / towt2025
 
 ## Tech Stack
@@ -16,7 +16,7 @@
 | Frontend | Jinja2 templates + HTMX (no JS framework) |
 | Auth | Cookie sessions, bcrypt, itsdangerous |
 | CSS | Single `app/static/css/app.css` design system |
-| Deployment | Docker on Synology NAS, port 8081 |
+| Deployment | Docker on VPS OVH, behind nginx reverse proxy |
 
 ## Project Structure
 
@@ -109,7 +109,7 @@ mytowt/
 
 ## Deployment
 
-### Current (Synology NAS)
+### Current (VPS OVH)
 ```bash
 docker-compose up -d          # Start
 docker restart towt-app-v2    # Restart after changes

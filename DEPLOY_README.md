@@ -16,22 +16,19 @@ mytowt-deploy/
 └── DEPLOY_README.md      # Ce fichier
 ```
 
-## Déploiement rapide (Synology NAS)
+## Déploiement rapide (VPS OVH)
 
-### 1. Copier le package sur le NAS
+### 1. Se connecter au VPS
 
 ```bash
-# Depuis votre machine locale
-scp mytowt-deploy.tar.gz admin@<IP_NAS>:/volume1/docker/
+ssh user@51.178.59.174
 ```
 
-### 2. Extraire et déployer
+### 2. Déployer
 
 ```bash
-# Sur le NAS (via SSH)
-cd /volume1/docker
-tar xzf mytowt-deploy.tar.gz
-cd mytowt-deploy
+cd /home/user/mytowt
+git pull origin main
 chmod +x deploy.sh backup.sh restore.sh
 ./deploy.sh
 ```
@@ -46,7 +43,7 @@ Le script `deploy.sh` effectue automatiquement :
 
 ### 3. Accéder à l'application
 
-- **URL** : `http://<IP_NAS>:8081`
+- **URL** : `http://51.178.59.174`
 - **Login** : `admin` / `towt2025`
 
 ## Déploiement manuel
@@ -96,18 +93,18 @@ docker restart towt-app-v2
 
 | Service | Port interne | Port exposé |
 |---------|-------------|-------------|
-| Application (uvicorn) | 8000 | **8081** |
+| Application (uvicorn) | 8000 | **80** (via nginx) |
 | PostgreSQL | 5432 | **5433** |
 
 ## Sauvegarde et restauration
 
 ### Sauvegarde automatique (cron)
 
-Pour des sauvegardes quotidiennes sur le NAS :
+Pour des sauvegardes quotidiennes sur le VPS :
 
 ```bash
 # Ajouter au crontab (crontab -e)
-0 2 * * * /volume1/docker/mytowt-deploy/backup.sh /volume1/docker/mytowt-deploy/backups >> /var/log/towt-backup.log 2>&1
+0 2 * * * /home/user/mytowt/backup.sh /home/user/mytowt/backups >> /var/log/towt-backup.log 2>&1
 ```
 
 ### Restauration

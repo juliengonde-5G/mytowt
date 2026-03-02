@@ -61,7 +61,7 @@ git commit -m "Initial commit — my_TOWT v2.0.0
 Maritime operations platform:
 - 10 modules: planning, commercial, cargo, escale, onboard, crew, passengers, finance, KPI, admin
 - FastAPI + PostgreSQL + Jinja2 + HTMX
-- Docker deployment (Synology NAS)
+- Docker deployment (VPS OVH)
 - Role-based permissions (6 roles, 14 modules)"
 
 # 5. Push
@@ -69,25 +69,15 @@ git branch -M main
 git push -u origin main
 ```
 
-### Option B — Depuis le Synology directement
+### Option B — Depuis le VPS OVH directement
 
 ```bash
-# Se connecter en SSH au Synology
-ssh admin@towt-planning.synology.me
+# Se connecter en SSH au VPS
+ssh user@51.178.59.174
 
-# Installer git si nécessaire (via package center ou opkg)
-
-# Extraire l'app depuis le container
-cd /volume1/homes/admin.5g/
-mkdir mytowt && cd mytowt
-
-# Copier les sources depuis le container
-sudo docker cp towt-app-v2:/app/app ./app
-
-# Créer les fichiers racine manuellement (ou copier depuis le ZIP)
-# ... (Dockerfile, docker-compose.yml, requirements.txt, etc.)
-
-# Puis git init + push comme ci-dessus
+# Le code est déjà sur le VPS
+cd /home/user/mytowt
+git pull origin main
 ```
 
 ---
@@ -138,33 +128,27 @@ git add -A
 git commit -m "feat: description du changement"
 git push
 
-# 4. Déployer sur le Synology (voir ci-dessous)
+# 4. Déployer sur le VPS (voir ci-dessous)
 ```
 
-### Déploiement depuis GitHub vers Synology
+### Déploiement depuis GitHub vers VPS OVH
 
-**Option simple — Pull sur le Synology :**
+**Option simple — Pull sur le VPS :**
 ```bash
-ssh admin@towt-planning.synology.me
-cd /volume1/homes/admin.5g/mytowt
+ssh user@51.178.59.174
+cd /home/user/mytowt
 git pull origin main
-
-# Copier dans le container
-sudo docker cp app towt-app-v2:/app/
-sudo docker exec towt-app-v2 chmod -R 755 /app/app/static/
-sudo docker restart towt-app-v2
+docker restart towt-app-v2
 ```
 
 **Option avancée — Script de deploy automatique :**
 ```bash
 #!/bin/bash
-# deploy.sh — à mettre sur le Synology
+# deploy.sh — sur le VPS OVH
 set -e
-cd /volume1/homes/admin.5g/mytowt
+cd /home/user/mytowt
 git pull origin main
-sudo docker cp app towt-app-v2:/app/
-sudo docker exec towt-app-v2 chmod -R 755 /app/app/static/
-sudo docker restart towt-app-v2
+docker restart towt-app-v2
 echo "✅ Déployé $(git log --oneline -1)"
 ```
 

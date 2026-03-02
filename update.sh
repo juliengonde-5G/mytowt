@@ -129,8 +129,8 @@ sleep 3
 
 # ─── 7. Vérification santé ───────────────────────────
 echo ""
-if curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/login | grep -q "200"; then
-    log "Application accessible sur http://localhost:8081"
+if curl -s -o /dev/null -w "%{http_code}" http://localhost/login | grep -q "200"; then
+    log "Application accessible sur http://localhost"
 else
     # Essai avec le port interne
     if docker exec towt-app-v2 curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/login 2>/dev/null | grep -q "200"; then
@@ -155,6 +155,6 @@ echo "  • Timeline escale améliorée"
 echo "  • CRUD navires complet (créer/modifier/supprimer)"
 echo "  • Import ports UN/LOCODE"
 echo ""
-echo "  Accès : http://$(hostname -I | awk '{print $1}'):8081"
+echo "  Accès : http://$(hostname -I | awk '{print $1}')"
 echo "  Logs  : docker logs towt-app-v2 --tail 50"
 echo ""

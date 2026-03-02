@@ -1,17 +1,16 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
-# my_TOWT — Script de déploiement pour Synology NAS
+# my_TOWT — Script de déploiement pour VPS OVH
 # ═══════════════════════════════════════════════════════════════
 #
 # Usage:
-#   1. Copier le dossier mytowt-deploy/ sur le NAS
-#   2. cd mytowt-deploy
-#   3. chmod +x deploy.sh
-#   4. ./deploy.sh
+#   1. cd /home/user/mytowt
+#   2. chmod +x deploy.sh
+#   3. ./deploy.sh
 #
 # Prérequis:
-#   - Docker + Docker Compose installés sur le Synology
-#   - Accès SSH au NAS
+#   - Docker + Docker Compose installés sur le VPS
+#   - Accès SSH au VPS
 # ═══════════════════════════════════════════════════════════════
 
 set -e
@@ -152,7 +151,7 @@ if [ "$APP_STATUS" = "running" ] && [ "$DB_STATUS" = "running" ]; then
     echo "╔═══════════════════════════════════════════════════╗"
     echo "║  ✅ Déploiement réussi !                         ║"
     echo "║                                                   ║"
-    echo "║  URL: http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):8081  ║"
+    echo "║  URL: http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost')  ║"
     echo "║  Login: admin / towt2025                         ║"
     echo "║                                                   ║"
     echo "║  Commandes utiles:                               ║"

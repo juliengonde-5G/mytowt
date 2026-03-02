@@ -32,7 +32,7 @@ cp .env.example .env
 docker-compose up -d
 
 # 4. Open
-# http://localhost:8081
+# http://localhost:8081 (dev) or http://51.178.59.174 (prod VPS OVH)
 # Login: admin / towt2025
 ```
 
