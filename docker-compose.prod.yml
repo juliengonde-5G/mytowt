@@ -1,0 +1,78 @@
+version: "3.8"
+
+services:
+  # ─── FastAPI Application ────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: towt-app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-towt_admin}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-towt_planning}
+      - SECRET_KEY=${SECRET_KEY}
+      - APP_ENV=production
+      - DEBUG=false
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - towt-net
+
+  # ─── PostgreSQL Database ────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: towt-db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-towt_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-towt_planning}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-towt_admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - towt-net
+
+  # ─── Nginx Reverse Proxy + SSL ─────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: towt-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - certbot_webroot:/var/www/certbot:ro
+      - certbot_certs:/etc/letsencrypt:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - towt-net
+
+  # ─── Certbot (SSL certificates) ────────────────────
+  certbot:
+    image: certbot/certbot
+    container_name: towt-certbot
+    volumes:
+      - certbot_webroot:/var/www/certbot
+      - certbot_certs:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    restart: unless-stopped
+    networks:
+      - towt-net
+
+volumes:
+  postgres_data:
+  certbot_webroot:
+  certbot_certs:
+
+networks:
+  towt-net:
+    driver: bridge
