@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}my_TOWT{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/img/favicon_mytowt.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <link rel="stylesheet" href="/static/css/app.css">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    {% block body %}
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <a href="/" class="sidebar-logo">
+                    <img src="/static/img/logo_mytowt_white.svg" alt="my_TOWT" class="logo-img">
+                </a>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <span class="nav-section-label">Navigation</span>
+                    <a href="/" class="nav-item {% if active_module == 'dashboard' %}active{% endif %}">
+                        <i data-lucide="layout-dashboard"></i><span>{{ t('nav_dashboard', lang|default('fr')) }}</span>
+                    </a>
+                    {% if has_any_access(user, 'planning') %}
+                    <a href="/planning" class="nav-item {% if active_module == 'planning' %}active{% endif %}">
+                        <i data-lucide="map"></i><span>{{ t('nav_planning', lang|default('fr')) }}</span>
+                    </a>
+                    {% endif %}
+                    {% if has_any_access(user, 'commercial') %}
+                    <a href="/commercial" class="nav-item {% if active_module == 'commercial' %}active{% endif %}">
+                        <i data-lucide="package"></i><span>{{ t('nav_commercial', lang|default('fr')) }}</span>
+                    </a>
+                    {% endif %}
+                    {% if has_any_access(user, 'escale') %}
+                    <a href="/escale" class="nav-item {% if active_module == 'escale' %}active{% endif %}">
+                        <i data-lucide="anchor"></i><span>{{ t('nav_escale', lang|default('fr')) }}</span>
+                    </a>
+                    {% endif %}
+                    {% if has_any_access(user, 'finance') %}
+                    <a href="/finance" class="nav-item {% if active_module == 'finance' %}active{% endif %}">
+                        <i data-lucide="euro"></i><span>{{ t('nav_finance', lang|default('fr')) }}</span>
+                    </a>
+                    {% endif %}
+                    {% if has_any_access(user, 'kpi') %}
+                    <a href="/kpi" class="nav-item {% if active_module == 'kpi' %}active{% endif %}">
+                        <i data-lucide="bar-chart-3"></i><span>{{ t('nav_kpi', lang|default('fr')) }}</span>
+                    </a>
+                    {% endif %}
+                    {% if has_any_access(user, 'captain') %}
+                    <a href="/onboard" class="nav-item {% if active_module == 'captain' %}active{% endif %}">
+                        <i data-lucide="compass"></i><span>On Board</span>
+                    </a>
+                    <a href="/passengers" class="nav-item {% if active_module == 'passengers' %}active{% endif %}">
+                        <i data-lucide="users"></i><span>Passagers</span>
+                    </a>
+                    {% endif %}
+                    {% if has_any_access(user, 'crew') %}
+                    <a href="/crew" class="nav-item {% if active_module == 'crew' %}active{% endif %}">
+                        <i data-lucide="users"></i><span>{{ t('nav_crew', lang|default('fr')) }}</span>
+                    </a>
+                    {% endif %}
+                    {% if has_any_access(user, 'cargo') %}
+                    <a href="/cargo" class="nav-item {% if active_module == 'cargo' %}active{% endif %}">
+                        <i data-lucide="file-box"></i><span>{{ t('nav_cargo', lang|default('fr')) }}</span>
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="nav-section">
+                    <span class="nav-section-label">Administration</span>
+                    {% if user and user.role in ('administrateur', 'admin') %}
+                    <a href="/admin/settings" class="nav-item {% if active_module == 'settings' %}active{% endif %}">
+                        <i data-lucide="settings"></i><span>{{ t('nav_settings', lang|default('fr')) }}</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar"><i data-lucide="user"></i></div>
+                    <div class="user-details">
+                        <span class="user-name">{{ user.full_name if user else '' }}</span>
+                        <span class="user-role">{{ user.role if user else '' }}</span>
+                    </div>
+                </div>
+                <a href="/logout" class="nav-item logout-btn" hx-boost="false">
+                    <i data-lucide="log-out"></i><span>Déconnexion</span>
+                </a>
+            </div>
+        </aside>
+        <main class="main-content">
+            <header class="topbar">
+                <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">
+                    <i data-lucide="menu"></i>
+                </button>
+                <div class="topbar-title"><h1>{% block page_title %}Tableau de bord{% endblock %}</h1></div>
+                <div class="topbar-actions">{% block topbar_actions %}{% endblock %}</div>
+            </header>
+            <div class="page-content" id="main-content">{% block content %}{% endblock %}</div>
+        </main>
+    </div>
+    {% endblock %}
+    <div id="toast-container" class="toast-container"></div>
+    <script>
+        lucide.createIcons();
+        document.addEventListener('htmx:afterSwap', function(){lucide.createIcons();});
+        function showToast(message, type){
+            type = type || 'success';
+            var c = document.getElementById('toast-container');
+            var t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.innerHTML = '<span>' + message + '</span><button onclick="this.parentElement.remove()">×</button>';
+            c.appendChild(t);
+            setTimeout(function(){t.remove();},4000);
+        }
+    </script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

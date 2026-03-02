@@ -1,0 +1,33 @@
+<div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal" style="max-width:500px;">
+        <div class="modal-header">
+            <h3>{{ 'Modifier' if edit_member else 'Nouveau membre' }}</h3>
+            <button class="modal-close" onclick="closeModal()"><i data-lucide="x"></i></button>
+        </div>
+        <form method="POST" action="{{ '/crew/members/' ~ edit_member.id ~ '/edit' if edit_member else '/crew/members/create' }}">
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">Prénom *</label><input type="text" name="first_name" class="form-input" required value="{{ edit_member.first_name if edit_member else '' }}"></div>
+                    <div class="form-group"><label class="form-label">Nom *</label><input type="text" name="last_name" class="form-input" required value="{{ edit_member.last_name if edit_member else '' }}"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Rôle *</label>
+                        <select name="role" class="form-select" required>
+                            {% for r in crew_roles %}
+                            <option value="{{ r.value }}" {% if edit_member and edit_member.role == r.value %}selected{% endif %}>{{ r.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group"><label class="form-label">Téléphone</label><input type="text" name="phone" class="form-input" value="{{ edit_member.phone if edit_member and edit_member.phone else '' }}"></div>
+                </div>
+                <div class="form-group"><label class="form-label">Email</label><input type="email" name="email" class="form-input" value="{{ edit_member.email if edit_member and edit_member.email else '' }}"></div>
+                <div class="form-group"><label class="form-label">Notes</label><textarea name="notes" class="form-input" rows="2">{{ edit_member.notes if edit_member and edit_member.notes else '' }}</textarea></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary"><i data-lucide="check"></i> {{ 'Enregistrer' if edit_member else 'Créer' }}</button>
+            </div>
+        </form>
+    </div>
+</div>

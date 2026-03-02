@@ -1,0 +1,382 @@
+from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query, UploadFile, File
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from app.templating import templates
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, or_
+from sqlalchemy.orm import selectinload
+from typing import Optional
+from datetime import datetime, date
+import os, shutil
+
+from app.database import get_db
+from app.auth import get_current_user
+from app.models.user import User
+from app.models.vessel import Vessel
+from app.models.leg import Leg
+from app.models.order import Order, OrderAssignment, PALETTE_FORMATS, PALETTE_COEFF
+from app.models.kpi import LegKPI
+
+router = APIRouter(prefix="/commercial", tags=["commercial"])
+
+DEFAULT_WEIGHT_PER_PALETTE = 0.8
+UPLOAD_DIR = "app/static/uploads/orders"
+
+
+def pf(val, default=None):
+    if val is None or (isinstance(val, str) and val.strip() == ""): return default
+    try:
+        if isinstance(val, str):
+            val = val.replace(" ", "").replace("\u00a0", "")
+            if "." in val and "," in val: val = val.replace(".", "").replace(",", ".")
+            elif "," in val: val = val.replace(",", ".")
+        return float(val)
+    except: return default
+
+def pi(val, default=None):
+    if val is None or (isinstance(val, str) and val.strip() == ""): return default
+    try: return int(val)
+    except: return default
+
+def pd(val):
+    if val is None or (isinstance(val, str) and val.strip() == ""): return None
+    try: return date.fromisoformat(val)
+    except: return None
+
+
+async def generate_reference(db: AsyncSession) -> str:
+    year = datetime.now().year
+    prefix = f"OT-{year}-"
+    result = await db.execute(
+        select(func.count(Order.id)).where(Order.reference.like(f"{prefix}%"))
+    )
+    count = result.scalar() or 0
+    return f"{prefix}{count + 1:04d}"
+
+
+async def find_matching_leg(db: AsyncSession, order: Order):
+    if not order.departure_locode and not order.arrival_locode:
+        return None
+    query = select(Leg).options(
+        selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port)
+    ).where(Leg.year == datetime.now().year)
+    if order.departure_locode:
+        query = query.where(Leg.departure_port_locode == order.departure_locode.upper())
+    if order.arrival_locode:
+        query = query.where(Leg.arrival_port_locode == order.arrival_locode.upper())
+    if order.delivery_date_start:
+        query = query.where(or_(Leg.eta >= order.delivery_date_start, Leg.eta == None))
+    query = query.order_by(Leg.eta.asc().nulls_last()).limit(1)
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+
+# ─── HOME ────────────────────────────────────────────────────
+@router.get("", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse)
+async def commercial_home(
+    request: Request,
+    status: Optional[str] = Query(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(Order).options(
+        selectinload(Order.leg).selectinload(Leg.vessel),
+        selectinload(Order.leg).selectinload(Leg.arrival_port),
+    ).order_by(Order.created_at.desc())
+    if status:
+        query = query.where(Order.status == status)
+    result = await db.execute(query)
+    orders = result.scalars().all()
+
+    statuses = {
+        "non_affecte": "Non affecté", "reserve": "Réservé",
+        "confirme": "Confirmé", "annule": "Annulé",
+    }
+
+    return templates.TemplateResponse("commercial/index.html", {
+        "request": request, "user": user,
+        "orders": orders, "statuses": statuses,
+        "selected_status": status,
+        "active_module": "commercial",
+    })
+
+
+# ─── CREATE ORDER ────────────────────────────────────────────
+@router.get("/orders/create", response_class=HTMLResponse)
+async def order_create_form(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    ref = await generate_reference(db)
+    return templates.TemplateResponse("commercial/order_form.html", {
+        "request": request, "user": user,
+        "edit_order": None, "reference": ref,
+        "default_weight": DEFAULT_WEIGHT_PER_PALETTE,
+        "palette_formats": PALETTE_FORMATS,
+        "error": None,
+    })
+
+@router.post("/orders/create", response_class=HTMLResponse)
+async def order_create_submit(
+    request: Request,
+    client_name: str = Form(...), client_contact: Optional[str] = Form(None),
+    quantity_palettes: str = Form(...), palette_format: str = Form("EPAL"),
+    weight_per_palette: Optional[str] = Form(None),
+    unit_price: str = Form(...), thc_included: Optional[str] = Form(None),
+    booking_fee: Optional[str] = Form(None), documentation_fee: Optional[str] = Form(None),
+    delivery_date_start: Optional[str] = Form(None), delivery_date_end: Optional[str] = Form(None),
+    departure_locode: Optional[str] = Form(None), arrival_locode: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    ref = await generate_reference(db)
+    order = Order(
+        reference=ref,
+        client_name=client_name.strip(),
+        client_contact=client_contact.strip() if client_contact else None,
+        quantity_palettes=pi(quantity_palettes, 1),
+        palette_format=palette_format if palette_format in PALETTE_COEFF else "EPAL",
+        weight_per_palette=pf(weight_per_palette, DEFAULT_WEIGHT_PER_PALETTE),
+        unit_price=pf(unit_price, 0),
+        thc_included=thc_included == "on",
+        booking_fee=pf(booking_fee, 0),
+        documentation_fee=pf(documentation_fee, 0),
+        delivery_date_start=pd(delivery_date_start),
+        delivery_date_end=pd(delivery_date_end),
+        departure_locode=departure_locode.strip().upper() if departure_locode and departure_locode.strip() else None,
+        arrival_locode=arrival_locode.strip().upper() if arrival_locode and arrival_locode.strip() else None,
+        description=description.strip() if description else None,
+    )
+    order.compute_total()
+    db.add(order)
+    await db.flush()
+
+    # Auto-match leg
+    matching = await find_matching_leg(db, order)
+    if matching:
+        order.leg_id = matching.id
+        order.status = "reserve"
+
+    url = "/commercial"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# ─── EDIT ORDER ──────────────────────────────────────────────
+@router.get("/orders/{oid}/edit", response_class=HTMLResponse)
+async def order_edit_form(
+    oid: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Order).where(Order.id == oid))
+    order = result.scalar_one_or_none()
+    if not order: raise HTTPException(404)
+    return templates.TemplateResponse("commercial/order_form.html", {
+        "request": request, "user": user,
+        "edit_order": order, "reference": order.reference,
+        "default_weight": DEFAULT_WEIGHT_PER_PALETTE,
+        "palette_formats": PALETTE_FORMATS,
+        "error": None,
+    })
+
+@router.post("/orders/{oid}/edit", response_class=HTMLResponse)
+async def order_edit_submit(
+    oid: int, request: Request,
+    client_name: str = Form(...), client_contact: Optional[str] = Form(None),
+    quantity_palettes: str = Form(...), palette_format: str = Form("EPAL"),
+    weight_per_palette: Optional[str] = Form(None),
+    unit_price: str = Form(...), thc_included: Optional[str] = Form(None),
+    booking_fee: Optional[str] = Form(None), documentation_fee: Optional[str] = Form(None),
+    delivery_date_start: Optional[str] = Form(None), delivery_date_end: Optional[str] = Form(None),
+    departure_locode: Optional[str] = Form(None), arrival_locode: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    status: Optional[str] = Form(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Order).where(Order.id == oid))
+    order = result.scalar_one_or_none()
+    if not order: raise HTTPException(404)
+    order.client_name = client_name.strip()
+    order.client_contact = client_contact.strip() if client_contact else None
+    order.quantity_palettes = pi(quantity_palettes, order.quantity_palettes)
+    order.palette_format = palette_format if palette_format in PALETTE_COEFF else "EPAL"
+    order.weight_per_palette = pf(weight_per_palette, DEFAULT_WEIGHT_PER_PALETTE)
+    order.unit_price = pf(unit_price, order.unit_price)
+    order.thc_included = thc_included == "on"
+    order.booking_fee = pf(booking_fee, 0)
+    order.documentation_fee = pf(documentation_fee, 0)
+    order.delivery_date_start = pd(delivery_date_start)
+    order.delivery_date_end = pd(delivery_date_end)
+    order.departure_locode = departure_locode.strip().upper() if departure_locode and departure_locode.strip() else None
+    order.arrival_locode = arrival_locode.strip().upper() if arrival_locode and arrival_locode.strip() else None
+    order.description = description.strip() if description else None
+    if status: order.status = status
+    order.compute_total()
+    url = "/commercial"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# ─── DELETE ORDER ────────────────────────────────────────────
+@router.delete("/orders/{oid}", response_class=HTMLResponse)
+async def order_delete(
+    oid: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Order).where(Order.id == oid))
+    order = result.scalar_one_or_none()
+    if not order: raise HTTPException(404)
+    await db.delete(order)
+    url = "/commercial"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# ─── ASSIGN ORDER ────────────────────────────────────────────
+@router.get("/orders/{oid}/assign", response_class=HTMLResponse)
+async def order_assign_form(
+    oid: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    order_result = await db.execute(select(Order).where(Order.id == oid))
+    order = order_result.scalar_one_or_none()
+    if not order: raise HTTPException(404)
+
+    # Only show legs matching the order's route
+    query = (
+        select(Leg).options(
+            selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port)
+        ).where(Leg.year == datetime.now().year)
+    )
+    if order.departure_locode:
+        query = query.where(Leg.departure_port_locode == order.departure_locode.upper())
+    if order.arrival_locode:
+        query = query.where(Leg.arrival_port_locode == order.arrival_locode.upper())
+
+    query = query.order_by(Leg.vessel_id, Leg.sequence)
+    result = await db.execute(query)
+    legs = result.scalars().all()
+
+    assigned_ids = {order.leg_id} if order.leg_id else set()
+    suggested_leg = await find_matching_leg(db, order) if not order.leg_id else None
+
+    return templates.TemplateResponse("commercial/assign_form.html", {
+        "request": request, "user": user,
+        "order": order, "legs": legs,
+        "assigned_ids": assigned_ids,
+        "suggested_leg": suggested_leg,
+    })
+
+
+@router.post("/orders/{oid}/assign", response_class=HTMLResponse)
+async def order_assign_submit(
+    oid: int, request: Request,
+    leg_id: Optional[str] = Form(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    order_result = await db.execute(select(Order).where(Order.id == oid))
+    order = order_result.scalar_one_or_none()
+    if not order: raise HTTPException(404)
+
+    _lid = pi(leg_id)
+    order.leg_id = _lid
+    if _lid:
+        if order.status == "non_affecte":
+            order.status = "reserve"
+    else:
+        order.status = "non_affecte"
+    await db.flush()
+
+    url = "/commercial"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# ─── ATTACHMENT ──────────────────────────────────────────────
+@router.post("/orders/{oid}/upload", response_class=HTMLResponse)
+async def order_upload_attachment(
+    oid: int, request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    order_result = await db.execute(select(Order).where(Order.id == oid))
+    order = order_result.scalar_one_or_none()
+    if not order: raise HTTPException(404)
+
+    # Validate file type
+    allowed = {".pdf", ".doc", ".docx"}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed:
+        raise HTTPException(400, detail="Format non supporté. Utilisez PDF ou Word.")
+
+    # Save file
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    safe_name = f"order_{oid}_{int(datetime.now().timestamp())}{ext}"
+    filepath = os.path.join(UPLOAD_DIR, safe_name)
+
+    # Remove old attachment
+    if order.attachment_path and os.path.exists(order.attachment_path):
+        os.remove(order.attachment_path)
+
+    with open(filepath, "wb") as f:
+        content = await file.read()
+        f.write(content)
+
+    order.attachment_filename = file.filename
+    order.attachment_path = filepath
+    await db.flush()
+
+    url = "/commercial"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.get("/orders/{oid}/attachment", response_class=FileResponse)
+async def order_download_attachment(
+    oid: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    order_result = await db.execute(select(Order).where(Order.id == oid))
+    order = order_result.scalar_one_or_none()
+    if not order or not order.attachment_path:
+        raise HTTPException(404)
+    if not os.path.exists(order.attachment_path):
+        raise HTTPException(404)
+    return FileResponse(
+        order.attachment_path,
+        filename=order.attachment_filename,
+        media_type="application/octet-stream",
+    )
+
+
+@router.delete("/orders/{oid}/attachment", response_class=HTMLResponse)
+async def order_delete_attachment(
+    oid: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    order_result = await db.execute(select(Order).where(Order.id == oid))
+    order = order_result.scalar_one_or_none()
+    if not order: raise HTTPException(404)
+    if order.attachment_path and os.path.exists(order.attachment_path):
+        os.remove(order.attachment_path)
+    order.attachment_filename = None
+    order.attachment_path = None
+    url = "/commercial"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)

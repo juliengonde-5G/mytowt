@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% block title %}TOWT - Paramètres{% endblock %}
+{% block page_title %}Paramètres{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+    <!-- Sections as tabs -->
+    <div class="settings-tabs">
+        <button class="stab active" onclick="showSection('users')">👤 Utilisateurs</button>
+        <button class="stab" onclick="showSection('vessels')">🚢 Navires</button>
+        <button class="stab" onclick="showSection('ports')">⚓ Ports</button>
+        <button class="stab" onclick="showSection('economics')">💰 Économique</button>
+        <button class="stab" onclick="showSection('kpi')">📊 KPI / Émissions</button>
+        <button class="stab" onclick="showSection('locks')">🔒 Verrouillage</button>
+        <button class="stab" onclick="showSection('export')">📥 Export</button>
+        <button class="stab" onclick="showSection('language')">🌐 Langue</button>
+        <button class="stab" onclick="showSection('pricing')">🧳 Tarifs passagers</button>
+    </div>
+
+    <!-- USERS -->
+    <div class="settings-section" id="sec-users">
+        <div class="sec-header">
+            <h3>Utilisateurs</h3>
+            <button class="btn btn-primary btn-sm" onclick="openModal('/admin/users/create')"><i data-lucide="plus"></i> Nouvel utilisateur</button>
+        </div>
+        <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>ID</th><th>Login</th><th>Nom</th><th>Rôle</th><th style="text-align:right;">Actions</th></tr></thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td>{{ u.id }}</td><td>{{ u.username }}</td><td>{{ u.full_name }}</td>
+                        <td><span class="badge badge-{{ u.role }}">{{ u.role }}</span></td>
+                        <td style="text-align:right;">
+                            <button class="btn btn-sm btn-secondary" onclick="openModal('/admin/users/{{ u.id }}/edit')"><i data-lucide="pencil"></i></button>
+                            {% if u.id != user.id %}
+                            <button class="btn btn-sm btn-danger" hx-delete="/admin/users/{{ u.id }}" hx-confirm="Supprimer ?"><i data-lucide="trash-2"></i></button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- VESSELS -->
+    <div class="settings-section" id="sec-vessels" style="display:none;">
+        <h3>Navires & configuration</h3>
+        <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Code</th><th>Nom</th><th>Capacité (pal.)</th><th>Vitesse (nds)</th><th>Élongation</th><th style="text-align:right;">Actions</th></tr></thead>
+                <tbody>
+                    {% for v in vessels %}
+                    <tr>
+                        <td><strong>{{ v.code }}</strong></td><td>{{ v.name }}</td>
+                        <td>{{ v.capacity_palettes or '—' }}</td>
+                        <td>{{ v.default_speed }}</td><td>{{ v.default_elongation }}</td>
+                        <td style="text-align:right;">
+                            <button class="btn btn-sm btn-secondary" onclick="openModal('/admin/vessels/{{ v.id }}/edit')"><i data-lucide="pencil"></i></button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- PORTS -->
+    <div class="settings-section" id="sec-ports" style="display:none;">
+        <div class="sec-header">
+            <h3>Configuration des ports</h3>
+            <a href="/finance/ports" class="btn btn-primary btn-sm"><i data-lucide="settings"></i> Gérer les ports</a>
+        </div>
+        {% if port_configs %}
+        <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>LOCODE</th><th>Port</th><th>Accessible</th><th style="text-align:right;">Coût port (€)</th><th style="text-align:right;">Quai/jour (€)</th><th style="text-align:right;">Coût/pal. (€)</th></tr></thead>
+                <tbody>
+                    {% for c in port_configs %}
+                    <tr {% if not c.accessible %}style="opacity:0.5;"{% endif %}>
+                        <td><strong style="font-family:monospace;">{{ c.port_locode }}</strong></td>
+                        <td>{{ c.port.name if c.port else '—' }}</td>
+                        <td>{% if c.accessible %}✓{% else %}✗{% endif %}</td>
+                        <td style="text-align:right;">{{ c.port_cost_total|eur }}</td>
+                        <td style="text-align:right;">{{ c.daily_quay_cost|eur }}</td>
+                        <td style="text-align:right;">{{ c.cost_per_palette|eur }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color:#aaa;">Aucun port configuré. <a href="/finance/ports">Configurer les ports →</a></p>
+        {% endif %}
+    </div>
+
+    <!-- ECONOMICS -->
+    <div class="settings-section" id="sec-economics" style="display:none;">
+        <h3>Données économiques</h3>
+        <form method="POST" action="/admin/opex/update" style="max-width:400px;">
+            <div class="form-group">
+                <label class="form-label">OPEX journalier en mer (€/jour)</label>
+                <input type="text" name="opex_daily_rate" class="form-input" style="text-align:right;"
+                       value="{% for p in opex_params %}{% if p.parameter_name == 'opex_daily_rate' %}{{ p.parameter_value }}{% endif %}{% endfor %}">
+                <span style="font-size:10px;color:#aaa;">Coût journalier total en mer (fuel, équipage, maintenance, assurance)</span>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="check"></i> Enregistrer</button>
+        </form>
+    </div>
+
+    <!-- KPI / EMISSIONS -->
+    <div class="settings-section" id="sec-kpi" style="display:none;">
+        <h3>Paramètres KPI & Émissions</h3>
+        {% if emission_params %}
+        <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Paramètre</th><th>Valeur</th><th>Unité</th></tr></thead>
+                <tbody>
+                    {% for ep in emission_params %}
+                    <tr><td>{{ ep.parameter_name }}</td><td>{{ ep.parameter_value }}</td><td>{{ ep.unit or '' }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color:#aaa;">Paramètres d'émissions par défaut du router KPI.</p>
+        {% endif %}
+    </div>
+
+    <!-- LOCKS -->
+    <div class="settings-section" id="sec-locks" style="display:none;">
+        <h3>Verrouillage des escales</h3>
+        <p style="font-size:13px;color:#666;margin-bottom:16px;">Verrouiller les escales terminées empêche toute modification. Escales verrouillées : <strong>{{ locked_count }}</strong></p>
+        <form method="POST" action="/admin/legs/lock" style="display:inline;">
+            <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="lock"></i> Verrouiller les escales terminées (ATD renseigné)</button>
+        </form>
+    </div>
+
+    <!-- EXPORT -->
+    <div class="settings-section" id="sec-export" style="display:none;">
+        <h3>Export global</h3>
+        <p style="font-size:13px;color:#666;margin-bottom:16px;">Exporter toutes les données de navigation.</p>
+        <a href="/admin/export/global" class="btn btn-primary btn-sm" hx-boost="false"><i data-lucide="download"></i> Export CSV global</a>
+    </div>
+
+    <div class="settings-section" id="sec-language" style="display:none;">
+        <h3>🌐 Langue de l'interface</h3>
+        <p style="font-size:13px;color:#666;margin-bottom:16px;">Choisissez votre langue préférée. Le changement s'appliquera à toute la navigation.</p>
+        <form method="POST" action="/admin/settings/language" style="max-width:400px;">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                {% for code, label in SUPPORTED_LANGUAGES.items() %}
+                <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #eee;border-radius:8px;cursor:pointer;{% if user.language == code or (not user.language and code == 'fr') %}background:#f0f7f8;border-color:var(--towt-blue);{% endif %}">
+                    <input type="radio" name="language" value="{{ code }}" {% if user.language == code or (not user.language and code == 'fr') %}checked{% endif %}>
+                    <span style="font-size:14px;font-weight:500;">{{ label }}</span>
+                </label>
+                {% endfor %}
+                <button type="submit" class="btn btn-primary btn-sm" style="margin-top:8px;">💾 Enregistrer</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- PRICING GRID -->
+    <div class="settings-section" id="sec-pricing" style="display:none;">
+        <h3>🧳 Grille tarifaire passagers</h3>
+        <p style="font-size:13px;color:#666;margin-bottom:16px;">Prix par traversée (origine → destination) et par type de cabine. L'acompte est calculé en % du prix.</p>
+
+        {% if pricing_grid %}
+        <table class="data-table" style="margin-bottom:16px;">
+            <thead><tr><th>Origine</th><th>Destination</th><th>Type cabine</th><th>Prix (€)</th><th>Acompte %</th><th>Notes</th><th>Actif</th><th></th></tr></thead>
+            <tbody>
+            {% for pg in pricing_grid %}
+            <tr>
+                <form method="POST" action="/admin/settings/pricing/{{ pg.id }}/edit">
+                <td>{{ route_ports.get(pg.origin_locode, pg.origin_locode) }} <span style="font-size:10px;color:#888;">({{ pg.origin_locode }})</span></td>
+                <td>{{ route_ports.get(pg.destination_locode, pg.destination_locode) }} <span style="font-size:10px;color:#888;">({{ pg.destination_locode }})</span></td>
+                <td>{{ cabin_type_labels.get(pg.cabin_type, pg.cabin_type) }}</td>
+                <td><input type="number" name="price" value="{{ pg.price }}" step="0.01" style="width:80px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;"></td>
+                <td><input type="number" name="deposit_pct" value="{{ pg.deposit_pct }}" min="0" max="100" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;">%</td>
+                <td><input type="text" name="notes" value="{{ pg.notes or '' }}" style="width:100px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;"></td>
+                <td><input type="checkbox" name="is_active" {% if pg.is_active %}checked{% endif %}></td>
+                <td style="white-space:nowrap;">
+                    <button type="submit" class="btn btn-sm btn-secondary" style="padding:3px 8px;font-size:10px;">💾</button>
+                    <button type="button" class="btn btn-sm" style="padding:3px 8px;font-size:10px;color:#dc2626;"
+                            hx-delete="/admin/settings/pricing/{{ pg.id }}" hx-confirm="Supprimer ?" hx-target="closest tr" hx-swap="outerHTML">🗑</button>
+                </td>
+                </form>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color:#aaa;text-align:center;padding:20px;">Aucun tarif configuré.</p>
+        {% endif %}
+
+        <details style="margin-top:12px;">
+            <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--towt-blue);">＋ Ajouter un tarif</summary>
+            <form method="POST" action="/admin/settings/pricing/add" style="margin-top:10px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr 100px 80px 1fr;gap:8px;align-items:end;">
+                    <div>
+                        <label style="font-size:10px;font-weight:600;color:#888;">Route (Origine → Destination)</label>
+                        <select name="route" id="pricing-route" required onchange="var v=this.value.split('|');document.getElementById('h-origin').value=v[0]||'';document.getElementById('h-dest').value=v[1]||'';" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                            <option value="">— Choisir une route —</option>
+                            {% for r in existing_routes %}
+                            <option value="{{ r.dep }}|{{ r.arr }}">{{ r.dep_name }} ({{ r.dep }}) → {{ r.arr_name }} ({{ r.arr }})</option>
+                            {% endfor %}
+                        </select>
+                        <input type="hidden" name="origin_locode" id="h-origin">
+                        <input type="hidden" name="destination_locode" id="h-dest">
+                    </div>
+                    <div>
+                        <label style="font-size:10px;font-weight:600;color:#888;">Type cabine</label>
+                        <select name="cabin_type" required style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                            <option value="double">Lit double</option>
+                            <option value="twin">Lits jumeaux</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:10px;font-weight:600;color:#888;">Prix (€)</label>
+                        <input type="number" name="price" step="0.01" required style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                    </div>
+                    <div>
+                        <label style="font-size:10px;font-weight:600;color:#888;">Acompte %</label>
+                        <input type="number" name="deposit_pct" value="30" min="0" max="100" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                    </div>
+                    <div>
+                        <label style="font-size:10px;font-weight:600;color:#888;">Notes</label>
+                        <input type="text" name="notes" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm" style="margin-top:10px;">Ajouter</button>
+            </form>
+        </details>
+    </div>
+</div>
+
+<style>
+    .settings-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:20px;background:white;padding:6px;border-radius:var(--radius-lg);box-shadow:var(--shadow);}
+    .stab{padding:8px 16px;border:none;background:transparent;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;color:var(--towt-gray);}
+    .stab:hover{background:var(--towt-light);}.stab.active{background:var(--towt-blue);color:white;}
+    .settings-section{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:20px;margin-bottom:16px;}
+    .sec-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+    .sec-header h3{margin:0;}
+    .badge-admin{background:rgba(220,38,38,0.1);color:#DC2626;padding:2px 8px;border-radius:100px;font-size:11px;}
+    .badge-administrateur{background:rgba(220,38,38,0.1);color:#DC2626;padding:2px 8px;border-radius:100px;font-size:11px;}
+    .badge-operation{background:rgba(135,189,43,0.1);color:#5a8010;padding:2px 8px;border-radius:100px;font-size:11px;}
+    .badge-armement{background:rgba(245,158,11,0.1);color:#D97706;padding:2px 8px;border-radius:100px;font-size:11px;}
+    .badge-technique{background:rgba(99,102,241,0.1);color:#6366F1;padding:2px 8px;border-radius:100px;font-size:11px;}
+    .badge-data_analyst{background:rgba(96,165,250,0.1);color:#2563EB;padding:2px 8px;border-radius:100px;font-size:11px;}
+    .badge-marins{background:rgba(6,182,212,0.1);color:#0891B2;padding:2px 8px;border-radius:100px;font-size:11px;}
+    .badge-viewer{background:rgba(96,165,250,0.1);color:#2563EB;padding:2px 8px;border-radius:100px;font-size:11px;}
+    .badge-editor{background:rgba(135,189,43,0.1);color:#5a8010;padding:2px 8px;border-radius:100px;font-size:11px;}
+</style>
+
+<script>
+    window.showSection = function(name) {
+        document.querySelectorAll('.settings-section').forEach(function(s){s.style.display='none';});
+        document.querySelectorAll('.stab').forEach(function(t){t.classList.remove('active');});
+        document.getElementById('sec-' + name).style.display = 'block';
+        event.target.classList.add('active');
+    };
+    window.openModal = function(url) {
+        fetch(url).then(function(r){return r.text();}).then(function(html){
+            document.getElementById('modal-container').innerHTML = html;
+            lucide.createIcons();
+            var form = document.querySelector('#modal-container form');
+            if (form) {
+                form.addEventListener('submit', function(e){
+                    e.preventDefault();
+                    fetch(form.action, {method:'POST', body:new FormData(form)})
+                        .then(function(r){if(r.redirected)window.location.href=r.url;else window.location.href='/admin/settings';})
+                        .catch(function(){window.location.reload();});
+                });
+            }
+        });
+    };
+    window.closeModal = function(){document.getElementById('modal-container').innerHTML='';};
+</script>
+{% endblock %}

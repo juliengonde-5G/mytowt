@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}TOWT - Calendrier {{ member.full_name }}{% endblock %}
+{% block page_title %}Calendrier — {{ member.full_name }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/crew" class="btn btn-secondary btn-sm"><i data-lucide="arrow-left"></i> Retour équipage</a>
+{% endblock %}
+
+{% block content %}
+<div class="calendar-page">
+    <div class="member-header">
+        <div>
+            <h2 style="margin:0;">{{ member.full_name }}</h2>
+            <span class="crew-role-badge {{ member.role }}" style="font-size:12px;padding:4px 12px;">{{ member.role_label }}</span>
+        </div>
+        <div class="calendar-stats">
+            <div class="cal-stat"><span class="cal-stat-val">{{ total_days }}</span><span class="cal-stat-lbl">Jours embarqué</span></div>
+            <div class="cal-stat"><span class="cal-stat-val">{{ rest_days }}</span><span class="cal-stat-lbl">Jours repos</span></div>
+            <div class="cal-stat"><span class="cal-stat-val">{{ ((total_days / days_in_year) * 100)|round(0)|int }}%</span><span class="cal-stat-lbl">Taux activité</span></div>
+        </div>
+    </div>
+
+    {% if assignments %}
+    <div class="section-block" style="margin-top:20px;">
+        <h3 style="font-size:15px;margin-bottom:12px;">Embarquements {{ current_year }}</h3>
+        <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Navire</th><th>Embarquement</th><th>Débarquement</th><th>Durée</th><th>Statut</th><th style="text-align:right;">Actions</th></tr></thead>
+                <tbody>
+                    {% for a in assignments %}
+                    <tr>
+                        <td><strong>{{ a.vessel.name if a.vessel else '—' }}</strong></td>
+                        <td>{{ a.embark_date.strftime('%d/%m/%Y') }}</td>
+                        <td>{{ a.disembark_date.strftime('%d/%m/%Y') if a.disembark_date else 'En cours' }}</td>
+                        <td>{{ ((a.disembark_date or today) - a.embark_date).days if a.embark_date else '—' }} j.</td>
+                        <td>
+                            {% if not a.disembark_date %}<span class="badge badge-completed">🟢 Embarqué</span>
+                            {% else %}<span class="badge badge-planned">Terminé</span>{% endif %}
+                        </td>
+                        <td style="text-align:right;">
+                            <button class="btn btn-sm btn-danger" hx-delete="/crew/assignments/{{ a.id }}" hx-confirm="Supprimer ?"><i data-lucide="trash-2"></i></button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state" style="margin-top:20px;">
+        <h3>Aucun embarquement en {{ current_year }}</h3>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .member-header{background:white;padding:20px;border-radius:var(--radius-lg);box-shadow:var(--shadow);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;}
+    .calendar-stats{display:flex;gap:20px;}
+    .cal-stat{text-align:center;}
+    .cal-stat-val{display:block;font-size:24px;font-weight:700;color:var(--towt-blue);}
+    .cal-stat-lbl{display:block;font-size:11px;color:#888;}
+    .section-block{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:20px;}
+    .crew-role-badge.capitaine{background:rgba(220,38,38,0.1);color:#DC2626;}
+    .crew-role-badge.second{background:rgba(245,158,11,0.1);color:#D97706;}
+    .crew-role-badge.chef_mecanicien{background:rgba(139,92,246,0.1);color:#7C3AED;}
+    .crew-role-badge.cook{background:rgba(236,72,153,0.1);color:#DB2777;}
+    .crew-role-badge.lieutenant{background:rgba(96,165,250,0.1);color:#2563EB;}
+    .crew-role-badge.bosco{background:rgba(16,185,129,0.1);color:#059669;}
+    .crew-role-badge.marin{background:rgba(107,114,128,0.1);color:#6B7280;}
+</style>
+{% endblock %}

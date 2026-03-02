@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}my_TOWT — {{ booking.reference }}{% endblock %}
+{% block page_title %}🧳 {{ booking.reference }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/passengers" class="btn btn-secondary btn-sm"><i data-lucide="arrow-left"></i> Liste</a>
+<a href="/passengers/{{ booking.id }}/book" class="btn btn-secondary btn-sm"><i data-lucide="book-open"></i> Book FR</a>
+<a href="/passengers/{{ booking.id }}/book?lang=en" class="btn btn-secondary btn-sm"><i data-lucide="book-open"></i> Book EN</a>
+{% if booking.leg %}
+<a href="/onboard?vessel={{ booking.leg.vessel.code }}&leg_id={{ booking.leg_id }}" class="btn btn-secondary btn-sm"><i data-lucide="compass"></i> On Board</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="bd-layout">
+<div class="bd-main">
+
+    <!-- STATUS -->
+    <div class="bd-status-bar">
+        <div class="bd-status-steps">
+            {% set steps = ['draft','confirmed','paid','embarked','completed'] %}
+            {% for s in steps %}
+            <div class="bd-step {% if s == booking.status %}current{% endif %} {% if steps.index(s) < steps.index(booking.status) %}done{% endif %}">
+                <span class="bd-step-dot"></span><span>{{ s|capitalize }}</span>
+            </div>
+            {% if not loop.last %}<div class="bd-step-line {% if steps.index(s) < steps.index(booking.status) %}done{% endif %}"></div>{% endif %}
+            {% endfor %}
+        </div>
+        <form method="POST" action="/passengers/{{ booking.id }}/status" style="display:flex;gap:6px;align-items:center;">
+            <select name="status" class="fi-sm">
+                {% for code, label in booking_statuses %}<option value="{{ code }}" {% if booking.status == code %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm">OK</button>
+        </form>
+    </div>
+
+    <!-- VOYAGE -->
+    <div class="bd-card">
+        <h3>🚢 {{ booking.leg.leg_code }} — {{ booking.leg.vessel.name }}</h3>
+        <div style="font-size:13px;color:#555;">
+            {{ booking.leg.departure_port.name }} → {{ booking.leg.arrival_port.name }}
+            · ETD {{ booking.leg.etd.strftime('%d/%m/%Y') if booking.leg.etd else '?' }}
+        </div>
+        <div style="margin-top:8px;display:flex;gap:12px;align-items:center;">
+            <span class="cabin-badge cabin-{{ booking.cabin_number }}">Cabine {{ booking.cabin_number }} · {{ booking.cabin_label }}</span>
+            <span style="font-size:12px;color:#888;">{{ booking.passengers|length }} / 2 passagers</span>
+        </div>
+    </div>
+
+    <!-- PASSENGERS -->
+    {% for pax in booking.passengers %}
+    <div class="bd-card">
+        <h3>👤 Passager {{ loop.index }} — {{ pax.full_name }}</h3>
+        <form method="POST" action="/passengers/pax/{{ pax.id }}/update">
+            <div class="bd-grid">
+                <div class="fg"><label>Prénom</label><input type="text" name="first_name" value="{{ pax.first_name }}" class="fi-sm" required></div>
+                <div class="fg"><label>Nom</label><input type="text" name="last_name" value="{{ pax.last_name }}" class="fi-sm" required></div>
+                <div class="fg"><label>Email</label><input type="email" name="email" value="{{ pax.email or '' }}" class="fi-sm"></div>
+                <div class="fg"><label>Téléphone</label><input type="text" name="phone" value="{{ pax.phone or '' }}" class="fi-sm"></div>
+                <div class="fg"><label>Naissance</label><input type="date" name="date_of_birth" value="{{ pax.date_of_birth.strftime('%Y-%m-%d') if pax.date_of_birth else '' }}" class="fi-sm"></div>
+                <div class="fg"><label>Nationalité</label><input type="text" name="nationality" value="{{ pax.nationality or '' }}" class="fi-sm"></div>
+                <div class="fg"><label>N° Passeport</label><input type="text" name="passport_number" value="{{ pax.passport_number or '' }}" class="fi-sm"></div>
+                <div class="fg"></div>
+                <div class="fg"><label>Urgence — Nom</label><input type="text" name="emergency_contact_name" value="{{ pax.emergency_contact_name or '' }}" class="fi-sm"></div>
+                <div class="fg"><label>Urgence — Tél.</label><input type="text" name="emergency_contact_phone" value="{{ pax.emergency_contact_phone or '' }}" class="fi-sm"></div>
+            </div>
+            <button type="submit" class="btn btn-secondary btn-sm" style="margin-top:8px;">Sauvegarder</button>
+        </form>
+
+        <!-- Documents for this passenger -->
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid #f0f0f0;">
+            <h4 style="font-size:12px;color:#888;margin:0 0 8px;">📄 Documents — {{ pax.first_name }}</h4>
+            <table class="pax-table">
+                <thead><tr><th>Document</th><th>Statut</th><th>Notes</th><th></th></tr></thead>
+                <tbody>
+                {% for d in pax.documents %}
+                <tr>
+                    <td><strong>{% for code, label in document_types %}{% if code == d.doc_type %}{{ label }}{% endif %}{% endfor %}</strong></td>
+                    <td><span class="doc-st doc-st-{{ d.status }}">{% if d.status == 'missing' %}⚪ Manquant{% elif d.status == 'uploaded' %}🔵 Téléversé{% elif d.status == 'validated' %}🟢 Validé{% elif d.status == 'rejected' %}🔴 Rejeté{% endif %}</span></td>
+                    <td style="font-size:11px;color:#888;">{{ d.notes or '' }}</td>
+                    <td>
+                        <form method="POST" action="/passengers/doc/{{ d.id }}/status" style="display:inline-flex;gap:4px;">
+                            <select name="status" class="fi-sm" style="width:auto;">
+                                {% for code, label in document_statuses %}<option value="{{ code }}" {% if d.status == code %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                            </select>
+                            <input type="text" name="notes" placeholder="Note" class="fi-sm" style="width:80px;">
+                            <button type="submit" class="btn btn-sm btn-secondary" style="padding:3px 8px;font-size:10px;">OK</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% set missing = pax.documents|selectattr('status','equalto','missing')|list|length %}
+            {% if missing > 0 %}
+            <div style="margin-top:6px;font-size:11px;color:#D97706;">⚠️ {{ missing }} document(s) manquant(s)</div>
+            {% endif %}
+        </div>
+
+        <!-- Questionnaire status -->
+        {% set form = pax_forms.get(pax.id) %}
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;">
+            {% if form and form.signed %}
+            <div style="font-size:11px;color:#16a34a;">✅ Questionnaire pré-embarquement signé le {{ form.signed_at.strftime('%d/%m/%Y') if form.signed_at else '' }}</div>
+            {% if form.seasick %}<span style="font-size:10px;color:#888;display:block;">Mal de mer : {{ form.seasick }}</span>{% endif %}
+            {% if form.chronic_conditions %}<span style="font-size:10px;color:#888;display:block;">Santé : {{ form.chronic_conditions }}</span>{% endif %}
+            {% if form.allergies %}<span style="font-size:10px;color:#888;display:block;">Allergies : {{ form.allergies }}</span>{% endif %}
+            {% if form.daily_medication %}<span style="font-size:10px;color:#888;display:block;">Traitement : {{ form.daily_medication }}</span>{% endif %}
+            {% if form.dietary_requirements %}<span style="font-size:10px;color:#888;display:block;">Régime : {{ form.dietary_requirements }}</span>{% endif %}
+            {% if form.can_swim_50m %}<span style="font-size:10px;color:#888;display:block;">Nage 50m : {{ form.can_swim_50m }}</span>{% endif %}
+            {% else %}
+            <div style="font-size:11px;color:#D97706;">⚠️ Questionnaire pré-embarquement non rempli</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- ADD 2nd PASSENGER -->
+    {% if booking.passengers|length < 2 %}
+    <div class="bd-card" style="border-left:3px solid #87BD2B;">
+        <h3>＋ Ajouter un 2ème passager</h3>
+        <form method="POST" action="/passengers/{{ booking.id }}/add-passenger">
+            <div class="bd-grid">
+                <div class="fg"><label>Prénom *</label><input type="text" name="first_name" class="fi-sm" required></div>
+                <div class="fg"><label>Nom *</label><input type="text" name="last_name" class="fi-sm" required></div>
+                <div class="fg"><label>Email</label><input type="email" name="email" class="fi-sm"></div>
+                <div class="fg"><label>Téléphone</label><input type="text" name="phone" class="fi-sm"></div>
+                <div class="fg"><label>Naissance</label><input type="date" name="date_of_birth" class="fi-sm"></div>
+                <div class="fg"><label>Nationalité</label><input type="text" name="nationality" class="fi-sm"></div>
+                <div class="fg"><label>N° Passeport</label><input type="text" name="passport_number" class="fi-sm"></div>
+                <div class="fg"></div>
+                <div class="fg"><label>Urgence — Nom</label><input type="text" name="emergency_contact_name" class="fi-sm"></div>
+                <div class="fg"><label>Urgence — Tél.</label><input type="text" name="emergency_contact_phone" class="fi-sm"></div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm" style="margin-top:8px;">Ajouter le passager</button>
+        </form>
+    </div>
+    {% endif %}
+
+    <!-- PAYMENTS -->
+    <div class="bd-card" id="payments">
+        <h3>💶 Paiements
+            <span style="font-size:12px;font-weight:400;color:#888;margin-left:8px;">
+                Total : {{ "%.2f"|format(booking.price_total or 0) }} € ·
+                Acompte : {{ "%.2f"|format(booking.price_deposit or 0) }} € ·
+                Solde : {{ "%.2f"|format(booking.price_balance or 0) }} €
+            </span>
+        </h3>
+
+        {% set paid_total = booking.payments|selectattr('status','equalto','received')|map(attribute='amount')|sum %}
+        {% if booking.price_total %}
+        <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;">
+            <div style="flex:1;height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden;">
+                <div style="height:100%;background:#87BD2B;border-radius:4px;width:{{ ((paid_total / (booking.price_total|float)) * 100)|int }}%;"></div>
+            </div>
+            <span style="font-size:12px;font-weight:600;color:#555;">{{ "%.0f"|format(paid_total) }} / {{ "%.0f"|format(booking.price_total) }} €</span>
+        </div>
+        {% endif %}
+
+        {% if booking.payments %}
+        <table class="pax-table">
+            <thead><tr><th>Type</th><th>Méthode</th><th>Montant</th><th>Échéance</th><th>Statut</th><th>Payé le</th><th></th></tr></thead>
+            <tbody>
+            {% for p in booking.payments %}
+            <tr>
+                <td><strong>{{ p.payment_type|capitalize }}</strong></td>
+                <td>{% if p.payment_method == 'virement' %}🏦 Virement{% elif p.payment_method == 'revolut' %}💳 CB Revolut{% else %}{{ p.payment_method or '—' }}{% endif %}</td>
+                <td style="font-weight:600;">{{ "%.2f"|format(p.amount) }} €</td>
+                <td>{{ p.due_date.strftime('%d/%m/%Y') if p.due_date else '—' }}</td>
+                <td>
+                    <form method="POST" action="/passengers/payment/{{ p.id }}/status" style="display:inline-flex;gap:4px;">
+                        <select name="status" class="fi-sm" style="width:auto;">
+                            <option value="pending" {% if p.status == 'pending' %}selected{% endif %}>⏳ En attente</option>
+                            <option value="sent" {% if p.status == 'sent' %}selected{% endif %}>📨 Ordre envoyé</option>
+                            <option value="received" {% if p.status == 'received' %}selected{% endif %}>✅ Reçu</option>
+                            <option value="failed" {% if p.status == 'failed' %}selected{% endif %}>❌ Échoué</option>
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-secondary" style="padding:3px 8px;font-size:10px;">OK</button>
+                    </form>
+                </td>
+                <td>{% if p.paid_date %}<span style="font-size:11px;color:#16a34a;">✓ {{ p.paid_date.strftime('%d/%m/%Y') }}</span>{% endif %}</td>
+                <td>{% if p.reference %}<span style="font-size:10px;color:#888;">Réf: {{ p.reference }}</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="font-size:12px;color:#aaa;padding:8px 0;">Aucun ordre de paiement créé.</p>
+        {% endif %}
+
+        <!-- Quick buttons -->
+        {% set has_deposit = booking.payments|selectattr('payment_type','equalto','acompte')|list|length > 0 %}
+        {% set has_balance = booking.payments|selectattr('payment_type','equalto','solde')|list|length > 0 %}
+        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+            {% if not has_deposit and booking.price_deposit %}
+            <form method="POST" action="/passengers/{{ booking.id }}/payment">
+                <input type="hidden" name="payment_type" value="acompte">
+                <input type="hidden" name="payment_method" value="virement">
+                <input type="hidden" name="amount" value="{{ booking.price_deposit }}">
+                <button type="submit" class="btn btn-primary btn-sm">🏦 Créer ordre acompte · {{ "%.0f"|format(booking.price_deposit) }} €</button>
+            </form>
+            {% endif %}
+            {% if not has_balance and booking.price_balance and has_deposit %}
+            <form method="POST" action="/passengers/{{ booking.id }}/payment">
+                <input type="hidden" name="payment_type" value="solde">
+                <input type="hidden" name="payment_method" value="virement">
+                <input type="hidden" name="amount" value="{{ booking.price_balance }}">
+                <button type="submit" class="btn btn-secondary btn-sm">🏦 Créer ordre solde · {{ "%.0f"|format(booking.price_balance) }} €</button>
+            </form>
+            {% endif %}
+        </div>
+
+        <!-- Manual add -->
+        <details style="margin-top:12px;">
+            <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--towt-blue);">＋ Ajouter un paiement personnalisé</summary>
+            <form method="POST" action="/passengers/{{ booking.id }}/payment" style="margin-top:10px;">
+                <div class="bd-grid">
+                    <div class="fg"><label>Type</label><select name="payment_type" class="fi-sm" required>{% for c,l in payment_types %}<option value="{{ c }}">{{ l }}</option>{% endfor %}</select></div>
+                    <div class="fg"><label>Méthode</label><select name="payment_method" class="fi-sm" required>{% for c,l in payment_methods %}<option value="{{ c }}">{{ l }}</option>{% endfor %}</select></div>
+                    <div class="fg"><label>Montant (€)</label><input type="number" name="amount" class="fi-sm" step="0.01" required></div>
+                    <div class="fg"><label>Échéance</label><input type="date" name="due_date" class="fi-sm"></div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm" style="margin-top:8px;">Créer l'ordre</button>
+            </form>
+        </details>
+    </div>
+
+</div>
+
+<!-- SIDEBAR -->
+<div class="bd-side">
+    <div class="bd-card">
+        <h3>📋 Réservation</h3>
+        <div class="bd-info-row"><span>Référence</span><strong>{{ booking.reference }}</strong></div>
+        <div class="bd-info-row"><span>Date</span><strong>{{ booking.booking_date.strftime('%d/%m/%Y') if booking.booking_date else '—' }}</strong></div>
+        <div class="bd-info-row"><span>Cabine</span><strong>{{ booking.cabin_number }} · {{ booking.cabin_label }}</strong></div>
+        <div class="bd-info-row"><span>Prix</span><strong>{{ "%.2f"|format(booking.price_total or 0) }} €</strong></div>
+        <div class="bd-info-row"><span>Acompte</span><strong>{{ "%.2f"|format(booking.price_deposit or 0) }} €</strong></div>
+        <div class="bd-info-row"><span>Solde</span><strong>{{ "%.2f"|format(booking.price_balance or 0) }} €</strong></div>
+    </div>
+
+    <div class="bd-card">
+        <h3>🔗 Lien passager</h3>
+        <p style="font-size:11px;color:#888;margin-bottom:8px;">Partagez ce lien pour que le passager suive sa réservation et dépose ses documents.</p>
+        <div class="token-box">
+            <input type="text" value="{{ request.base_url }}passenger/{{ booking.token }}" class="fi-sm" id="pax-link" readonly style="font-size:10px;">
+            <button type="button" class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('pax-link').value)">📋</button>
+        </div>
+    </div>
+
+    <div class="bd-card">
+        <h3>📝 Notes</h3>
+        <p style="font-size:12px;color:#666;">{{ booking.notes or 'Aucune note.' }}</p>
+    </div>
+</div>
+</div>
+
+<style>
+    .bd-layout{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+    @media(max-width:1000px){.bd-layout{grid-template-columns:1fr}}
+    .bd-main{display:flex;flex-direction:column;gap:16px}
+    .bd-side{display:flex;flex-direction:column;gap:16px}
+    .bd-card{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px}
+    .bd-card h3{margin:0 0 12px;font-size:14px}
+    .bd-card h4{font-size:12px}
+    .bd-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(max-width:600px){.bd-grid{grid-template-columns:1fr}}
+    .fg{display:flex;flex-direction:column;gap:2px;margin-bottom:4px}
+    .fg label{font-size:10px;font-weight:600;color:#888;text-transform:uppercase}
+    .fi-sm{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:inherit;width:100%;box-sizing:border-box}
+    .fi-sm:focus{border-color:var(--towt-blue);outline:none}
+    .bd-status-bar{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+    .bd-status-steps{display:flex;align-items:center;gap:0}
+    .bd-step{display:flex;align-items:center;gap:4px;font-size:11px;color:#bbb}
+    .bd-step.done{color:#87BD2B}.bd-step.current{color:var(--towt-blue);font-weight:700}
+    .bd-step-dot{width:10px;height:10px;border-radius:50%;border:2px solid #ddd;background:white;flex-shrink:0}
+    .bd-step.done .bd-step-dot{background:#87BD2B;border-color:#87BD2B}.bd-step.current .bd-step-dot{background:var(--towt-blue);border-color:var(--towt-blue)}
+    .bd-step-line{width:20px;height:2px;background:#eee;flex-shrink:0}.bd-step-line.done{background:#87BD2B}
+    .cabin-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:600}
+    .cabin-1,.cabin-2{background:rgba(168,85,247,0.1);color:#A855F7}
+    .cabin-3,.cabin-4{background:rgba(96,165,250,0.1);color:#2563EB}
+    .pax-table{width:100%;border-collapse:collapse;font-size:12px}
+    .pax-table th{text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:#888;border-bottom:2px solid #f0f0f0}
+    .pax-table td{padding:6px 8px;border-bottom:1px solid #f8f8f8;vertical-align:middle}
+    .doc-st{font-size:11px;font-weight:500}
+    .doc-st-missing{color:#999}.doc-st-uploaded{color:#2563EB}.doc-st-validated{color:#16a34a}.doc-st-rejected{color:#DC2626}
+    .token-box{display:flex;gap:4px}.token-box input{flex:1}
+    .bd-info-row{display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid #f8f8f8}
+    .bd-info-row span{color:#888}
+</style>
+{% endblock %}

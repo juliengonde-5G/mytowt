@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+
+{% block title %}TOWT - KPI Environnementaux{% endblock %}
+{% block page_title %}KPI Environnementaux{% endblock %}
+
+{% block topbar_actions %}
+<a href="/kpi/export/csv" class="btn btn-secondary btn-sm" hx-boost="false">
+    <i data-lucide="download"></i> Export CSV
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="kpi-page">
+    <!-- Filters -->
+    <div class="kpi-filters">
+        <div class="vessel-tabs">
+            <a href="/kpi?year={{ current_year }}"
+               class="vessel-tab {% if not selected_vessel %}active{% endif %}">
+                <i data-lucide="globe"></i> Tous
+            </a>
+            {% for v in vessels %}
+            <a href="/kpi?vessel={{ v.code }}&year={{ current_year }}"
+               class="vessel-tab {% if selected_vessel == v.code %}active{% endif %}">
+                <i data-lucide="ship"></i> {{ v.name }}
+            </a>
+            {% endfor %}
+        </div>
+        <div class="year-selector">
+            {% for y in years %}
+            <a href="/kpi?{% if selected_vessel %}vessel={{ selected_vessel }}&{% endif %}year={{ y }}"
+               class="year-btn {% if current_year == y %}active{% endif %}">{{ y }}</a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- DASHBOARD CARDS -->
+    <div class="kpi-cards">
+        <!-- CO2 évité -->
+        <div class="kpi-card kpi-card-co2">
+            <div class="kpi-card-icon">
+                <i data-lucide="leaf"></i>
+            </div>
+            <div class="kpi-card-body">
+                <span class="kpi-card-value">{{ '%.1f'|format(totals.co2_avoided_kg / 1000) }}</span>
+                <span class="kpi-card-unit">tonnes CO₂ évitées</span>
+                <div class="kpi-card-equiv">
+                    {% if totals.equiv_flights >= 0.01 %}
+                    <span class="equiv-badge">✈️ {{ '%.1f'|format(totals.equiv_flights) }} vol{{ 's' if totals.equiv_flights > 1 }} Paris–New York</span>
+                    {% endif %}
+                    {% if totals.equiv_containers >= 1 %}
+                    <span class="equiv-badge">📦 {{ '%.0f'|format(totals.equiv_containers) }} container{{ 's' if totals.equiv_containers > 1 }} Asie–Europe</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- NOx + SOx évités -->
+        <div class="kpi-card kpi-card-nox">
+            <div class="kpi-card-icon">
+                <i data-lucide="wind"></i>
+            </div>
+            <div class="kpi-card-body">
+                <span class="kpi-card-value">{{ '%.1f'|format(totals.nox_avoided_kg) }}</span>
+                <span class="kpi-card-unit">kg NOx évités</span>
+                <div class="kpi-card-sub">
+                    + {{ '%.1f'|format(totals.sox_avoided_kg) }} kg SOx évités
+                </div>
+            </div>
+        </div>
+
+        <!-- Taux d'occupation -->
+        <div class="kpi-card kpi-card-occ">
+            <div class="kpi-card-icon">
+                <i data-lucide="box"></i>
+            </div>
+            <div class="kpi-card-body">
+                <span class="kpi-card-value">{{ totals.occupation_avg }}%</span>
+                <span class="kpi-card-unit">occupation moyenne</span>
+                <div class="kpi-card-sub">
+                    {{ '%.0f'|format(totals.cargo_tons) }} tonnes transportées
+                </div>
+            </div>
+        </div>
+
+        <!-- Distance -->
+        <div class="kpi-card kpi-card-dist">
+            <div class="kpi-card-icon">
+                <i data-lucide="navigation"></i>
+            </div>
+            <div class="kpi-card-body">
+                <span class="kpi-card-value">{{ '%.0f'|format(totals.distance_nm) }}</span>
+                <span class="kpi-card-unit">milles nautiques</span>
+                <div class="kpi-card-sub">
+                    {{ totals.leg_count }} escale{{ 's' if totals.leg_count > 1 }}
+                </div>
+            </div>
+        </div>
+
+        <!-- CO2 par tonne -->
+        <div class="kpi-card kpi-card-eff">
+            <div class="kpi-card-icon">
+                <i data-lucide="target"></i>
+            </div>
+            <div class="kpi-card-body">
+                <span class="kpi-card-value">{{ totals.co2_per_ton_avg }}</span>
+                <span class="kpi-card-unit">kg CO₂ / tonne transportée</span>
+                <div class="kpi-card-sub">
+                    vs ~{{ '%.1f'|format(params.conventional_co2_per_ton_nm * 4000) }} kg en conventionnel (4000 NM)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DETAIL TABLE -->
+    <h3 style="margin:24px 0 12px;font-size:16px;">Détail par escale</h3>
+
+    {% if leg_kpis %}
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Leg</th>
+                    <th>Navire</th>
+                    <th>Route</th>
+                    <th>Dist. (NM)</th>
+                    <th>Tonnes</th>
+                    <th>Occup.</th>
+                    <th>CO₂ évité</th>
+                    <th>NOx évité</th>
+                    <th>SOx évité</th>
+                    <th>CO₂/t</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for kpi in leg_kpis %}
+                <tr>
+                    <td><strong style="font-family:monospace;color:var(--towt-blue);">{{ kpi.leg.leg_code }}</strong></td>
+                    <td>{{ kpi.leg.vessel.name }}</td>
+                    <td>
+                        <span class="port-badge">{{ kpi.leg.departure_port.locode }}</span>
+                        →
+                        <span class="port-badge">{{ kpi.leg.arrival_port.locode }}</span>
+                    </td>
+                    <td>{{ kpi.distance_nm }}</td>
+                    <td>
+                        <form method="POST" action="/kpi/legs/{{ kpi.leg.id }}/cargo"
+                              style="display:inline;" id="cargo-form-{{ kpi.leg.id }}">
+                            <input type="number" name="cargo_tons" step="0.1" min="0"
+                                   value="{{ kpi.cargo_tons }}"
+                                   class="cargo-input"
+                                   onchange="this.form.submit()">
+                        </form>
+                    </td>
+                    <td>
+                        <div class="occ-bar-container">
+                            <div class="occ-bar" style="width:{{ kpi.occupation_pct }}%"></div>
+                            <span class="occ-value">{{ kpi.occupation_pct }}%</span>
+                        </div>
+                    </td>
+                    <td class="text-green">{{ '%.1f'|format(kpi.co2_avoided_kg) }} kg</td>
+                    <td>{{ '%.2f'|format(kpi.nox_avoided_kg) }} kg</td>
+                    <td>{{ '%.2f'|format(kpi.sox_avoided_kg) }} kg</td>
+                    <td>{{ kpi.co2_per_ton_kg }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr style="font-weight:600;background:var(--towt-light);">
+                    <td colspan="3">TOTAL</td>
+                    <td>{{ '%.0f'|format(totals.distance_nm) }}</td>
+                    <td>{{ '%.0f'|format(totals.cargo_tons) }}</td>
+                    <td>{{ totals.occupation_avg }}%</td>
+                    <td class="text-green">{{ '%.1f'|format(totals.co2_avoided_kg) }} kg</td>
+                    <td>{{ '%.2f'|format(totals.nox_avoided_kg) }} kg</td>
+                    <td>{{ '%.2f'|format(totals.sox_avoided_kg) }} kg</td>
+                    <td>{{ totals.co2_per_ton_avg }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i data-lucide="bar-chart-3" style="width:48px;height:48px;color:var(--towt-sky);"></i>
+        <h3>Aucune escale pour calculer les KPI</h3>
+        <p>Créez des escales dans le module Planification, puis renseignez les tonnes transportées ici.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .kpi-filters { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:20px; flex-wrap:wrap; }
+    .year-selector { display:flex; gap:4px; background:white; padding:4px; border-radius:var(--radius); box-shadow:var(--shadow); }
+    .year-btn { padding:6px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; color:var(--towt-gray); }
+    .year-btn:hover { background:var(--towt-light); }
+    .year-btn.active { background:var(--towt-green); color:white; }
+
+    .kpi-cards {
+        display:grid;
+        grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+        gap:16px;
+        margin-bottom:24px;
+    }
+    .kpi-card {
+        background:white;
+        border-radius:var(--radius-lg);
+        box-shadow:var(--shadow);
+        padding:20px;
+        display:flex;
+        gap:16px;
+        align-items:flex-start;
+        border-left:4px solid transparent;
+    }
+    .kpi-card-co2 { border-left-color:var(--towt-green); }
+    .kpi-card-nox { border-left-color:#60A5FA; }
+    .kpi-card-occ { border-left-color:var(--towt-blue); }
+    .kpi-card-dist { border-left-color:var(--towt-sky); }
+    .kpi-card-eff { border-left-color:#F59E0B; }
+
+    .kpi-card-icon {
+        width:44px; height:44px; border-radius:12px;
+        display:flex; align-items:center; justify-content:center;
+        flex-shrink:0;
+    }
+    .kpi-card-co2 .kpi-card-icon { background:rgba(135,189,43,0.12); color:var(--towt-green); }
+    .kpi-card-nox .kpi-card-icon { background:rgba(96,165,250,0.12); color:#60A5FA; }
+    .kpi-card-occ .kpi-card-icon { background:rgba(9,85,97,0.1); color:var(--towt-blue); }
+    .kpi-card-dist .kpi-card-icon { background:rgba(158,198,210,0.2); color:var(--towt-sky-dark); }
+    .kpi-card-eff .kpi-card-icon { background:rgba(245,158,11,0.12); color:#F59E0B; }
+
+    .kpi-card-body { flex:1; }
+    .kpi-card-value { display:block; font-size:28px; font-weight:700; color:var(--towt-gray); line-height:1; }
+    .kpi-card-unit { display:block; font-size:12px; color:#888; margin-top:4px; }
+    .kpi-card-sub { font-size:11px; color:#aaa; margin-top:6px; }
+    .kpi-card-equiv { margin-top:8px; display:flex; flex-direction:column; gap:4px; }
+    .equiv-badge {
+        display:inline-block; font-size:11px; font-weight:500;
+        background:#F0FFF4; color:#22863A; padding:3px 8px;
+        border-radius:100px; border:1px solid #C6F6D5;
+    }
+
+    .port-badge { display:inline-block; background:var(--towt-light); padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; color:var(--towt-blue); font-family:monospace; }
+    .text-green { color:#22863A; font-weight:500; }
+
+    .cargo-input {
+        width:70px; padding:4px 6px; border:1px solid #e0e0e0;
+        border-radius:4px; font-size:12px; font-family:'Poppins',sans-serif;
+        text-align:right;
+    }
+    .cargo-input:focus { border-color:var(--towt-blue); outline:none; box-shadow:0 0 0 2px rgba(9,85,97,0.1); }
+
+    .occ-bar-container {
+        display:flex; align-items:center; gap:6px;
+    }
+    .occ-bar {
+        height:8px; border-radius:4px; background:var(--towt-green);
+        min-width:2px; max-width:80px;
+        transition:width 0.3s;
+    }
+    .occ-value { font-size:12px; color:#888; }
+</style>
+{% endblock %}

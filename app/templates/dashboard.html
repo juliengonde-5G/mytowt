@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}my_TOWT - Tableau de bord{% endblock %}
+{% block page_title %}Tableau de bord{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="welcome-banner">
+        <div class="welcome-text">
+            <h2>Bienvenue, {{ user.full_name }}</h2>
+            <p>TOWT — Transport à la voile · Gestion de la flotte</p>
+        </div>
+        <div class="welcome-date"><span id="current-date"></span></div>
+    </div>
+
+    <!-- CARGO NOTIFICATIONS -->
+    {% if cargo_notifications %}
+    <div class="cargo-notif-section" style="margin-bottom:20px;">
+        <div class="section-header" style="display:flex;align-items:center;gap:8px;">
+            <h3><i data-lucide="package-check" style="width:18px;height:18px;"></i> Packing Lists à traiter ({{ cargo_notifications|length }})</h3>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
+            {% for pl in cargo_notifications %}
+            <div class="cargo-notif-card">
+                <div class="notif-left">
+                    <span class="notif-icon">📦</span>
+                    <div>
+                        <strong>{{ pl.order.reference }}</strong> — {{ pl.order.client_name }}
+                        <div style="font-size:11px;color:#888;">{{ pl.batch_count }} batch{{ 's' if pl.batch_count > 1 }} · {{ pl.completion_pct }}% rempli · Soumis {{ pl.updated_at.strftime('%d/%m %H:%M') if pl.updated_at else '' }}</div>
+                    </div>
+                </div>
+                <div class="notif-actions">
+                    <a href="/cargo/{{ pl.id }}" class="btn btn-sm btn-secondary"><i data-lucide="eye" style="width:12px;height:12px;"></i> Voir</a>
+                    <form method="POST" action="/notifications/cargo/{{ pl.id }}/dismiss" style="display:inline;">
+                        <button type="submit" class="btn btn-sm btn-primary"><i data-lucide="check" style="width:12px;height:12px;"></i> Traité</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ALERTS -->
+    {% if alerts %}
+    <div class="alerts-section">
+        <div class="section-header" style="display:flex;align-items:center;gap:8px;">
+            <h3><i data-lucide="bell" style="width:18px;height:18px;"></i> Alertes ({{ alerts|length }})</h3>
+            <button class="btn btn-sm btn-secondary" onclick="document.querySelector('.alerts-list').classList.toggle('collapsed')" style="margin-left:auto;font-size:11px;">Masquer/Afficher</button>
+        </div>
+        <div class="alerts-list">
+            {% for alert in alerts %}
+            <a href="{{ alert.link }}" class="alert-card {{ alert.severity }}">
+                <div class="alert-icon {{ alert.severity }}"><i data-lucide="{{ alert.icon }}"></i></div>
+                <div class="alert-body">
+                    <div class="alert-title">{{ alert.title }}</div>
+                    <div class="alert-msg">{{ alert.message }}</div>
+                </div>
+                <i data-lucide="chevron-right" style="width:16px;height:16px;color:#ccc;flex-shrink:0;"></i>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- KPI Cards -->
+    <div class="stats-grid" style="grid-template-columns:repeat(6,1fr);">
+        <div class="stat-card">
+            <div class="stat-card-icon blue"><i data-lucide="navigation"></i></div>
+            <div class="stat-card-body">
+                <span class="stat-card-value">{{ total_legs }}</span>
+                <span class="stat-card-label">Legs {{ current_year }}</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-icon green"><i data-lucide="package"></i></div>
+            <div class="stat-card-body">
+                <span class="stat-card-value">{{ total_orders }}</span>
+                <span class="stat-card-label">Commandes actives</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-icon sky"><i data-lucide="anchor"></i></div>
+            <div class="stat-card-body">
+                <span class="stat-card-value">{{ escales_month }}</span>
+                <span class="stat-card-label">Escales ce mois</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-icon warm"><i data-lucide="euro"></i></div>
+            <div class="stat-card-body">
+                <span class="stat-card-value">{{ ca_forecast|eur }} €</span>
+                <span class="stat-card-label">CA prév. {{ current_year }}</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-icon" style="background:rgba(34,197,94,0.12);color:#16a34a;"><i data-lucide="leaf"></i></div>
+            <div class="stat-card-body">
+                <span class="stat-card-value">{{ '%.1f'|format(co2_avoided_kg / 1000) }} t</span>
+                <span class="stat-card-label">CO₂ évité {{ current_year }}</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-icon" style="background:rgba(139,92,246,0.12);color:#7c3aed;"><i data-lucide="bar-chart"></i></div>
+            <div class="stat-card-body">
+                <span class="stat-card-value">{{ avg_fill_rate }}%</span>
+                <span class="stat-card-label">Remplissage moy.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fleet status -->
+    <div class="section-header"><h3>Flotte TOWT</h3></div>
+    <div class="fleet-grid">
+        {% for vs in vessel_statuses %}
+        <div class="vessel-card">
+            <div class="vessel-card-header">
+                <div class="vessel-icon"><i data-lucide="ship"></i></div>
+                <div class="vessel-status-dot {{ vs.status }}"></div>
+            </div>
+            <h4 class="vessel-name">{{ vs.vessel.name }}</h4>
+            <div class="vessel-location">
+                {% if vs.status == 'a_quai' %}
+                <span class="status-badge quai"><i data-lucide="anchor" style="width:12px;height:12px;"></i> À quai</span>
+                <span class="loc-text">{{ vs.location }}</span>
+                {% elif vs.status == 'en_mer' %}
+                <span class="status-badge mer"><i data-lucide="waves" style="width:12px;height:12px;"></i> En mer</span>
+                <span class="loc-text">{{ vs.location }}</span>
+                {% else %}
+                <span class="status-badge unknown"><i data-lucide="help-circle" style="width:12px;height:12px;"></i> —</span>
+                {% endif %}
+            </div>
+            {% if vs.current_leg %}
+            <div class="vessel-leg-info">
+                <span style="font-family:monospace;color:var(--towt-blue);font-size:11px;">{{ vs.current_leg.leg_code }}</span>
+                {% if vs.current_leg.eta %}
+                <span style="font-size:11px;color:#888;">ETA {{ vs.current_leg.eta.strftime('%d/%m') }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
+            <div style="display:flex;gap:4px;margin-top:8px;">
+                <a href="/planning?vessel={{ vs.vessel.code }}" class="vessel-card-link">Planning <i data-lucide="arrow-right"></i></a>
+                <a href="/captain?vessel={{ vs.vessel.code }}" class="vessel-card-link captain">Capitaine <i data-lucide="compass"></i></a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Upcoming -->
+    {% if upcoming_legs %}
+    <div class="section-header"><h3>Prochains départs</h3></div>
+    <div class="table-container">
+        <table class="data-table">
+            <thead><tr><th>Leg</th><th>Navire</th><th>Route</th><th>ETD</th><th>ETA</th><th>Durée</th></tr></thead>
+            <tbody>
+                {% for leg in upcoming_legs %}
+                <tr>
+                    <td><strong style="font-family:monospace;color:var(--towt-blue);">{{ leg.leg_code }}</strong></td>
+                    <td>{{ leg.vessel.name }}</td>
+                    <td>{{ leg.departure_port.name }} → {{ leg.arrival_port.name }}</td>
+                    <td>{{ leg.etd.strftime('%d/%m/%Y') if leg.etd else '—' }}</td>
+                    <td>{{ leg.eta.strftime('%d/%m/%Y') if leg.eta else '—' }}</td>
+                    <td>{{ ((leg.estimated_duration_hours or 0) / 24)|round(1) }} j.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Quick access -->
+    <div class="section-header"><h3>Accès rapide</h3></div>
+    <div class="modules-grid">
+        <a href="/planning" class="module-card"><div class="module-icon" style="background:var(--towt-blue);"><i data-lucide="map"></i></div><h4>Planification</h4><p>Routes, escales, planning</p></a>
+        <a href="/commercial" class="module-card"><div class="module-icon" style="background:var(--towt-green);"><i data-lucide="package"></i></div><h4>Commercial</h4><p>Commandes, affectations</p></a>
+        <a href="/escale" class="module-card"><div class="module-icon" style="background:var(--towt-sky-dark);"><i data-lucide="anchor"></i></div><h4>Escale</h4><p>Opérations portuaires</p></a>
+        <a href="/finance" class="module-card"><div class="module-icon" style="background:#84AAB0;"><i data-lucide="euro"></i></div><h4>Finances</h4><p>Revenus, dépenses, marges</p></a>
+        <a href="/kpi" class="module-card"><div class="module-icon" style="background:var(--towt-gray);"><i data-lucide="bar-chart-3"></i></div><h4>KPI</h4><p>Émissions, performance</p></a>
+    </div>
+</div>
+
+<style>
+    .alerts-section{margin-bottom:20px;}
+    .alerts-list{display:flex;flex-direction:column;gap:6px;}
+    .alerts-list.collapsed{display:none;}
+    .alert-card{display:flex;align-items:center;gap:12px;background:white;padding:12px 16px;border-radius:var(--radius);box-shadow:var(--shadow);border-left:4px solid #ddd;text-decoration:none;color:inherit;transition:all 0.15s;}
+    .alert-card:hover{transform:translateX(2px);box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+    .alert-card.danger{border-left-color:#DC2626;background:rgba(220,38,38,0.02);}
+    .alert-card.warning{border-left-color:#F59E0B;background:rgba(245,158,11,0.02);}
+    .alert-card.info{border-left-color:#60A5FA;background:rgba(96,165,250,0.02);}
+    .alert-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .alert-icon.danger{background:rgba(220,38,38,0.1);color:#DC2626;}
+    .alert-icon.warning{background:rgba(245,158,11,0.1);color:#F59E0B;}
+    .alert-icon.info{background:rgba(96,165,250,0.1);color:#60A5FA;}
+    .alert-icon i{width:18px;height:18px;}
+    .alert-body{flex:1;min-width:0;}
+    .alert-title{font-weight:600;font-size:13px;color:#333;}
+    .alert-msg{font-size:11px;color:#888;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .vessel-location{display:flex;align-items:center;gap:8px;margin:8px 0;}
+    .status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:100px;font-size:11px;font-weight:600;}
+    .status-badge.quai{background:rgba(135,189,43,0.15);color:#5a8010;}
+    .status-badge.mer{background:rgba(96,165,250,0.15);color:#2563EB;}
+    .status-badge.unknown{background:#f5f5f5;color:#aaa;}
+    .loc-text{font-size:12px;color:#666;}
+    .vessel-status-dot{width:10px;height:10px;border-radius:50%;}
+    .vessel-status-dot.a_quai{background:var(--towt-green);}
+    .vessel-status-dot.en_mer{background:#60A5FA;}
+    .vessel-status-dot.unknown{background:#ddd;}
+    .vessel-leg-info{display:flex;align-items:center;gap:8px;margin-top:4px;}
+    .vessel-card-link.captain{background:rgba(96,165,250,0.08);color:#2563EB;}
+    .vessel-card-link.captain:hover{background:rgba(96,165,250,0.15);}
+    .cargo-notif-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-left:4px solid #F59E0B}
+    .notif-left{display:flex;align-items:center;gap:10px}
+    .notif-icon{font-size:20px}
+    .notif-actions{display:flex;gap:6px}
+</style>
+
+<script>
+    var opts = {weekday:'long',year:'numeric',month:'long',day:'numeric'};
+    document.getElementById('current-date').textContent = new Date().toLocaleDateString('fr-FR', opts);
+</script>
+{% endblock %}
