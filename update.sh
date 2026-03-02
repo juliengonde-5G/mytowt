@@ -16,6 +16,15 @@ log()   { echo -e "${GREEN}[✓]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[!]${NC} $1"; }
 error() { echo -e "${RED}[✗]${NC} $1"; exit 1; }
 
+# Détecter docker compose (plugin) vs $DC (standalone)
+if docker compose version > /dev/null 2>&1; then
+    DC="docker compose"
+elif command -v $DC > /dev/null 2>&1; then
+    DC="$DC"
+else
+    error "Ni 'docker compose' ni '$DC' trouvé"
+fi
+
 echo ""
 echo "════════════════════════════════════════════════"
 echo "   my_TOWT — Mise à jour"
@@ -34,7 +43,7 @@ log "Docker OK"
 # Vérifier les conteneurs
 if ! docker ps --format '{{.Names}}' | grep -q "towt-app-v2"; then
     warn "Le conteneur towt-app-v2 n'est pas en cours d'exécution"
-    warn "Lancement initial ? Utilisez: docker-compose up -d --build"
+    warn "Lancement initial ? Utilisez: $DC up -d --build"
 fi
 
 # ─── 2. Pull du code ─────────────────────────────────
@@ -54,13 +63,13 @@ git fetch origin "$BRANCH" 2>/dev/null && {
 # ─── 3. Rebuild de l'image Docker ────────────────────
 echo ""
 warn "Rebuild de l'image Docker (httpx ajouté aux dépendances)..."
-docker-compose build --no-cache app
+$DC build --no-cache app
 log "Image reconstruite"
 
 # ─── 4. Redémarrage des services ─────────────────────
 echo ""
 warn "Redémarrage des services..."
-docker-compose up -d
+$DC up -d
 log "Services redémarrés"
 
 # Attente que l'app soit prête
