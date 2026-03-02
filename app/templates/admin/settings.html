@@ -46,21 +46,33 @@
 
     <!-- VESSELS -->
     <div class="settings-section" id="sec-vessels" style="display:none;">
-        <h3>Navires & configuration</h3>
+        <div class="sec-header">
+            <h3>Navires & configuration</h3>
+            <button class="btn btn-primary btn-sm" onclick="openModal('/admin/vessels/create')"><i data-lucide="plus"></i> Nouveau navire</button>
+        </div>
         <div class="table-container">
             <table class="data-table">
-                <thead><tr><th>Code</th><th>Nom</th><th>Capacité (pal.)</th><th>Vitesse (nds)</th><th>Élongation</th><th style="text-align:right;">Actions</th></tr></thead>
+                <thead><tr><th>Code</th><th>Nom</th><th>IMO</th><th>Pavillon</th><th>DWT</th><th>Capacité (pal.)</th><th>Vitesse (nds)</th><th>Élongation</th><th style="text-align:right;">Actions</th></tr></thead>
                 <tbody>
                     {% for v in vessels %}
                     <tr>
-                        <td><strong>{{ v.code }}</strong></td><td>{{ v.name }}</td>
+                        <td><strong>{{ v.code }}</strong></td>
+                        <td>{{ v.name }}</td>
+                        <td>{{ v.imo_number or '—' }}</td>
+                        <td>{{ v.flag or '—' }}</td>
+                        <td>{{ v.dwt or '—' }}</td>
                         <td>{{ v.capacity_palettes or '—' }}</td>
-                        <td>{{ v.default_speed }}</td><td>{{ v.default_elongation }}</td>
-                        <td style="text-align:right;">
+                        <td>{{ v.default_speed }}</td>
+                        <td>{{ v.default_elongation }}</td>
+                        <td style="text-align:right;white-space:nowrap;">
                             <button class="btn btn-sm btn-secondary" onclick="openModal('/admin/vessels/{{ v.id }}/edit')"><i data-lucide="pencil"></i></button>
+                            <button class="btn btn-sm btn-danger" hx-delete="/admin/vessels/{{ v.id }}" hx-confirm="Supprimer le navire {{ v.name }} ?"><i data-lucide="trash-2"></i></button>
                         </td>
                     </tr>
                     {% endfor %}
+                    {% if not vessels %}
+                    <tr><td colspan="9" style="text-align:center;color:#aaa;padding:20px;">Aucun navire configuré.</td></tr>
+                    {% endif %}
                 </tbody>
             </table>
         </div>
@@ -70,8 +82,23 @@
     <div class="settings-section" id="sec-ports" style="display:none;">
         <div class="sec-header">
             <h3>Configuration des ports</h3>
-            <a href="/finance/ports" class="btn btn-primary btn-sm"><i data-lucide="settings"></i> Gérer les ports</a>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <a href="/finance/ports" class="btn btn-secondary btn-sm"><i data-lucide="settings"></i> Gérer les ports</a>
+                <form method="POST" action="/admin/ports/import" style="margin:0;" id="port-import-form">
+                    <button type="submit" class="btn btn-primary btn-sm" id="btn-import-ports" onclick="this.disabled=true;this.innerHTML='<i data-lucide=loader class=spin></i> Import en cours...';this.form.submit();">
+                        <i data-lucide="download-cloud"></i> Importer les ports (UN/LOCODE)
+                    </button>
+                </form>
+            </div>
         </div>
+
+        <div style="margin-bottom:16px;padding:12px 16px;background:var(--towt-light);border-radius:8px;font-size:13px;">
+            <strong>{{ port_count }}</strong> ports en base de données (UN/LOCODE mondiaux).
+            {% if port_msg %}
+            <div style="margin-top:8px;padding:8px 12px;background:white;border-radius:6px;border:1px solid #e5e7eb;">{{ port_msg }}</div>
+            {% endif %}
+        </div>
+
         {% if port_configs %}
         <div class="table-container">
             <table class="data-table">

@@ -76,6 +76,10 @@ async def settings_home(
     emission_result = await db.execute(select(EmissionParameter).order_by(EmissionParameter.parameter_name))
     emission_params = emission_result.scalars().all()
 
+    # Port count
+    port_count_result = await db.execute(select(func.count(Port.id)))
+    port_count = port_count_result.scalar() or 0
+
     # Locked legs count
     locked_result = await db.execute(
         select(func.count(Leg.id)).where(Leg.status == "completed")
@@ -131,6 +135,8 @@ async def settings_home(
         "existing_routes": existing_routes,
         "route_ports": route_ports,
         "cabin_type_labels": CABIN_TYPE_LABELS,
+        "port_count": port_count,
+        "port_msg": request.query_params.get("port_msg", ""),
         "active_module": "settings",
     })
 
@@ -234,6 +240,54 @@ async def user_delete(
 
 
 # ─── VESSELS ─────────────────────────────────────────────────
+@router.get("/vessels/create", response_class=HTMLResponse)
+async def vessel_create_form(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    return templates.TemplateResponse("admin/vessel_form.html", {
+        "request": request, "user": user, "vessel": None,
+    })
+
+
+@router.post("/vessels/create", response_class=HTMLResponse)
+async def vessel_create_submit(
+    request: Request,
+    name: str = Form(...),
+    code: str = Form(...),
+    imo_number: str = Form(""),
+    flag: str = Form(""),
+    dwt: str = Form(""),
+    capacity_palettes: str = Form("0"),
+    default_speed: str = Form("8"),
+    default_elongation: str = Form("1.25"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    code_int = int(pf(code, 0))
+    existing = await db.execute(select(Vessel).where(Vessel.code == code_int))
+    if existing.scalar_one_or_none():
+        return templates.TemplateResponse("admin/vessel_form.html", {
+            "request": request, "user": user, "vessel": None,
+            "error": f"Le code navire {code_int} existe déjà.",
+        })
+    vessel = Vessel(
+        code=code_int,
+        name=name.strip(),
+        imo_number=imo_number.strip() or None,
+        flag=flag.strip() or None,
+        dwt=pf(dwt) or None,
+        capacity_palettes=int(pf(capacity_palettes, 0)),
+        default_speed=pf(default_speed, 8),
+        default_elongation=pf(default_elongation, 1.25),
+    )
+    db.add(vessel)
+    await db.flush()
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
+    return RedirectResponse(url="/admin/settings", status_code=303)
+
+
 @router.get("/vessels/{vid}/edit", response_class=HTMLResponse)
 async def vessel_edit_form(
     vid: int, request: Request,
@@ -253,6 +307,9 @@ async def vessel_edit_form(
 async def vessel_edit_submit(
     vid: int, request: Request,
     name: str = Form(...),
+    imo_number: str = Form(""),
+    flag: str = Form(""),
+    dwt: str = Form(""),
     capacity_palettes: str = Form("0"),
     default_speed: str = Form("8"),
     default_elongation: str = Form("1.25"),
@@ -263,11 +320,39 @@ async def vessel_edit_submit(
     vessel = result.scalar_one_or_none()
     if not vessel:
         raise HTTPException(status_code=404)
-    vessel.name = name
+    vessel.name = name.strip()
+    vessel.imo_number = imo_number.strip() or None
+    vessel.flag = flag.strip() or None
+    vessel.dwt = pf(dwt) or None
     vessel.capacity_palettes = int(pf(capacity_palettes, 0))
     vessel.default_speed = pf(default_speed, 8)
     vessel.default_elongation = pf(default_elongation, 1.25)
     await db.flush()
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
+    return RedirectResponse(url="/admin/settings", status_code=303)
+
+
+@router.delete("/vessels/{vid}", response_class=HTMLResponse)
+async def vessel_delete(
+    vid: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Vessel).where(Vessel.id == vid))
+    vessel = result.scalar_one_or_none()
+    if vessel:
+        # Check if vessel has legs
+        leg_count = await db.execute(
+            select(func.count(Leg.id)).where(Leg.vessel_id == vessel.id)
+        )
+        if leg_count.scalar() > 0:
+            return HTMLResponse(
+                content="Ce navire a des legs associés et ne peut pas être supprimé.",
+                status_code=400,
+            )
+        await db.delete(vessel)
+        await db.flush()
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
     return RedirectResponse(url="/admin/settings", status_code=303)
@@ -451,3 +536,32 @@ async def pricing_delete(
         await db.delete(entry)
         await db.flush()
     return HTMLResponse("", status_code=200)
+
+
+# ─── PORT IMPORT ────────────────────────────────────────────
+@router.post("/ports/import", response_class=HTMLResponse)
+async def import_ports(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Import seaports from UN/LOCODE open dataset."""
+    from app.utils.port_loader import load_ports_from_unlocode
+    try:
+        stats = await load_ports_from_unlocode(db)
+        msg = f"Import terminé : {stats['inserted']} ajoutés, {stats['updated']} mis à jour, {stats['skipped']} ignorés"
+    except Exception as e:
+        msg = f"Erreur lors de l'import : {e}"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": f"/admin/settings?port_msg={msg}"})
+    return RedirectResponse(url=f"/admin/settings?port_msg={msg}", status_code=303)
+
+
+@router.get("/ports/count")
+async def port_count(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(func.count(Port.id)))
+    count = result.scalar() or 0
+    return {"count": count}
