@@ -164,11 +164,12 @@ async def kpi_dashboard(
         .options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
         .where(Leg.year == current_year)
     )
+    vessel_obj = None
     if vessel:
         v_result = await db.execute(select(Vessel).where(Vessel.code == vessel))
-        v = v_result.scalar_one_or_none()
-        if v:
-            query = query.where(Leg.vessel_id == v.id)
+        vessel_obj = v_result.scalar_one_or_none()
+        if vessel_obj:
+            query = query.where(Leg.vessel_id == vessel_obj.id)
 
     result = await db.execute(query.order_by(Leg.vessel_id, Leg.sequence))
     legs = result.scalars().all()
