@@ -11,6 +11,7 @@ NOTIFICATION_TYPES = [
     ("eosp", "EOSP (End of Sea Passage)"),
     ("sosp", "SOSP (Start of Sea Passage)"),
     ("new_passenger_booking", "Nouvelle réservation passager"),
+    ("new_claim", "Nouveau claim ouvert"),
 ]
 
 NOTIFICATION_ICONS = {
@@ -20,6 +21,7 @@ NOTIFICATION_ICONS = {
     "eosp": "⚓",
     "sosp": "⛵",
     "new_passenger_booking": "🎫",
+    "new_claim": "⚠️",
 }
 
 

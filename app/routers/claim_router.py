@@ -102,6 +102,12 @@ async def claim_create_submit(request: Request, claim_type:str=Form(...), vessel
     if leg:
         sof = SofEvent(leg_id=leg_id, event_type="CLAIM_DECLARED", event_label=f"⚠️ Claim {ref} — {claim.type_label}", event_date=inc_date.date() if inc_date else date.today(), event_time=inc_date.strftime("%H:%M") if inc_date else datetime.now().strftime("%H:%M"), remarks=f"Claim {ref} ouvert : {description[:200]}", created_by=user.full_name)
         db.add(sof); await db.flush(); claim.sof_event_id = sof.id
+    # Dashboard notification
+    from app.models.notification import Notification
+    vessel = await db.get(Vessel, vessel_id)
+    vessel_name = vessel.name if vessel else "—"
+    leg_code = leg.leg_code if leg else "—"
+    db.add(Notification(type="new_claim", title=f"Claim {ref} ouvert — {claim.type_label} ({vessel_name})", detail=f"Voyage {leg_code} · {description[:150]}", link=f"/claims/{claim.id}", leg_id=leg_id))
     await db.flush()
     return RedirectResponse(url=f"/claims/{claim.id}", status_code=303)
 
