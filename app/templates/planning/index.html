@@ -317,6 +317,7 @@
                 });
 
                 if (bounds.length > 0) leafletMap.fitBounds(bounds, {padding: [40, 40]});
+                leafletMap.invalidateSize();
 
                 // Legend control
                 var legend = L.control({position: 'bottomleft'});

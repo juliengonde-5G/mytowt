@@ -339,7 +339,7 @@
     .vessel-marker-label{background:rgba(9,85,97,0.9);color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;white-space:nowrap;font-family:'Poppins',sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);}
 </style>
 <script>
-(function(){
+window.addEventListener('load', function(){
     const mapEl = document.getElementById('fleet-map');
     if(!mapEl) return;
 
@@ -353,6 +353,9 @@
         attribution:'© OpenStreetMap',
         maxZoom:18,
     }).addTo(map);
+
+    // Force recalculation of map size after layout is stable
+    setTimeout(function(){ map.invalidateSize(); }, 200);
 
     // Custom vessel icon
     function vesselIcon(color){
@@ -422,6 +425,8 @@
             if(bounds.length===1) map.setView(bounds[0],10);
             else if(bounds.length>1) map.fitBounds(bounds,{padding:[40,40],maxZoom:10});
 
+            map.invalidateSize();
+
             // Last update timestamp
             const latest=positions.reduce((a,b)=>new Date(a.recorded_at)>new Date(b.recorded_at)?a:b);
             const upd=document.getElementById('map-last-update');
@@ -431,6 +436,6 @@
             console.error('Tracking map error:',err);
             mapEl.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;font-size:13px;">Erreur chargement carte</div>';
         });
-})();
+});
 </script>
 {% endblock %}
