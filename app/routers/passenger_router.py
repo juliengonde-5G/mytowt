@@ -47,6 +47,7 @@ async def passenger_list(
 ):
     query = (
         select(PassengerBooking)
+        .join(Leg, PassengerBooking.leg_id == Leg.id)
         .options(
             selectinload(PassengerBooking.passengers),
             selectinload(PassengerBooking.leg).selectinload(Leg.departure_port),
@@ -55,7 +56,7 @@ async def passenger_list(
             selectinload(PassengerBooking.vessel),
             selectinload(PassengerBooking.payments),
         )
-        .order_by(PassengerBooking.created_at.desc())
+        .order_by(Leg.etd.asc().nulls_last(), PassengerBooking.created_at.desc())
     )
     if status:
         query = query.where(PassengerBooking.status == status)
@@ -115,6 +116,18 @@ async def booking_create_form(
     # Map leg_id → vessel_code
     leg_vessel_map = {str(l.id): str(l.vessel.code) for l in legs}
 
+    # Build booked cabins per leg (for disabling already-taken cabins)
+    booked_result = await db.execute(
+        select(PassengerBooking.leg_id, PassengerBooking.cabin_number)
+        .where(PassengerBooking.status != "cancelled")
+    )
+    booked_cabins = {}  # { "leg_id": [cabin_number, ...] }
+    for row in booked_result.all():
+        lid = str(row[0])
+        if lid not in booked_cabins:
+            booked_cabins[lid] = []
+        booked_cabins[lid].append(row[1])
+
     return templates.TemplateResponse("passengers/booking_form.html", {
         "request": request, "user": user,
         "legs": legs,
@@ -122,6 +135,7 @@ async def booking_create_form(
         "pricing_json": pricing_json,
         "cabins_by_vessel_json": cabins_by_vessel,
         "leg_vessel_map_json": leg_vessel_map,
+        "booked_cabins_json": booked_cabins,
         "active_module": "passengers",
     })
 
@@ -151,6 +165,17 @@ async def booking_create_submit(
     leg = await db.get(Leg, leg_id)
     if not leg:
         raise HTTPException(400, "Leg introuvable")
+
+    # Check cabin not already booked on this leg
+    existing_cabin = await db.execute(
+        select(PassengerBooking).where(
+            PassengerBooking.leg_id == leg_id,
+            PassengerBooking.cabin_number == cabin_number,
+            PassengerBooking.status != "cancelled",
+        )
+    )
+    if existing_cabin.scalar_one_or_none():
+        raise HTTPException(400, f"La cabine {cabin_number} est déjà réservée sur ce leg.")
 
     # Auto-price from grid
     cabin_type = "double" if cabin_number <= 2 else "twin"
