@@ -778,6 +778,12 @@ async def cargo_doc_form(
         if doc and doc.data_json:
             doc_data = json.loads(doc.data_json)
 
+    # Determine current port based on leg status
+    if leg.ata:
+        current_port = leg.arrival_port.name if leg.arrival_port else ""
+    else:
+        current_port = leg.departure_port.name if leg.departure_port else ""
+
     # Pre-fill from leg data
     prefill = {
         "vessel_name": leg.vessel.name if leg.vessel else "",
@@ -787,6 +793,7 @@ async def cargo_doc_form(
         "port_dep_locode": leg.departure_port.locode if leg.departure_port else "",
         "port_arr": leg.arrival_port.name if leg.arrival_port else "",
         "port_arr_locode": leg.arrival_port.locode if leg.arrival_port else "",
+        "current_port": current_port,
         "etd": leg.etd.strftime("%Y-%m-%d") if leg.etd else "",
         "eta": leg.eta.strftime("%Y-%m-%d") if leg.eta else "",
         "date_today": date.today().strftime("%Y-%m-%d"),
@@ -799,6 +806,16 @@ async def cargo_doc_form(
     )
     sof_events = sof_result.scalars().all()
 
+    # Load embarked crew for this vessel
+    crew_result = await db.execute(
+        select(CrewAssignment).options(selectinload(CrewAssignment.member))
+        .where(
+            CrewAssignment.vessel_id == leg.vessel_id,
+            CrewAssignment.status == "active",
+        ).order_by(CrewAssignment.member_id)
+    )
+    crew_onboard = crew_result.scalars().all()
+
     doc_label = next((l for c, l in CARGO_DOC_TYPES if c == doc_type), doc_type)
 
     return templates.TemplateResponse("onboard/doc_form.html", {
@@ -806,6 +823,7 @@ async def cargo_doc_form(
         "leg": leg, "doc_type": doc_type, "doc_label": doc_label,
         "doc": doc, "doc_data": doc_data, "prefill": prefill,
         "sof_events": sof_events,
+        "crew_onboard": crew_onboard,
         "active_module": "captain",
         "lang": user.language or "fr",
     })
