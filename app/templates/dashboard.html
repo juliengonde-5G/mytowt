@@ -3,8 +3,27 @@
 {% block page_title %}{{ t('page_dashboard', lang) }}{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Critical Leaflet CSS inline — fallback if CDN CSS fails -->
+<style>
+.leaflet-pane,.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow,
+.leaflet-tile-container,.leaflet-pane>svg,.leaflet-pane>canvas,
+.leaflet-zoom-box,.leaflet-image-layer,.leaflet-layer{position:absolute;left:0;top:0;}
+.leaflet-container{overflow:hidden;-webkit-tap-highlight-color:transparent;}
+.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow{-webkit-user-select:none;-moz-user-select:none;user-select:none;-webkit-user-drag:none;}
+.leaflet-tile{filter:inherit;visibility:hidden;}
+.leaflet-tile-loaded{visibility:inherit;}
+.leaflet-container img{max-width:none!important;max-height:none!important;}
+.leaflet-tile-pane{z-index:200;}.leaflet-overlay-pane{z-index:400;}
+.leaflet-shadow-pane{z-index:500;}.leaflet-marker-pane{z-index:600;}
+.leaflet-tooltip-pane{z-index:650;}.leaflet-popup-pane{z-index:700;}
+.leaflet-control{position:relative;z-index:800;pointer-events:auto;}
+.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none;}
+.leaflet-top{top:0;}.leaflet-right{right:0;}.leaflet-bottom{bottom:0;}.leaflet-left{left:0;}
+.leaflet-zoom-anim .leaflet-zoom-animated{transition:transform .25s cubic-bezier(0,0,.25,1);}
+.leaflet-interactive{cursor:pointer;}.leaflet-grab{cursor:grab;}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -315,14 +334,11 @@
 </script>
 
 <style>
-    /* Leaflet reset — override global * {box-sizing:border-box;padding:0} that breaks tile layout */
-    #fleet-map{border:1px solid #e2e8f0;overflow:hidden;}
-    #fleet-map .leaflet-container{font-family:inherit;}
-    #fleet-map .leaflet-tile-pane,
-    #fleet-map .leaflet-tile-container{padding:0;}
-    .leaflet-container img{max-width:none!important;max-height:none!important;}
-    .leaflet-container *,.leaflet-container *::before,.leaflet-container *::after{box-sizing:content-box;}
-    .leaflet-control-container *,.leaflet-control-container *::before,.leaflet-control-container *::after{box-sizing:border-box;}
+    /* Override global * reset for Leaflet internals */
+    #fleet-map{border:1px solid #e2e8f0;}
+    .leaflet-container *,.leaflet-container *::before,.leaflet-container *::after{box-sizing:content-box;margin:0;padding:0;}
+    .leaflet-control-container,.leaflet-control-container *,.leaflet-control-container *::before,.leaflet-control-container *::after{box-sizing:border-box;}
+    /* Vessel popup & marker styles */
     .vessel-popup{font-family:'Poppins',sans-serif;min-width:180px;}
     .vessel-popup h4{margin:0 0 6px 0;font-size:14px;color:var(--towt-blue,#095561);}
     .vessel-popup .vp-row{display:flex;justify-content:space-between;font-size:12px;color:#555;padding:2px 0;}
