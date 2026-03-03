@@ -72,11 +72,11 @@
         {% endif %}
 
         {% if request.query_params.get('error') == 'no_file' %}
-        <div class="locked-banner">No file selected.</div>
+        <div class="locked-banner">{{ t('error_no_file', lang) }}</div>
         {% elif request.query_params.get('error') == 'invalid_file' %}
-        <div class="locked-banner">Invalid Excel file. Please use the TOWT template.</div>
+        <div class="locked-banner">{{ t('error_invalid_file', lang) }}</div>
         {% elif request.query_params.get('error') == 'invalid_format' %}
-        <div class="locked-banner">Invalid format. Please use the TOWT Packing List template.</div>
+        <div class="locked-banner">{{ t('error_invalid_format', lang) }}</div>
         {% endif %}
 
         <!-- Info bar -->
@@ -111,7 +111,7 @@
                     {% if not pl.is_locked and pl.batches|length > 1 %}
                     <form method="POST" action="/p/{{ pl.token }}/batch/{{ batch.id }}" style="display:inline;">
                         <input type="hidden" name="_method" value="DELETE">
-                        <button type="button" class="btn-danger btn" onclick="if(confirm('Supprimer ce batch ?')) fetch('/p/{{ pl.token }}/batch/{{ batch.id }}',{method:'DELETE'}).then(()=>location.reload())">✕ Supprimer</button>
+                        <button type="button" class="btn-danger btn" onclick="if(confirm('{{ t('confirm_delete_batch', lang) }}')) fetch('/p/{{ pl.token }}/batch/{{ batch.id }}',{method:'DELETE'}).then(()=>location.reload())">✕ {{ t('delete', lang) }}</button>
                     </form>
                     {% endif %}
                 </div>
@@ -141,31 +141,31 @@
                         <div class="form-group"><label class="form-label">{{ t('f_batch_id', lang) }}</label><input type="text" name="{{ p }}customer_batch_id" class="form-input" value="{{ batch.customer_batch_id or '' }}"></div>
                     </div>
 
-                    <div class="section-title">📤 Shipper (Expéditeur)</div>
+                    <div class="section-title">📤 {{ t('f_shipper', lang) }}</div>
                     <div class="form-grid">
                         <div class="form-group"><label class="form-label">{{ t('f_shipper_name', lang) }} *</label><input type="text" name="{{ p }}shipper_name" class="form-input" value="{{ batch.shipper_name or '' }}" required></div>
-                        <div class="form-group full"><label class="form-label">Address *</label><input type="text" name="{{ p }}shipper_address" class="form-input" value="{{ batch.shipper_address or '' }}" required placeholder="Street address"></div>
-                        <div class="form-group"><label class="form-label">Postal code *</label><input type="text" name="{{ p }}shipper_postal" class="form-input" value="{{ batch.shipper_postal or '' }}" required></div>
-                        <div class="form-group"><label class="form-label">City *</label><input type="text" name="{{ p }}shipper_city" class="form-input" value="{{ batch.shipper_city or '' }}" required></div>
-                        <div class="form-group"><label class="form-label">Country *</label><input type="text" name="{{ p }}shipper_country" class="form-input" value="{{ batch.shipper_country or '' }}" required></div>
+                        <div class="form-group full"><label class="form-label">{{ t('f_address', lang) }} *</label><input type="text" name="{{ p }}shipper_address" class="form-input" value="{{ batch.shipper_address or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_postal_code', lang) }} *</label><input type="text" name="{{ p }}shipper_postal" class="form-input" value="{{ batch.shipper_postal or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_city', lang) }} *</label><input type="text" name="{{ p }}shipper_city" class="form-input" value="{{ batch.shipper_city or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_country', lang) }} *</label><input type="text" name="{{ p }}shipper_country" class="form-input" value="{{ batch.shipper_country or '' }}" required></div>
                     </div>
 
-                    <div class="section-title">🔔 Notify Party</div>
+                    <div class="section-title">🔔 {{ t('f_notify_party', lang) }}</div>
                     <div class="form-grid">
-                        <div class="form-group"><label class="form-label">Name *</label><input type="text" name="{{ p }}notify_name" class="form-input" value="{{ batch.notify_name or '' }}" required></div>
-                        <div class="form-group full"><label class="form-label">Address *</label><input type="text" name="{{ p }}notify_address" class="form-input" value="{{ batch.notify_address or '' }}" required placeholder="Street address"></div>
-                        <div class="form-group"><label class="form-label">Postal code *</label><input type="text" name="{{ p }}notify_postal" class="form-input" value="{{ batch.notify_postal or '' }}" required></div>
-                        <div class="form-group"><label class="form-label">City *</label><input type="text" name="{{ p }}notify_city" class="form-input" value="{{ batch.notify_city or '' }}" required></div>
-                        <div class="form-group"><label class="form-label">Country *</label><input type="text" name="{{ p }}notify_country" class="form-input" value="{{ batch.notify_country or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_name', lang) }} *</label><input type="text" name="{{ p }}notify_name" class="form-input" value="{{ batch.notify_name or '' }}" required></div>
+                        <div class="form-group full"><label class="form-label">{{ t('f_address', lang) }} *</label><input type="text" name="{{ p }}notify_address" class="form-input" value="{{ batch.notify_address or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_postal_code', lang) }} *</label><input type="text" name="{{ p }}notify_postal" class="form-input" value="{{ batch.notify_postal or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_city', lang) }} *</label><input type="text" name="{{ p }}notify_city" class="form-input" value="{{ batch.notify_city or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_country', lang) }} *</label><input type="text" name="{{ p }}notify_country" class="form-input" value="{{ batch.notify_country or '' }}" required></div>
                     </div>
 
-                    <div class="section-title">📥 Consignee (Destinataire)</div>
+                    <div class="section-title">📥 {{ t('f_consignee', lang) }}</div>
                     <div class="form-grid">
-                        <div class="form-group"><label class="form-label">Name *</label><input type="text" name="{{ p }}consignee_name" class="form-input" value="{{ batch.consignee_name or '' }}" required></div>
-                        <div class="form-group full"><label class="form-label">Address *</label><input type="text" name="{{ p }}consignee_address" class="form-input" value="{{ batch.consignee_address or '' }}" required placeholder="Street address"></div>
-                        <div class="form-group"><label class="form-label">Postal code *</label><input type="text" name="{{ p }}consignee_postal" class="form-input" value="{{ batch.consignee_postal or '' }}" required></div>
-                        <div class="form-group"><label class="form-label">City *</label><input type="text" name="{{ p }}consignee_city" class="form-input" value="{{ batch.consignee_city or '' }}" required></div>
-                        <div class="form-group"><label class="form-label">Country *</label><input type="text" name="{{ p }}consignee_country" class="form-input" value="{{ batch.consignee_country or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_name', lang) }} *</label><input type="text" name="{{ p }}consignee_name" class="form-input" value="{{ batch.consignee_name or '' }}" required></div>
+                        <div class="form-group full"><label class="form-label">{{ t('f_address', lang) }} *</label><input type="text" name="{{ p }}consignee_address" class="form-input" value="{{ batch.consignee_address or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_postal_code', lang) }} *</label><input type="text" name="{{ p }}consignee_postal" class="form-input" value="{{ batch.consignee_postal or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_city', lang) }} *</label><input type="text" name="{{ p }}consignee_city" class="form-input" value="{{ batch.consignee_city or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_country', lang) }} *</label><input type="text" name="{{ p }}consignee_country" class="form-input" value="{{ batch.consignee_country or '' }}" required></div>
                     </div>
 
                     <div class="section-title">📦 {{ t('pl_goods_section', lang) }}</div>
@@ -220,8 +220,8 @@
                     <form method="POST" action="/p/{{ pl.token }}/batch/add" style="display:inline;">
                         <button type="submit" class="btn btn-add" style="width:auto;padding:10px 20px;">＋ {{ t('pl_add_batch', lang) }}</button>
                     </form>
-                    <a href="/p/{{ pl.token }}/template" class="btn btn-secondary">📥 Download Excel template</a>
-                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='flex'">📤 Import Excel</button>
+                    <a href="/p/{{ pl.token }}/template" class="btn btn-secondary">📥 {{ t('download_template', lang) }}</a>
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='flex'">📤 {{ t('import_excel', lang) }}</button>
                 </div>
                 <button type="submit" class="btn btn-primary">💾 {{ t('save', lang) }}</button>
             </div>
@@ -232,13 +232,13 @@
     <!-- Import Excel Modal -->
     <div id="import-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;" onclick="if(event.target===this) this.style.display='none'">
         <div style="background:white;border-radius:12px;padding:24px;max-width:500px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
-            <h3 style="margin-bottom:8px;color:#095561;">📤 Import Excel Template</h3>
-            <p style="font-size:12px;color:#888;margin-bottom:16px;">Upload your filled Packing List template. Existing batch data will be updated with the imported values.</p>
+            <h3 style="margin-bottom:8px;color:#095561;">📤 {{ t('import_excel_title', lang) }}</h3>
+            <p style="font-size:12px;color:#888;margin-bottom:16px;">{{ t('import_excel_desc', lang) }}</p>
             <form method="POST" action="/p/{{ pl.token }}/import" enctype="multipart/form-data">
                 <input type="file" name="file" accept=".xlsx,.xls" class="form-input" required style="margin-bottom:16px;">
                 <div style="display:flex;gap:8px;justify-content:flex-end;">
-                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='none'">Cancel</button>
-                    <button type="submit" class="btn btn-primary">📤 Import</button>
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='none'">{{ t('cancel', lang) }}</button>
+                    <button type="submit" class="btn btn-primary">📤 {{ t('import_excel', lang) }}</button>
                 </div>
             </form>
         </div>
@@ -247,5 +247,15 @@
     <div class="footer">
         <p>TOWT — Transport à la voile · Décarboner le fret maritime</p>
     </div>
+    <script>
+        document.addEventListener('submit', function(e) {
+            var btn = e.target.querySelector('button[type="submit"]');
+            if (btn && !btn.disabled) {
+                btn.disabled = true;
+                btn.style.opacity = '0.6';
+                setTimeout(function() { btn.disabled = false; btn.style.opacity = '1'; }, 5000);
+            }
+        });
+    </script>
 </body>
 </html>
