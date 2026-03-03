@@ -10,6 +10,7 @@ import os, shutil
 
 from app.database import get_db
 from app.auth import get_current_user
+from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
@@ -81,7 +82,7 @@ async def find_matching_leg(db: AsyncSession, order: Order):
 async def commercial_home(
     request: Request,
     status: Optional[str] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("commercial", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Order).options(
@@ -125,7 +126,7 @@ async def commercial_home(
 @router.get("/orders/create", response_class=HTMLResponse)
 async def order_create_form(
     request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("commercial", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     ref = await generate_reference(db)
@@ -148,7 +149,7 @@ async def order_create_submit(
     delivery_date_start: Optional[str] = Form(None), delivery_date_end: Optional[str] = Form(None),
     departure_locode: Optional[str] = Form(None), arrival_locode: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("commercial", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     ref = await generate_reference(db)
@@ -190,7 +191,7 @@ async def order_create_submit(
 @router.get("/orders/{oid}/edit", response_class=HTMLResponse)
 async def order_edit_form(
     oid: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("commercial", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Order).where(Order.id == oid))
@@ -216,7 +217,7 @@ async def order_edit_submit(
     departure_locode: Optional[str] = Form(None), arrival_locode: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("commercial", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Order).where(Order.id == oid))
@@ -256,7 +257,7 @@ async def order_edit_submit(
 @router.delete("/orders/{oid}", response_class=HTMLResponse)
 async def order_delete(
     oid: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("commercial", "S")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Order).where(Order.id == oid))
@@ -276,7 +277,7 @@ async def order_delete(
 @router.get("/orders/{oid}/assign", response_class=HTMLResponse)
 async def order_assign_form(
     oid: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("commercial", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     order_result = await db.execute(select(Order).where(Order.id == oid))
@@ -313,7 +314,7 @@ async def order_assign_form(
 async def order_assign_submit(
     oid: int, request: Request,
     leg_id: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("commercial", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     order_result = await db.execute(select(Order).where(Order.id == oid))
@@ -341,7 +342,7 @@ async def order_assign_submit(
 async def order_upload_attachment(
     oid: int, request: Request,
     file: UploadFile = File(...),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("commercial", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     order_result = await db.execute(select(Order).where(Order.id == oid))
@@ -381,7 +382,7 @@ async def order_upload_attachment(
 @router.get("/orders/{oid}/attachment", response_class=FileResponse)
 async def order_download_attachment(
     oid: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("commercial", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     order_result = await db.execute(select(Order).where(Order.id == oid))
@@ -400,7 +401,7 @@ async def order_download_attachment(
 @router.delete("/orders/{oid}/attachment", response_class=HTMLResponse)
 async def order_delete_attachment(
     oid: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("commercial", "S")),
     db: AsyncSession = Depends(get_db),
 ):
     order_result = await db.execute(select(Order).where(Order.id == oid))

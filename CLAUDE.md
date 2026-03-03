@@ -27,7 +27,7 @@ mytowt/
 │   ├── config.py             # Settings via pydantic-settings (.env)
 │   ├── database.py           # Async engine, session factory, Base
 │   ├── auth.py               # Password hashing, session tokens, get_current_user
-│   ├── permissions.py        # Role-based matrix (6 roles × 14 modules)
+│   ├── permissions.py        # Role-based matrix (9 roles × 10 modules)
 │   ├── templating.py         # Jinja2 config + custom filters (|flag)
 │   ├── i18n/                 # Translations (fr, en, es, pt-br, vi)
 │   ├── models/               # SQLAlchemy ORM models
@@ -72,6 +72,7 @@ mytowt/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
+├── presentation_mytowt.html  # Seminar slideshow (14 slides, HTML/CSS)
 ├── .env.example
 └── .gitignore
 ```
@@ -95,9 +96,24 @@ mytowt/
 - Custom filter `|flag` converts country code → emoji flag
 
 ### Permissions
-- 6 roles: administrateur, operation, armement, technique, data_analyst, marins
+- 9 roles: administrateur, operation, armement, technique, data_analyst, marins, gestionnaire_passagers, commercial, manager_maritime
+- 10 modules: planning, commercial, escale, finance, kpi, captain, crew, cargo, mrv, passengers
 - Levels: C (consult), M (modify), S (suppress)
-- Route dependency: `Depends(require_permission("module", "C"))`
+- Route dependency: `Depends(require_permission("module", "C"))` — enforced on ALL routes (GET=C, POST=M, DELETE=S)
+- Sidebar visibility: `has_any_access(user, 'module')` in base.html
+- Admin access: roles administrateur + data_analyst can access /admin/settings
+
+### Security
+- **SQL injection prevention**: `admin_router.py` uses `ALLOWED_TABLES` whitelist + parameterized queries (`.bindparams()`) for all dynamic table references
+- **Route-level permissions**: ALL endpoints in planning, commercial, escale, cargo, passengers, crew, finance, kpi routers enforce `require_permission()` — GET requires C, POST requires M, DELETE requires S
+- **External routes** (`/p/{token}`, `/boarding/{token}`) are excluded from permission checks (public access via token)
+- **CORS**: Configured in `main.py` — restrict `allow_origins` in production
+
+### CSS Design System
+- Font: **Poppins** everywhere (templates, PDF exports, popups)
+- CSS variables: `--towt-blue`, `--towt-green`, `--towt-sky`, `--towt-sky-dark`, `--warning`, etc.
+- Utility classes in `app.css`: `.card`, `.card-title`, `.alert`, `.alert-success`, `.alert-error`, `.field-label`, `.field-value`, `.btn-outline`, `.leg-code`, `.account-grid`
+- Prefer CSS classes over inline styles for consistency
 
 ### Forms
 - Standard HTML `<form method="POST">`
@@ -166,7 +182,9 @@ docker exec towt-app-v2 chmod -R 755 /app/app/static/
 **DO:**
 - Run `docker restart towt-app-v2` after any Python file change
 - Provide migration SQL when adding/modifying DB columns
-- Keep templates self-contained (inline styles)
+- Use CSS utility classes (`.card`, `.alert`, `.field-label`, etc.) instead of inline styles
+- Use parameterized queries (`.bindparams()`) for any dynamic SQL
+- Add `require_permission("module", "C"/"M"/"S")` to every new endpoint
 - Test on Docker before pushing
 
 **DON'T:**
@@ -174,3 +192,5 @@ docker exec towt-app-v2 chmod -R 755 /app/app/static/
 - Never modify `routers/__init__.py` — it must stay empty
 - Never hardcode credentials in source — use .env
 - Don't add heavy JS frameworks — the app uses HTMX
+- Never use f-strings to interpolate table/column names in SQL — use `ALLOWED_TABLES` whitelist
+- Don't use `Segoe UI` or `Inter` fonts — always use `Poppins` with `system-ui` fallback

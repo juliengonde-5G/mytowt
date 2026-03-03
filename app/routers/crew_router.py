@@ -9,6 +9,7 @@ from datetime import datetime, date, timedelta
 
 from app.database import get_db
 from app.auth import get_current_user
+from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
@@ -34,7 +35,7 @@ async def crew_list(
     request: Request,
     role: Optional[str] = Query(None),
     vessel: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(CrewMember).options(
@@ -111,7 +112,7 @@ async def crew_list(
 
 # ─── CREATE MEMBER ───────────────────────────────────────────
 @router.get("/members/create", response_class=HTMLResponse)
-async def member_create_form(request: Request, user: User = Depends(get_current_user)):
+async def member_create_form(request: Request, user: User = Depends(require_permission("crew", "M"))):
     return templates.TemplateResponse("crew/member_form.html", {
         "request": request, "user": user,
         "edit_member": None, "crew_roles": CREW_ROLES, "error": None,
@@ -125,7 +126,7 @@ async def member_create_submit(
     role: str = Form(...),
     phone: Optional[str] = Form(None), email: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     member = CrewMember(
@@ -145,7 +146,7 @@ async def member_create_submit(
 @router.get("/members/{mid}/edit", response_class=HTMLResponse)
 async def member_edit_form(
     mid: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(CrewMember).where(CrewMember.id == mid))
@@ -165,7 +166,7 @@ async def member_edit_submit(
     role: str = Form(...),
     phone: Optional[str] = Form(None), email: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(CrewMember).where(CrewMember.id == mid))
@@ -189,7 +190,7 @@ async def member_edit_submit(
 @router.delete("/members/{mid}", response_class=HTMLResponse)
 async def member_delete(
     mid: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "S")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(CrewMember).where(CrewMember.id == mid))
@@ -209,7 +210,7 @@ async def member_delete(
 @router.get("/members/{mid}/assign", response_class=HTMLResponse)
 async def assign_form(
     mid: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(CrewMember).where(CrewMember.id == mid))
@@ -231,7 +232,7 @@ async def assign_submit(
     embark_date: str = Form(...),
     disembark_date: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     assignment = CrewAssignment(
@@ -252,7 +253,7 @@ async def assign_submit(
 @router.delete("/assignments/{aid}", response_class=HTMLResponse)
 async def assignment_delete(
     aid: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "S")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(CrewAssignment).where(CrewAssignment.id == aid))
@@ -308,7 +309,7 @@ async def crew_for_vessel_api(
 async def member_calendar(
     mid: int, request: Request,
     year: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     current_year = year or date.today().year

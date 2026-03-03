@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.templating import templates
 from app.database import get_db
 from app.auth import get_current_user
+from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
@@ -41,7 +42,7 @@ def _gen_ref():
 async def passenger_list(
     request: Request,
     status: Optional[str] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     query = (
@@ -89,7 +90,7 @@ async def passenger_list(
 @router.get("/create", response_class=HTMLResponse)
 async def booking_create_form(
     request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     legs_result = await db.execute(
@@ -143,7 +144,7 @@ async def booking_create_submit(
     pax2_passport: str = Form(""),
     pax2_emergency_name: str = Form(""), pax2_emergency_phone: str = Form(""),
     notes: str = Form(""),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     # Get leg and vessel
@@ -245,7 +246,7 @@ async def booking_create_submit(
 @router.get("/{booking_id}", response_class=HTMLResponse)
 async def booking_detail(
     booking_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -308,7 +309,7 @@ async def booking_detail(
 async def booking_update_status(
     booking_id: int, request: Request,
     status: str = Form(...),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     booking = await db.get(PassengerBooking, booking_id)
@@ -336,7 +337,7 @@ async def passenger_update(
     date_of_birth: str = Form(""), nationality: str = Form(""),
     passport_number: str = Form(""),
     emergency_contact_name: str = Form(""), emergency_contact_phone: str = Form(""),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     pax = await db.get(Passenger, pax_id)
@@ -385,7 +386,7 @@ async def add_passenger(
     date_of_birth: str = Form(""), nationality: str = Form(""),
     passport_number: str = Form(""),
     emergency_contact_name: str = Form(""), emergency_contact_phone: str = Form(""),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     booking = await db.get(PassengerBooking, booking_id)
@@ -428,7 +429,7 @@ async def add_payment(
     amount: float = Form(...),
     due_date: str = Form(""),
     notes: str = Form(""),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     booking = await db.get(PassengerBooking, booking_id)
@@ -467,7 +468,7 @@ async def add_payment(
 async def update_payment_status(
     payment_id: int, request: Request,
     status: str = Form(...),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     payment = await db.get(PassengerPayment, payment_id)
@@ -502,7 +503,7 @@ async def update_doc_status(
     doc_id: int, request: Request,
     status: str = Form(...),
     notes: str = Form(""),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     doc = await db.get(PassengerDocument, doc_id)
@@ -534,7 +535,7 @@ async def update_doc_status(
 async def backoffice_upload_doc(
     doc_id: int, request: Request,
     file: UploadFile = File(...),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     import os, uuid
@@ -574,7 +575,7 @@ async def backoffice_upload_doc(
 @router.get("/doc/{doc_id}/download")
 async def download_doc(
     doc_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     from fastapi.responses import FileResponse
@@ -595,7 +596,7 @@ async def edit_payment(
     amount: float = Form(...),
     due_date: str = Form(""),
     notes: str = Form(""),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     payment = await db.get(PassengerPayment, payment_id)
@@ -629,7 +630,7 @@ async def edit_payment(
 @router.post("/payment/{payment_id}/delete", response_class=HTMLResponse)
 async def delete_payment(
     payment_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "S")),
     db: AsyncSession = Depends(get_db),
 ):
     payment = await db.get(PassengerPayment, payment_id)
@@ -657,7 +658,7 @@ async def delete_payment(
 @router.get("/{booking_id}/history", response_class=HTMLResponse)
 async def booking_history(
     booking_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     booking = await db.get(PassengerBooking, booking_id)
@@ -691,7 +692,7 @@ async def booking_history(
 async def crossing_book_pdf(
     booking_id: int, request: Request,
     lang: str = Query("fr"),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     from fastapi.responses import Response
@@ -749,7 +750,7 @@ async def crossing_book_pdf(
 @router.post("/{booking_id}/messages/send", response_class=HTMLResponse)
 async def backoffice_send_message(
     booking_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     form = await request.form()
@@ -769,7 +770,7 @@ async def backoffice_send_message(
 @router.post("/{booking_id}/messages/read", response_class=HTMLResponse)
 async def backoffice_mark_messages_read(
     booking_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(

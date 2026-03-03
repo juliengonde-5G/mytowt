@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone, date
 
 from app.database import get_db
 from app.auth import get_current_user
+from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
@@ -215,7 +216,7 @@ async def escale_home(
     vessel: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
     leg_id: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("escale", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     current_year = year or datetime.now().year
@@ -357,7 +358,7 @@ async def update_port_status(
     lid: int, request: Request,
     new_status: str = Form(...),
     status_time: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("escale", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -403,7 +404,7 @@ async def update_port_status(
 
 # === LOCK / UNLOCK ===
 @router.post("/legs/{lid}/lock", response_class=HTMLResponse)
-async def lock_leg(lid: int, request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def lock_leg(lid: int, request: Request, user: User = Depends(require_permission("escale", "M")), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == lid))
     leg = result.scalar_one_or_none()
     if not leg:
@@ -418,7 +419,7 @@ async def lock_leg(lid: int, request: Request, user: User = Depends(get_current_
 
 
 @router.post("/legs/{lid}/unlock", response_class=HTMLResponse)
-async def unlock_leg(lid: int, request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def unlock_leg(lid: int, request: Request, user: User = Depends(require_permission("escale", "M")), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == lid))
     leg = result.scalar_one_or_none()
     if not leg:
@@ -434,7 +435,7 @@ async def unlock_leg(lid: int, request: Request, user: User = Depends(get_curren
 
 # === PDF EXPORT ===
 @router.get("/legs/{lid}/pdf", response_class=HTMLResponse)
-async def escale_pdf(lid: int, request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def escale_pdf(lid: int, request: Request, user: User = Depends(require_permission("escale", "C")), db: AsyncSession = Depends(get_db)):
     leg_result = await db.execute(
         select(Leg).options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
         .where(Leg.id == lid)
@@ -463,7 +464,7 @@ async def escale_pdf(lid: int, request: Request, user: User = Depends(get_curren
 async def operation_create_form(
     request: Request, leg_id: int = Query(...),
     cat: Optional[str] = Query(None),
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("escale", "M")), db: AsyncSession = Depends(get_db),
 ):
     leg_result = await db.execute(select(Leg).where(Leg.id == leg_id))
     leg = leg_result.scalar_one_or_none()
@@ -498,7 +499,7 @@ async def operation_create_submit(
     planned_start: Optional[str] = Form(None),
     actual_start: Optional[str] = Form(None),
     intervenant: Optional[str] = Form(None), description: Optional[str] = Form(None),
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("escale", "M")), db: AsyncSession = Depends(get_db),
 ):
     _leg_id = int(leg_id)
     op = EscaleOperation(
@@ -527,7 +528,7 @@ async def operation_create_submit(
 @router.get("/operations/{op_id}/edit", response_class=HTMLResponse)
 async def operation_edit_form(
     op_id: int, request: Request,
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("escale", "M")), db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(EscaleOperation).where(EscaleOperation.id == op_id))
     op = result.scalar_one_or_none()
@@ -564,7 +565,7 @@ async def operation_edit_submit(
     planned_start: Optional[str] = Form(None),
     actual_start: Optional[str] = Form(None),
     intervenant: Optional[str] = Form(None), description: Optional[str] = Form(None),
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("escale", "M")), db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(EscaleOperation).where(EscaleOperation.id == op_id))
     op = result.scalar_one_or_none()
@@ -592,7 +593,7 @@ async def operation_edit_submit(
 
 # === DELETE OPERATION ===
 @router.delete("/operations/{op_id}", response_class=HTMLResponse)
-async def operation_delete(op_id: int, request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def operation_delete(op_id: int, request: Request, user: User = Depends(require_permission("escale", "S")), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(EscaleOperation).where(EscaleOperation.id == op_id))
     op = result.scalar_one_or_none()
     if not op:
@@ -612,7 +613,7 @@ async def operation_delete(op_id: int, request: Request, user: User = Depends(ge
 
 # === DOCKER SHIFTS (keep duration/end) ===
 @router.get("/dockers/create", response_class=HTMLResponse)
-async def docker_create_form(request: Request, leg_id: int = Query(...), user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def docker_create_form(request: Request, leg_id: int = Query(...), user: User = Depends(require_permission("escale", "M")), db: AsyncSession = Depends(get_db)):
     leg_result = await db.execute(select(Leg).where(Leg.id == leg_id))
     leg = leg_result.scalar_one_or_none()
     if leg and is_leg_locked(leg):
@@ -636,7 +637,7 @@ async def docker_create_submit(
     request: Request, leg_id: str = Form(...), hold: str = Form(...),
     planned_start: Optional[str] = Form(None), planned_end: Optional[str] = Form(None),
     planned_palettes: Optional[str] = Form(None), notes: Optional[str] = Form(None),
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("escale", "M")), db: AsyncSession = Depends(get_db),
 ):
     _leg_id = int(leg_id)
     ds = DockerShift(
@@ -658,7 +659,7 @@ async def docker_create_submit(
 
 
 @router.get("/dockers/{ds_id}/edit", response_class=HTMLResponse)
-async def docker_edit_form(ds_id: int, request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def docker_edit_form(ds_id: int, request: Request, user: User = Depends(require_permission("escale", "M")), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(DockerShift).where(DockerShift.id == ds_id))
     ds = result.scalar_one_or_none()
     if not ds:
@@ -686,7 +687,7 @@ async def docker_edit_submit(
     actual_start: Optional[str] = Form(None), actual_end: Optional[str] = Form(None),
     planned_palettes: Optional[str] = Form(None), actual_palettes: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("escale", "M")), db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(DockerShift).where(DockerShift.id == ds_id))
     ds = result.scalar_one_or_none()
@@ -711,7 +712,7 @@ async def docker_edit_submit(
 
 
 @router.delete("/dockers/{ds_id}", response_class=HTMLResponse)
-async def docker_delete(ds_id: int, request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def docker_delete(ds_id: int, request: Request, user: User = Depends(require_permission("escale", "S")), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(DockerShift).where(DockerShift.id == ds_id))
     ds = result.scalar_one_or_none()
     if not ds:

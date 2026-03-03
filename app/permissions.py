@@ -48,19 +48,20 @@ _MATRIX = {
     ("operation", "escale"):      {"C", "M", "S"},
     ("operation", "kpi"):         {"C"},
     ("operation", "captain"):     {"C", "M"},
-    ("operation", "crew"):        {"C"},
+    ("operation", "crew"):        {"C", "M"},
     ("operation", "cargo"):       {"C", "M", "S"},
     ("operation", "mrv"):         {"C", "M"},
     ("operation", "passengers"):  {"C", "M"},
     ("operation", "claims"):      {"C", "M", "S"},
 
     # ─── ARMEMENT (CREW) ────────────────────────────────
-    # Planning, Escale, KPI, Equipage
+    # Planning, Escale, KPI, Equipage, Passagers
     ("armement", "planning"):    {"C"},
     ("armement", "escale"):      {"C"},
     ("armement", "kpi"):         {"C"},
     ("armement", "captain"):     {"C"},
     ("armement", "crew"):        {"C", "M", "S"},
+    ("armement", "passengers"):  {"C", "M"},
     ("armement", "mrv"):         {"C"},
 
     # ─── TECHNIQUE ───────────────────────────────────────
@@ -69,7 +70,7 @@ _MATRIX = {
     ("technique", "commercial"):  {"C"},
     ("technique", "escale"):      {"C", "M", "S"},
     ("technique", "kpi"):         {"C"},
-    ("technique", "captain"):     {"C"},
+    ("technique", "captain"):     {"C", "M"},
     ("technique", "crew"):        {"C"},
     ("technique", "cargo"):       {"C"},
     ("technique", "mrv"):         {"C", "M"},

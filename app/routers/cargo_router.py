@@ -11,6 +11,7 @@ import io
 
 from app.database import get_db
 from app.auth import get_current_user
+from app.permissions import require_permission
 from app.models.user import User
 from app.models.order import Order
 from app.models.leg import Leg
@@ -67,7 +68,7 @@ def pi(val, default=None):
 async def cargo_home(
     request: Request,
     status: Optional[str] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     query = (
@@ -98,7 +99,7 @@ async def cargo_home(
 async def create_packing_list(
     request: Request,
     order_id: str = Form(...),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     oid = int(order_id)
@@ -160,7 +161,7 @@ async def create_packing_list(
 @router.get("/{pl_id}", response_class=HTMLResponse)
 async def cargo_detail(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -197,7 +198,7 @@ async def cargo_detail(
 @router.post("/{pl_id}/lock", response_class=HTMLResponse)
 async def lock_packing_list(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(PackingList).where(PackingList.id == pl_id))
@@ -217,7 +218,7 @@ async def lock_packing_list(
 @router.post("/{pl_id}/unlock", response_class=HTMLResponse)
 async def unlock_packing_list(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(PackingList).where(PackingList.id == pl_id))
@@ -238,7 +239,7 @@ async def unlock_packing_list(
 @router.delete("/{pl_id}", response_class=HTMLResponse)
 async def delete_packing_list(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "S")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(PackingList).where(PackingList.id == pl_id))
@@ -257,7 +258,7 @@ async def delete_packing_list(
 @router.get("/{pl_id}/excel")
 async def export_excel(
     pl_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -376,7 +377,7 @@ async def export_excel(
 @router.get("/{pl_id}/bol")
 async def bill_of_lading(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -521,7 +522,7 @@ async def bill_of_lading(
 @router.post("/{pl_id}/add-batch", response_class=HTMLResponse)
 async def add_batch(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -617,7 +618,7 @@ def apply_batch_fields(batch, form_data):
 @router.post("/{pl_id}/edit", response_class=HTMLResponse)
 async def exploitation_edit_batches(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -649,7 +650,7 @@ async def exploitation_edit_batches(
 @router.get("/{pl_id}/history", response_class=HTMLResponse)
 async def audit_history(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -677,7 +678,7 @@ async def audit_history(
 @router.post("/{pl_id}/import-excel", response_class=HTMLResponse)
 async def import_excel(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     from fastapi import UploadFile, File
@@ -793,7 +794,7 @@ async def import_excel(
 @router.get("/voyage/{leg_id}/excel")
 async def export_voyage_excel(
     leg_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     leg_result = await db.execute(
@@ -896,7 +897,7 @@ async def export_voyage_excel(
 @router.post("/{pl_id}/messages/send", response_class=HTMLResponse)
 async def backoffice_cargo_send_message(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     form = await request.form()
@@ -916,7 +917,7 @@ async def backoffice_cargo_send_message(
 @router.post("/{pl_id}/messages/read", response_class=HTMLResponse)
 async def backoffice_cargo_mark_messages_read(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(

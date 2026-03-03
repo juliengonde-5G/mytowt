@@ -466,6 +466,11 @@ TABLE_DEFS = {
     "config": {"label": "Config", "tables": ["vessels", "ports", "port_configs", "opex_parameters", "emission_parameters", "cabin_price_grid", "insurance_contracts"]},
 }
 
+# Whitelist of all allowed table names for SQL queries (prevents SQL injection)
+ALLOWED_TABLES = set()
+for _def in TABLE_DEFS.values():
+    ALLOWED_TABLES.update(_def["tables"])
+
 
 @router.get("/export/global")
 async def export_global(
@@ -485,10 +490,12 @@ async def export_global(
         tables = [r[0] for r in result.fetchall()]
 
         for table_name in tables:
+            if table_name not in ALLOWED_TABLES:
+                continue
             try:
-                cols_result = await db.execute(text(
-                    f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}' ORDER BY ordinal_position"
-                ))
+                cols_result = await db.execute(
+                    text("SELECT column_name FROM information_schema.columns WHERE table_name = :tname ORDER BY ordinal_position").bindparams(tname=table_name)
+                )
                 columns = [r[0] for r in cols_result.fetchall()]
                 rows_result = await db.execute(text(f'SELECT * FROM "{table_name}" LIMIT 50000'))
                 rows = rows_result.fetchall()
@@ -532,10 +539,12 @@ async def export_selective(
 
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
         for table_name in sorted(selected_tables):
+            if table_name not in ALLOWED_TABLES:
+                continue
             try:
-                cols_result = await db.execute(text(
-                    f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}' ORDER BY ordinal_position"
-                ))
+                cols_result = await db.execute(
+                    text("SELECT column_name FROM information_schema.columns WHERE table_name = :tname ORDER BY ordinal_position").bindparams(tname=table_name)
+                )
                 columns = [r[0] for r in cols_result.fetchall()]
                 if not columns:
                     continue
@@ -712,6 +721,8 @@ async def database_stats(
     tables = [r[0] for r in result.fetchall()]
     stats = []
     for t in tables:
+        if t not in ALLOWED_TABLES:
+            continue
         try:
             cnt = await db.execute(text(f'SELECT COUNT(*) FROM "{t}"'))
             count = cnt.scalar() or 0

@@ -7,9 +7,7 @@
         <form method="POST" action="{% if vessel %}/admin/vessels/{{ vessel.id }}/edit{% else %}/admin/vessels/create{% endif %}">
             <div class="modal-body">
                 {% if error %}
-                <div style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:13px;">
-                    {{ error }}
-                </div>
+                <div class="alert alert-error">{{ error }}</div>
                 {% endif %}
 
                 {% if not vessel %}

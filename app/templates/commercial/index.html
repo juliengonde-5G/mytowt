@@ -25,33 +25,33 @@
         <!-- KPI Cards -->
         <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));gap:12px;margin-bottom:24px;">
             <div style="background:#fff;border-radius:10px;padding:16px;border:1px solid #eee;text-align:center;">
-                <div style="font-size:28px;font-weight:700;color:var(--towt-blue);font-family:'Poppins',sans-serif;">{{ kpi.total_grids_active }}</div>
+                <div style="font-size:28px;font-weight:700;color:var(--towt-blue);">{{ kpi.total_grids_active }}</div>
                 <div style="font-size:11px;color:#888;margin-top:4px;">Grilles actives</div>
             </div>
             <div style="background:#fff;border-radius:10px;padding:16px;border:1px solid #eee;text-align:center;">
-                <div style="font-size:28px;font-weight:700;color:#3498db;font-family:'Poppins',sans-serif;">{{ kpi.total_offers }}</div>
+                <div style="font-size:28px;font-weight:700;color:var(--towt-sky-dark);">{{ kpi.total_offers }}</div>
                 <div style="font-size:11px;color:#888;margin-top:4px;">Offres émises</div>
             </div>
             <div style="background:#fff;border-radius:10px;padding:16px;border:1px solid #eee;text-align:center;">
-                <div style="font-size:28px;font-weight:700;color:#e67e22;font-family:'Poppins',sans-serif;">{{ kpi.total_offers_pending }}</div>
+                <div style="font-size:28px;font-weight:700;color:var(--warning);">{{ kpi.total_offers_pending }}</div>
                 <div style="font-size:11px;color:#888;margin-top:4px;">Offres en cours</div>
             </div>
             <div style="background:#fff;border-radius:10px;padding:16px;border:1px solid #eee;text-align:center;">
-                <div style="font-size:28px;font-weight:700;color:#27ae60;font-family:'Poppins',sans-serif;">{{ kpi.total_offers_accepted }}</div>
+                <div style="font-size:28px;font-weight:700;color:var(--towt-green);">{{ kpi.total_offers_accepted }}</div>
                 <div style="font-size:11px;color:#888;margin-top:4px;">Offres acceptées</div>
             </div>
             <div style="background:#fff;border-radius:10px;padding:16px;border:1px solid #eee;text-align:center;">
-                <div style="font-size:28px;font-weight:700;color:var(--towt-blue);font-family:'Poppins',sans-serif;">{{ kpi.total_orders }}</div>
+                <div style="font-size:28px;font-weight:700;color:var(--towt-blue);">{{ kpi.total_orders }}</div>
                 <div style="font-size:11px;color:#888;margin-top:4px;">Ordres de transport</div>
             </div>
             <div style="background:#fff;border-radius:10px;padding:16px;border:1px solid #eee;text-align:center;">
-                <div style="font-size:28px;font-weight:700;color:#27ae60;font-family:'Poppins',sans-serif;">{{ '{:,.0f}'.format(kpi.total_ca).replace(',', ' ') }} €</div>
+                <div style="font-size:28px;font-weight:700;color:var(--towt-green);">{{ '{:,.0f}'.format(kpi.total_ca).replace(',', ' ') }} €</div>
                 <div style="font-size:11px;color:#888;margin-top:4px;">CA total</div>
             </div>
         </div>
 
         <!-- Performance par grille -->
-        <h3 style="margin:0 0 12px;color:var(--towt-blue);font-size:15px;font-family:'Poppins',sans-serif;">Performance par grille tarifaire</h3>
+        <h3 style="margin:0 0 12px;color:var(--towt-blue);font-size:15px;">Performance par grille tarifaire</h3>
         {% if grids %}
         <div class="table-container">
             <table class="data-table">

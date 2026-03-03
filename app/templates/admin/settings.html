@@ -86,7 +86,7 @@
                 <tbody>
                     {% for c in port_configs %}
                     <tr {% if not c.accessible %}style="opacity:0.5;"{% endif %}>
-                        <td><strong style="font-family:'Poppins',sans-serif;">{{ c.port_locode }}</strong></td>
+                        <td><strong>{{ c.port_locode }}</strong></td>
                         <td>{{ c.port.name if c.port else '—' }}</td>
                         <td>{% if c.accessible %}✓{% else %}✗{% endif %}</td>
                         <td style="text-align:right;">{{ c.port_cost_total|eur }}</td>
@@ -423,7 +423,7 @@
 
         <!-- Filters -->
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
-            <select id="al-action" style="padding:6px 12px;border:1px solid #ddd;border-radius:8px;font-size:12px;font-family:'Poppins',sans-serif;">
+            <select id="al-action" class="form-select" style="padding:6px 12px;font-size:12px;width:auto;">
                 <option value="">Toutes les actions</option>
                 <option value="login">🔑 Connexion</option>
                 <option value="logout">🚪 Déconnexion</option>
@@ -432,7 +432,7 @@
                 <option value="update">✏️ Modification</option>
                 <option value="delete">🗑️ Suppression</option>
             </select>
-            <select id="al-module" style="padding:6px 12px;border:1px solid #ddd;border-radius:8px;font-size:12px;font-family:'Poppins',sans-serif;">
+            <select id="al-module" class="form-select" style="padding:6px 12px;font-size:12px;width:auto;">
                 <option value="">Tous les modules</option>
                 <option value="auth">🔐 Auth</option>
                 <option value="commercial">📦 Commercial</option>
@@ -446,7 +446,7 @@
                 <option value="admin">⚙️ Admin</option>
                 <option value="onboard">🚢 On Board</option>
             </select>
-            <select id="al-user" style="padding:6px 12px;border:1px solid #ddd;border-radius:8px;font-size:12px;font-family:'Poppins',sans-serif;">
+            <select id="al-user" class="form-select" style="padding:6px 12px;font-size:12px;width:auto;">
                 <option value="">Tous les utilisateurs</option>
                 {% for u in users %}
                 <option value="{{ u.id }}">{{ u.full_name }}</option>
@@ -471,7 +471,7 @@
             .al-login_fail{background:#fee2e2;color:#dc2626;}.al-create{background:#d1fae5;color:#059669;}
             .al-update{background:#fef3c7;color:#d97706;}.al-delete{background:#fee2e2;color:#dc2626;}
             .al-module{padding:2px 8px;border-radius:100px;font-size:10px;font-weight:500;background:#f1f5f9;color:#475569;}
-            .al-ip{font-family:'Poppins',sans-serif;font-size:10px;color:#999;}
+            .al-ip{font-size:10px;color:#999;}
             .al-time{font-size:11px;color:#666;white-space:nowrap;}
         </style>
 

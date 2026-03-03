@@ -12,6 +12,7 @@ import math
 
 from app.database import get_db
 from app.auth import get_current_user, AuthRequired
+from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
@@ -145,7 +146,7 @@ async def kpi_dashboard(
     request: Request,
     vessel: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("kpi", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     current_year = year or datetime.now().year
@@ -235,7 +236,7 @@ async def update_cargo(
     leg_id: int,
     request: Request,
     cargo_tons: str = Form(...),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("kpi", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     _tons = 0
@@ -271,7 +272,7 @@ async def update_cargo(
 # ─── EXPORT KPI CSV ──────────────────────────────────────────
 @router.get("/export/csv", response_class=StreamingResponse)
 async def export_kpi_csv(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("kpi", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     params = await get_emission_params(db)
