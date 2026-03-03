@@ -2,6 +2,11 @@
 {% block title %}my_TOWT - Tableau de bord{% endblock %}
 {% block page_title %}{{ t('page_dashboard', lang) }}{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+{% endblock %}
+
 {% block content %}
 <div class="dashboard">
     <div class="welcome-banner">
@@ -324,9 +329,6 @@
     document.getElementById('current-date').textContent = new Date().toLocaleDateString('fr-FR', opts);
 </script>
 
-<!-- Leaflet -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <style>
     #fleet-map{border:1px solid #e2e8f0;}
     .vessel-popup{font-family:'Inter',sans-serif;min-width:180px;}
@@ -340,6 +342,11 @@
 (function(){
     const mapEl = document.getElementById('fleet-map');
     if(!mapEl) return;
+
+    if(typeof L === 'undefined'){
+        mapEl.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#c00;font-size:13px;">Erreur : la librairie cartographique (Leaflet) n\'a pas pu être chargée.</div>';
+        return;
+    }
 
     const map = L.map('fleet-map',{scrollWheelZoom:true}).setView([46.5,-2],5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{

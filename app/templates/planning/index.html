@@ -256,12 +256,23 @@
 
     // ── LEAFLET MAP ──
     function loadLeafletMap() {
-        if (leafletMap) { leafletMap.invalidateSize(); return; }
+        if (typeof L === 'undefined') {
+            document.getElementById('leaflet-map').innerHTML = '<div style="text-align:center;padding:60px;color:#c00;">Erreur : la librairie cartographique (Leaflet) n\'a pas pu être chargée. Vérifiez votre connexion internet.</div>';
+            return;
+        }
+
+        if (leafletMap) {
+            setTimeout(function(){ leafletMap.invalidateSize(); }, 200);
+            return;
+        }
 
         leafletMap = L.map('leaflet-map').setView([20, -20], 3);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 18
         }).addTo(leafletMap);
+
+        // Force recalculation after container becomes visible
+        setTimeout(function(){ leafletMap.invalidateSize(); }, 300);
 
         var vesselColors = {1:'#095561', 2:'#87BD2B', 3:'#5BA4B5', 4:'#393939'};
         var vesselNames = {1:'Anemos', 2:'Artemis', 3:'Atlantis', 4:'Atlas'};
@@ -269,7 +280,11 @@
         fetch('/planning/api/map?year=' + YEAR + (VESSEL ? '&vessel=' + VESSEL : ''))
             .then(function(r){ return r.json(); })
             .then(function(routes) {
-                if (!routes || routes.length === 0) return;
+                if (!routes || routes.length === 0) {
+                    document.getElementById('leaflet-map').insertAdjacentHTML('beforeend',
+                        '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;background:rgba(255,255,255,0.9);padding:16px 24px;border-radius:8px;color:#888;font-size:14px;">Aucune route à afficher (coordonnées ports manquantes ?)</div>');
+                    return;
+                }
                 var bounds = [];
                 var portMarkers = {};
 
@@ -320,6 +335,12 @@
                     return div;
                 };
                 legend.addTo(leafletMap);
+                setTimeout(function(){ leafletMap.invalidateSize(); }, 100);
+            })
+            .catch(function(err) {
+                console.error('Erreur chargement carte:', err);
+                document.getElementById('leaflet-map').insertAdjacentHTML('beforeend',
+                    '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;background:rgba(255,255,255,0.9);padding:16px 24px;border-radius:8px;color:#c00;font-size:14px;">Erreur lors du chargement des données de la carte.</div>');
             });
     }
 </script>
