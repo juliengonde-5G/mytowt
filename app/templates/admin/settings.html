@@ -255,7 +255,33 @@
     <!-- DATABASE -->
     <div class="settings-section" id="sec-database" style="display:none;">
         <h3>🗄️ Gestion de la base de données</h3>
-        <p style="font-size:13px;color:#666;margin-bottom:20px;">Outils d'export, de maintenance et de nettoyage des données de l'application.</p>
+        <p style="font-size:13px;color:#666;margin-bottom:20px;">Outils d'import, d'export, de maintenance et de nettoyage des données de l'application.</p>
+
+        {% if request.query_params.get('import_success') %}
+        <div style="background:#dcfce7;border:1px solid #86efac;color:#166534;padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:13px;">
+            {{ request.query_params.get('import_success') }}
+        </div>
+        {% endif %}
+        {% if request.query_params.get('import_error') %}
+        <div style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:13px;">
+            {{ request.query_params.get('import_error') }}
+        </div>
+        {% endif %}
+
+        <!-- IMPORT SECTION -->
+        <div class="db-block">
+            <h4 class="db-block-title"><i data-lucide="upload" style="width:16px;height:16px;"></i> Imports</h4>
+            <div class="db-card">
+                <div class="db-card-info">
+                    <strong>🧭 Importer le planning de navigation (CSV)</strong>
+                    <span>Fichier CSV séparateur <code>;</code> avec colonnes : Leg Code, Navire, Départ LOCODE, Port Départ, Arrivée LOCODE, Port Arrivée, ETD, ETA, ATD (réel), ATA (réel), Distance Ortho (NM), Distance Réelle (NM), Vitesse (nds), Durée Est. (h), Statut. Les legs existants seront mis à jour, les nouveaux seront créés. Les ports manquants seront auto-créés.</span>
+                </div>
+                <form method="POST" action="/admin/import/planning" enctype="multipart/form-data" style="display:flex;align-items:center;gap:8px;">
+                    <input type="file" name="file" accept=".csv" required class="form-input" style="font-size:12px;padding:6px;max-width:280px;">
+                    <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="upload"></i> Importer</button>
+                </form>
+            </div>
+        </div>
 
         <!-- EXPORT SECTION -->
         <div class="db-block">

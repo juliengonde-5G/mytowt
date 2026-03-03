@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query
+from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1146,6 +1146,197 @@ async def update_emission_params(
     await db.flush()
     await log_activity(db, user, "admin", "update", "EmissionParameter", None, "Mise à jour émissions KPI")
     url = "/admin/settings"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# ─── IMPORT PLANNING CSV ────────────────────────────────────
+# Port coordinates for auto-creation
+_PORT_COORDS = {
+    "FRFEC": ("Fecamp", 49.7578, 0.3650, "FR"),
+    "FRLEH": ("Le Havre", 49.4944, 0.1079, "FR"),
+    "FRCOC": ("Concarneau", 47.8706, -3.9214, "FR"),
+    "USNYC": ("New York", 40.6892, -74.0445, "US"),
+    "BRSSO": ("Sao Sebastiao", -23.8159, -45.4097, "BR"),
+    "COSMR": ("Santa Marta", 11.2472, -74.1992, "CO"),
+    "COSTM": ("Santa Marta", 11.2472, -74.1992, "CO"),
+    "HNPCR": ("Puerto Cortes", 15.8383, -87.9550, "HN"),
+    "CAQUE": ("Quebec", 46.8139, -71.2080, "CA"),
+    "CAMAT": ("Matane", 48.8500, -67.5333, "CA"),
+    "GPPTP": ("Pointe-a-Pitre", 16.2411, -61.5310, "GP"),
+    "GTSTC": ("Puerto Santo Tomas de Castilla", 15.7000, -88.6167, "GT"),
+    "PTOPO": ("Porto", 41.1496, -8.6109, "PT"),
+    "CUHAV": ("La Habana", 23.1136, -82.3666, "CU"),
+    "VNSGN": ("Ho Chi Minh City", 10.7626, 106.7533, "VN"),
+    "VNDAD": ("Da Nang", 16.0678, 108.2208, "VN"),
+    "REPDG": ("Port de Pointe des Galets", -20.9342, 55.2917, "RE"),
+    "RELPT": ("Le Port", -20.9342, 55.2917, "RE"),
+}
+
+
+def _parse_dt(s: str):
+    """Parse DD/MM/YYYY HH:MM or DD/MM/YYYY HH:MM:SS."""
+    if not s or not s.strip():
+        return None
+    s = s.strip()
+    for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+@router.post("/import/planning", response_class=HTMLResponse)
+async def import_planning_csv(
+    request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Import a planning CSV file (semicolon-separated) with legs data."""
+    from app.models.port import Port
+
+    raw = await file.read()
+    try:
+        content = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        content = raw.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(content), delimiter=";")
+    rows = list(reader)
+
+    if not rows:
+        return RedirectResponse(url="/admin/settings?import_error=Fichier+vide", status_code=303)
+
+    # Build vessel lookup {name -> id}
+    v_result = await db.execute(select(Vessel))
+    vessel_map = {v.name.lower(): v for v in v_result.scalars().all()}
+
+    created = 0
+    updated = 0
+    ports_created = 0
+    errors = []
+
+    for i, row in enumerate(rows, 1):
+        try:
+            leg_code = row.get("Leg Code", "").strip()
+            vessel_name = row.get("Navire", "").strip()
+            dep_locode = row.get("Départ LOCODE", row.get("Depart LOCODE", "")).strip()
+            arr_locode = row.get("Arrivée LOCODE", row.get("Arrivee LOCODE", "")).strip()
+            dep_name = row.get("Port Départ", row.get("Port Depart", "")).strip()
+            arr_name = row.get("Port Arrivée", row.get("Port Arrivee", "")).strip()
+
+            if not leg_code or not vessel_name:
+                continue
+
+            # Find vessel
+            vessel = vessel_map.get(vessel_name.lower())
+            if not vessel:
+                errors.append(f"Ligne {i}: navire '{vessel_name}' introuvable")
+                continue
+
+            # Ensure departure port exists
+            for locode, name in [(dep_locode, dep_name), (arr_locode, arr_name)]:
+                p_result = await db.execute(select(Port).where(Port.locode == locode))
+                port = p_result.scalar_one_or_none()
+                if not port:
+                    coords = _PORT_COORDS.get(locode)
+                    port = Port(
+                        locode=locode,
+                        name=coords[0] if coords else name,
+                        latitude=coords[1] if coords else None,
+                        longitude=coords[2] if coords else None,
+                        country_code=coords[3] if coords else locode[:2],
+                    )
+                    db.add(port)
+                    await db.flush()
+                    ports_created += 1
+                elif not port.latitude and locode in _PORT_COORDS:
+                    port.latitude = _PORT_COORDS[locode][1]
+                    port.longitude = _PORT_COORDS[locode][2]
+
+            # Parse dates
+            etd = _parse_dt(row.get("ETD", ""))
+            eta = _parse_dt(row.get("ETA", ""))
+            atd = _parse_dt(row.get("ATD (réel)", row.get("ATD (reel)", "")))
+            ata = _parse_dt(row.get("ATA (réel)", row.get("ATA (reel)", "")))
+
+            # Parse numbers
+            distance_ortho = pf(row.get("Distance Ortho (NM)", ""), None)
+            distance_reel = pf(row.get("Distance Réelle (NM)", row.get("Distance Reelle (NM)", "")), None)
+            speed = pf(row.get("Vitesse (nds)", ""), None)
+            duration = pf(row.get("Durée Est. (h)", row.get("Duree Est. (h)", "")), None)
+            status = row.get("Statut", "planned").strip() or "planned"
+
+            # Extract year from last digit of leg_code
+            last_digit = leg_code.rstrip("-ABCDEFGHIJKLMNOPQRSTUVWXYZ")[-1:]
+            year_map = {"4": 2024, "5": 2025, "6": 2026, "7": 2027}
+            year = year_map.get(last_digit, etd.year if etd else 2026)
+
+            # Extract sequence from second character (letter)
+            seq_char = leg_code[1] if len(leg_code) > 1 else "A"
+            sequence = ord(seq_char.upper()) - ord('A') + 1 if seq_char.isalpha() else 1
+
+            # Compute elongation
+            elongation = None
+            if distance_ortho and distance_reel and distance_ortho > 0:
+                elongation = round(distance_reel / distance_ortho, 2)
+
+            # Upsert leg
+            result = await db.execute(select(Leg).where(Leg.leg_code == leg_code))
+            leg = result.scalar_one_or_none()
+
+            if leg:
+                leg.vessel_id = vessel.id
+                leg.year = year
+                leg.sequence = sequence
+                leg.departure_port_locode = dep_locode
+                leg.arrival_port_locode = arr_locode
+                leg.etd = etd
+                leg.eta = eta
+                leg.atd = atd
+                leg.ata = ata
+                leg.distance_nm = distance_ortho
+                leg.computed_distance = distance_reel
+                leg.speed_knots = speed
+                leg.estimated_duration_hours = duration
+                leg.elongation_coeff = elongation or leg.elongation_coeff
+                leg.status = status
+                updated += 1
+            else:
+                leg = Leg(
+                    leg_code=leg_code,
+                    vessel_id=vessel.id,
+                    year=year,
+                    sequence=sequence,
+                    departure_port_locode=dep_locode,
+                    arrival_port_locode=arr_locode,
+                    etd=etd, eta=eta, atd=atd, ata=ata,
+                    distance_nm=distance_ortho,
+                    computed_distance=distance_reel,
+                    speed_knots=speed,
+                    elongation_coeff=elongation or 1.25,
+                    estimated_duration_hours=duration,
+                    status=status,
+                )
+                db.add(leg)
+                created += 1
+
+        except Exception as e:
+            errors.append(f"Ligne {i}: {str(e)}")
+
+    await db.flush()
+    await log_activity(db, user=user, action="import", module="admin",
+                       entity_type="planning_csv", entity_id=None,
+                       entity_label=f"{file.filename}: {created} créés, {updated} mis à jour",
+                       ip_address=get_client_ip(request))
+
+    msg = f"Import terminé : {created} legs créés, {updated} mis à jour, {ports_created} ports créés"
+    if errors:
+        msg += f", {len(errors)} erreurs"
+    url = f"/admin/settings?import_success={msg.replace(' ', '+')}"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
     return RedirectResponse(url=url, status_code=303)
