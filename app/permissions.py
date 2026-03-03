@@ -1,17 +1,18 @@
 """
 Permission system for TOWT Planning App.
 
-Roles: administrateur, operation, armement, technique, data_analyst, marins
-Modules: planning, commercial, escale, finance, kpi, captain, crew, cargo
+Roles: administrateur, operation, armement, technique, data_analyst, marins,
+       gestionnaire_passagers, commercial, manager_maritime
+Modules: planning, commercial, escale, finance, kpi, captain, crew, cargo, mrv, passengers
 Permissions: C (consult), M (modify), S (delete/suppress)
 
 Usage:
   from app.permissions import can_view, can_edit, can_delete, require_permission
-  
+
   # In route:
   if not can_view(user, 'commercial'):
       raise HTTPException(403)
-  
+
   # As dependency:
   @router.get("/commercial")
   async def index(user = Depends(require_permission('commercial', 'C'))):
@@ -37,41 +38,43 @@ _MATRIX = {
     ("administrateur", "crew"):        {"C", "M", "S"},
     ("administrateur", "cargo"):       {"C", "M", "S"},
     ("administrateur", "mrv"):         {"C", "M", "S"},
+    ("administrateur", "passengers"):  {"C", "M", "S"},
 
     # ─── OPERATION ───────────────────────────────────────
+    # Planning, Commercial, Escale, KPI, On board, Passagers, Equipage, Cargo, MRV
     ("operation", "planning"):    {"C", "M"},
     ("operation", "commercial"):  {"C", "M"},
-    ("operation", "escale"):      {"C", "M"},
-    # finance: no access
+    ("operation", "escale"):      {"C", "M", "S"},
     ("operation", "kpi"):         {"C"},
-    ("operation", "captain"):     {"C"},
+    ("operation", "captain"):     {"C", "M"},
     ("operation", "crew"):        {"C"},
     ("operation", "cargo"):       {"C", "M", "S"},
     ("operation", "mrv"):         {"C", "M"},
+    ("operation", "passengers"):  {"C", "M"},
 
-    # ─── ARMEMENT ────────────────────────────────────────
+    # ─── ARMEMENT (CREW) ────────────────────────────────
+    # Planning, Escale, KPI, Equipage
     ("armement", "planning"):    {"C"},
-    # commercial: no access
     ("armement", "escale"):      {"C"},
-    # finance: no access
     ("armement", "kpi"):         {"C"},
     ("armement", "captain"):     {"C"},
     ("armement", "crew"):        {"C", "M", "S"},
-    # cargo: no access
     ("armement", "mrv"):         {"C"},
 
     # ─── TECHNIQUE ───────────────────────────────────────
+    # Planning, Commercial, Escale, KPI, On board, Passagers, Equipage, Cargo, MRV
     ("technique", "planning"):    {"C"},
-    # commercial: no access
+    ("technique", "commercial"):  {"C"},
     ("technique", "escale"):      {"C", "M", "S"},
-    # finance: no access
     ("technique", "kpi"):         {"C"},
     ("technique", "captain"):     {"C"},
     ("technique", "crew"):        {"C"},
-    # cargo: no access
+    ("technique", "cargo"):       {"C"},
     ("technique", "mrv"):         {"C", "M"},
+    ("technique", "passengers"):  {"C"},
 
     # ─── DATA ANALYST ────────────────────────────────────
+    # Planning, Escale, Finance, KPI, MRV + admin data params
     ("data_analyst", "planning"):    {"C"},
     ("data_analyst", "commercial"):  {"C"},
     ("data_analyst", "escale"):      {"C"},
@@ -83,15 +86,44 @@ _MATRIX = {
     ("data_analyst", "mrv"):         {"C", "M"},
 
     # ─── MARINS ──────────────────────────────────────────
+    # Planning, Escale, KPI, Equipage — lecture seule
     ("marins", "planning"):    {"C"},
-    # commercial: no access
-    ("marins", "escale"):      {"C", "M", "S"},
-    # finance: no access
+    ("marins", "escale"):      {"C"},
     ("marins", "kpi"):         {"C"},
-    ("marins", "captain"):     {"C", "M", "S"},
+    ("marins", "captain"):     {"C"},
     ("marins", "crew"):        {"C"},
     ("marins", "cargo"):       {"C"},
     ("marins", "mrv"):         {"C"},
+
+    # ─── GESTIONNAIRE PASSAGERS ──────────────────────────
+    # Planning, Escale, KPI, Passagers
+    ("gestionnaire_passagers", "planning"):    {"C"},
+    ("gestionnaire_passagers", "escale"):      {"C"},
+    ("gestionnaire_passagers", "kpi"):         {"C"},
+    ("gestionnaire_passagers", "passengers"):  {"C", "M", "S"},
+    ("gestionnaire_passagers", "captain"):     {"C"},
+
+    # ─── COMMERCIAL ──────────────────────────────────────
+    # Planning, Commercial, Escale, KPI, Passagers, Cargo
+    ("commercial", "planning"):    {"C"},
+    ("commercial", "commercial"):  {"C", "M", "S"},
+    ("commercial", "escale"):      {"C"},
+    ("commercial", "kpi"):         {"C"},
+    ("commercial", "passengers"):  {"C", "M"},
+    ("commercial", "cargo"):       {"C", "M"},
+    ("commercial", "captain"):     {"C"},
+
+    # ─── MANAGER MARITIME ────────────────────────────────
+    # Planning, Commercial, Escale, KPI, On board, Passagers, Equipage, Cargo, MRV
+    ("manager_maritime", "planning"):    {"C", "M"},
+    ("manager_maritime", "commercial"):  {"C", "M"},
+    ("manager_maritime", "escale"):      {"C", "M"},
+    ("manager_maritime", "kpi"):         {"C"},
+    ("manager_maritime", "captain"):     {"C", "M", "S"},
+    ("manager_maritime", "crew"):        {"C", "M"},
+    ("manager_maritime", "cargo"):       {"C", "M"},
+    ("manager_maritime", "mrv"):         {"C", "M"},
+    ("manager_maritime", "passengers"):  {"C", "M"},
 }
 
 # Legacy role mapping (old roles → new roles)
@@ -106,16 +138,19 @@ _LEGACY_MAP = {
 ROLES = [
     ("administrateur", "Administrateur"),
     ("operation", "Opération"),
-    ("armement", "Armement"),
+    ("armement", "Armement / Équipage"),
     ("technique", "Technique"),
     ("data_analyst", "Data Analyst"),
     ("marins", "Marins"),
+    ("gestionnaire_passagers", "Gestionnaire Passagers"),
+    ("commercial", "Commercial"),
+    ("manager_maritime", "Manager Maritime"),
 ]
 
 # All modules
 MODULES = [
     "planning", "commercial", "escale", "finance",
-    "kpi", "captain", "crew", "cargo", "mrv",
+    "kpi", "captain", "crew", "cargo", "mrv", "passengers",
 ]
 
 # Module display names
@@ -125,10 +160,11 @@ MODULE_NAMES = {
     "escale": "Escale",
     "finance": "Finance",
     "kpi": "KPI",
-    "captain": "Capitaine",
+    "captain": "On Board",
     "crew": "Équipage",
     "cargo": "Cargo Docs",
     "mrv": "MRV Fuel",
+    "passengers": "Passagers",
 }
 
 

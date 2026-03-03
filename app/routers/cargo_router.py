@@ -17,6 +17,7 @@ from app.models.vessel import Vessel
 from app.models.packing_list import PackingList, PackingListBatch, PackingListAudit
 from app.i18n import get_lang_from_request
 from app.utils.activity import log_activity
+from app.routers.kpi_router import compute_decarbonation, get_co2_variables
 
 router = APIRouter(prefix="/cargo", tags=["cargo"])
 
@@ -1278,10 +1279,22 @@ async def client_packing_list(
     if lang not in ('fr', 'en', 'es', 'pt-br', 'vi'):
         lang = 'fr'
 
+    # Compute decarbonation for this order
+    co2_vars = await get_co2_variables(db)
+    decarb = {"decarb_kg": 0, "decarb_t": 0, "fill_rate_pct": 0}
+    if pl.order and pl.order.leg and pl.order.total_weight:
+        leg = pl.order.leg
+        distance = leg.computed_distance or (
+            leg.distance_nm * (leg.elongation_coeff or 1.25) if leg.distance_nm else 0
+        )
+        decarb = compute_decarbonation(pl.order.total_weight, distance, co2_vars)
+
     return templates.TemplateResponse("cargo/client_form.html", {
         "request": request, "pl": pl,
         "imo_classes": IMO_CLASSES,
         "lang": lang,
+        "decarb": decarb,
+        "co2_vars": co2_vars,
     })
 
 

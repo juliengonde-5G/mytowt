@@ -10,7 +10,9 @@
         <button class="stab" onclick="showSection('vessels')">🚢 Navires</button>
         <button class="stab" onclick="showSection('ports')">⚓ Ports</button>
         <button class="stab" onclick="showSection('economics')">💰 Économique</button>
+        <button class="stab" onclick="showSection('co2')">🌿 Décarbonation</button>
         <button class="stab" onclick="showSection('kpi')">📊 KPI / Émissions</button>
+        <button class="stab" onclick="showSection('mrv')">⛽ MRV Fuel</button>
         <button class="stab" onclick="showSection('locks')">🔒 Verrouillage</button>
         <button class="stab" onclick="showSection('export')">📥 Export</button>
         <button class="stab" onclick="showSection('language')">🌐 Langue</button>
@@ -137,23 +139,131 @@
         </form>
     </div>
 
-    <!-- KPI / EMISSIONS -->
-    <div class="settings-section" id="sec-kpi" style="display:none;">
-        <h3>Paramètres KPI & Émissions</h3>
-        {% if emission_params %}
-        <div class="table-container">
-            <table class="data-table">
-                <thead><tr><th>Paramètre</th><th>Valeur</th><th>Unité</th></tr></thead>
+    <!-- CO2 DECARBONATION -->
+    <div class="settings-section" id="sec-co2" style="display:none;">
+        <h3>🌿 Variables de décarbonation</h3>
+        <p style="font-size:12px;color:#666;margin-bottom:16px;">
+            Formule : <code style="background:#f0f7f8;padding:2px 6px;border-radius:4px;">(EF Conv. − EF TOWT) × Taux remplissage × Capacité × Distance (NM) × 1,852</code>
+        </p>
+
+        <form method="POST" action="/admin/co2/update" style="max-width:600px;">
+            {% for var_name, defaults in co2_defaults.items() %}
+            {% set current_val = None %}
+            {% for cv in co2_variables %}{% if cv.variable_name == var_name %}{% set current_val = cv %}{% endif %}{% endfor %}
+            <div class="form-group" style="margin-bottom:14px;">
+                <label class="form-label" style="font-weight:600;">
+                    {{ defaults.description }}
+                    <span style="font-size:10px;color:#888;font-weight:400;">({{ defaults.unit }})</span>
+                    {% if var_name == 'towt_co2_ef' %}
+                    <span style="font-size:10px;color:var(--towt-green);font-weight:400;">— historisé</span>
+                    {% endif %}
+                </label>
+                <input type="text" name="co2_{{ var_name }}" class="form-input" style="max-width:200px;text-align:right;"
+                       value="{{ current_val.variable_value if current_val else defaults.value }}">
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="check"></i> Enregistrer</button>
+        </form>
+
+        {% if co2_history and co2_history|length > 1 %}
+        <div style="margin-top:24px;">
+            <h4 style="font-size:14px;margin-bottom:8px;">Historique TOWT CO2 EF</h4>
+            <table class="data-table" style="max-width:500px;">
+                <thead><tr><th>Valeur</th><th>Unité</th><th>Date d'effet</th><th>Actif</th></tr></thead>
                 <tbody>
-                    {% for ep in emission_params %}
-                    <tr><td>{{ ep.parameter_name }}</td><td>{{ ep.parameter_value }}</td><td>{{ ep.unit or '' }}</td></tr>
+                    {% for h in co2_history %}
+                    <tr {% if not h.is_current %}style="opacity:0.5;"{% endif %}>
+                        <td style="font-weight:600;">{{ h.variable_value }}</td>
+                        <td>{{ h.unit }}</td>
+                        <td>{{ h.effective_date.strftime('%d/%m/%Y') if h.effective_date else '—' }}</td>
+                        <td>{% if h.is_current %}✓ Actuel{% else %}Ancien{% endif %}</td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        {% else %}
-        <p style="color:#aaa;">Paramètres d'émissions par défaut du router KPI.</p>
         {% endif %}
+    </div>
+
+    <!-- KPI / EMISSIONS -->
+    <div class="settings-section" id="sec-kpi" style="display:none;">
+        <h3>Paramètres KPI & Émissions</h3>
+        <p style="font-size:12px;color:#666;margin-bottom:16px;">Facteurs d'émission utilisés pour le calcul des KPI environnementaux (CO₂, NOx, SOx par tonne par mille nautique).</p>
+        <form method="POST" action="/admin/emissions/update" style="max-width:600px;">
+            {% set em_params_dict = {} %}
+            {% for ep in emission_params %}{% if em_params_dict.update({ep.parameter_name: ep.parameter_value}) %}{% endif %}{% endfor %}
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="form-group">
+                    <label class="form-label">CO₂ conventionnel (kg/t/NM)</label>
+                    <input type="text" name="em_conventional_co2_per_ton_nm" class="form-input" style="text-align:right;"
+                           value="{{ em_params_dict.get('conventional_co2_per_ton_nm', 0.0152) }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">CO₂ voile (kg/t/NM)</label>
+                    <input type="text" name="em_sail_co2_per_ton_nm" class="form-input" style="text-align:right;"
+                           value="{{ em_params_dict.get('sail_co2_per_ton_nm', 0.00198) }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">NOx conventionnel (kg/t/NM)</label>
+                    <input type="text" name="em_conventional_nox_per_ton_nm" class="form-input" style="text-align:right;"
+                           value="{{ em_params_dict.get('conventional_nox_per_ton_nm', 0.000406) }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">NOx voile (kg/t/NM)</label>
+                    <input type="text" name="em_sail_nox_per_ton_nm" class="form-input" style="text-align:right;"
+                           value="{{ em_params_dict.get('sail_nox_per_ton_nm', 0.0000528) }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SOx conventionnel (kg/t/NM)</label>
+                    <input type="text" name="em_conventional_sox_per_ton_nm" class="form-input" style="text-align:right;"
+                           value="{{ em_params_dict.get('conventional_sox_per_ton_nm', 0.0000812) }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SOx voile (kg/t/NM)</label>
+                    <input type="text" name="em_sail_sox_per_ton_nm" class="form-input" style="text-align:right;"
+                           value="{{ em_params_dict.get('sail_sox_per_ton_nm', 0.00001056) }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Réduction CO₂ (%)</label>
+                    <input type="text" name="em_co2_reduction_pct" class="form-input" style="text-align:right;"
+                           value="{{ em_params_dict.get('co2_reduction_pct', 87) }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">CO₂/vol Paris-NYC (t)</label>
+                    <input type="text" name="em_co2_per_flight_paris_nyc" class="form-input" style="text-align:right;"
+                           value="{{ em_params_dict.get('co2_per_flight_paris_nyc', 525) }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">CO₂/container Asie-EU (t)</label>
+                    <input type="text" name="em_co2_per_container_asia_eu" class="form-input" style="text-align:right;"
+                           value="{{ em_params_dict.get('co2_per_container_asia_eu', 2.5) }}">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm" style="margin-top:12px;"><i data-lucide="check"></i> Enregistrer</button>
+        </form>
+    </div>
+
+    <!-- MRV FUEL PARAMETERS -->
+    <div class="settings-section" id="sec-mrv" style="display:none;">
+        <h3>⛽ Paramètres MRV Fuel</h3>
+        <p style="font-size:12px;color:#666;margin-bottom:16px;">Paramètres pour le module MRV (Monitoring, Reporting, Verification) conformité EU MRV / DNV Veracity.</p>
+        <form method="POST" action="/admin/mrv/update" style="max-width:600px;">
+            {% set mrv_dict = {} %}
+            {% for mp in mrv_params %}{% if mrv_dict.update({mp.parameter_name: mp.parameter_value}) %}{% endif %}{% endfor %}
+
+            {% for param_name, defaults in mrv_defaults.items() %}
+            <div class="form-group" style="margin-bottom:14px;">
+                <label class="form-label" style="font-weight:600;">
+                    {{ defaults.description }}
+                    <span style="font-size:10px;color:#888;font-weight:400;">({{ defaults.unit }})</span>
+                </label>
+                <input type="text" name="mrv_{{ param_name }}" class="form-input" style="max-width:200px;text-align:right;"
+                       value="{{ mrv_dict.get(param_name, defaults.value) }}">
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="check"></i> Enregistrer</button>
+        </form>
     </div>
 
     <!-- LOCKS -->
@@ -278,6 +388,9 @@
     .badge-marins{background:rgba(6,182,212,0.1);color:#0891B2;padding:2px 8px;border-radius:100px;font-size:11px;}
     .badge-viewer{background:rgba(96,165,250,0.1);color:#2563EB;padding:2px 8px;border-radius:100px;font-size:11px;}
     .badge-editor{background:rgba(135,189,43,0.1);color:#5a8010;padding:2px 8px;border-radius:100px;font-size:11px;}
+    .badge-gestionnaire_passagers{background:rgba(236,72,153,0.1);color:#DB2777;padding:2px 8px;border-radius:100px;font-size:11px;}
+    .badge-commercial{background:rgba(249,115,22,0.1);color:#EA580C;padding:2px 8px;border-radius:100px;font-size:11px;}
+    .badge-manager_maritime{background:rgba(14,165,233,0.1);color:#0284C7;padding:2px 8px;border-radius:100px;font-size:11px;}
 </style>
 
 <script>

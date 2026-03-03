@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <title>TOWT — Packing List {{ pl.order.reference }}</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#f5f7fa;color:#333;min-height:100vh}
+        body{font-family:'Poppins','Segoe UI',system-ui,-apple-system,sans-serif;background:#f5f7fa;color:#333;min-height:100vh}
         .header{background:#095561;color:white;padding:20px 0;text-align:center}
         .header h1{font-size:22px;font-weight:700;letter-spacing:1px}
         .header p{font-size:13px;opacity:0.8;margin-top:4px}
@@ -87,6 +90,17 @@
             {% endif %}
             <div class="info-item"><span class="info-label">Palettes commandées</span><span class="info-value">{{ pl.order.quantity_palettes }}</span></div>
         </div>
+
+        {% if decarb and decarb.decarb_kg > 0 %}
+        <div style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;gap:16px;align-items:center;border:1px solid #86efac;">
+            <div style="font-size:28px;">🌿</div>
+            <div>
+                <div style="font-size:16px;font-weight:700;color:#065f46;">{{ '%.1f'|format(decarb.decarb_kg) }} kg CO₂</div>
+                <div style="font-size:12px;color:#047857;">{{ t('co2_for_shipment', lang) }}</div>
+                <div style="font-size:10px;color:#6b7280;margin-top:4px;">TOWT EF: {{ co2_vars.towt_co2_ef }} gCO₂/t.km · Conventional EF: {{ co2_vars.conventional_co2_ef }} gCO₂/t.km</div>
+            </div>
+        </div>
+        {% endif %}
 
         <form method="POST" action="/p/{{ pl.token }}/save">
             {% for batch in pl.batches %}

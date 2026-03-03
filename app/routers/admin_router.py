@@ -17,6 +17,8 @@ from app.models.port import Port
 from app.models.leg import Leg
 from app.models.finance import OpexParameter, PortConfig
 from app.models.emission_parameter import EmissionParameter
+from app.models.co2_variable import Co2Variable, CO2_DEFAULTS
+from app.models.mrv import MrvParameter, MRV_DEFAULTS
 from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -24,10 +26,13 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 USER_ROLES = [
     {"value": "administrateur", "label": "Administrateur"},
     {"value": "operation", "label": "Opération"},
-    {"value": "armement", "label": "Armement"},
+    {"value": "armement", "label": "Armement / Équipage"},
     {"value": "technique", "label": "Technique"},
     {"value": "data_analyst", "label": "Data Analyst"},
     {"value": "marins", "label": "Marins"},
+    {"value": "gestionnaire_passagers", "label": "Gestionnaire Passagers"},
+    {"value": "commercial", "label": "Commercial"},
+    {"value": "manager_maritime", "label": "Manager Maritime"},
 ]
 
 
@@ -82,6 +87,23 @@ async def settings_home(
     emission_result = await db.execute(select(EmissionParameter).order_by(EmissionParameter.parameter_name))
     emission_params = emission_result.scalars().all()
 
+    # CO2 decarbonation variables (current values)
+    co2_result = await db.execute(
+        select(Co2Variable).where(Co2Variable.is_current == True).order_by(Co2Variable.variable_name)
+    )
+    co2_variables = co2_result.scalars().all()
+
+    # CO2 history for TOWT CO2 EF (historized)
+    co2_history_result = await db.execute(
+        select(Co2Variable).where(Co2Variable.variable_name == "towt_co2_ef")
+        .order_by(Co2Variable.effective_date.desc())
+    )
+    co2_history = co2_history_result.scalars().all()
+
+    # MRV parameters
+    mrv_result = await db.execute(select(MrvParameter).order_by(MrvParameter.parameter_name))
+    mrv_params = mrv_result.scalars().all()
+
     # Locked legs count
     locked_result = await db.execute(
         select(func.count(Leg.id)).where(Leg.status == "completed")
@@ -134,6 +156,11 @@ async def settings_home(
         "port_msg": port_msg,
         "opex_params": opex_params,
         "emission_params": emission_params,
+        "co2_variables": co2_variables,
+        "co2_history": co2_history,
+        "co2_defaults": CO2_DEFAULTS,
+        "mrv_params": mrv_params,
+        "mrv_defaults": MRV_DEFAULTS,
         "locked_count": locked_count,
         "pricing_grid": pricing_grid,
         "existing_routes": existing_routes,
@@ -630,6 +657,133 @@ async def import_ports(
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": f"/admin/settings?port_msg={msg}"})
     return RedirectResponse(url=f"/admin/settings?port_msg={msg}", status_code=303)
+
+
+# ─── CO2 DECARBONATION VARIABLES ─────────────────────────────
+@router.post("/co2/update", response_class=HTMLResponse)
+async def co2_update(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    form = await request.form()
+    from datetime import date as _date
+
+    for var_name, defaults in CO2_DEFAULTS.items():
+        val_str = form.get(f"co2_{var_name}", "")
+        val = pf(val_str, defaults["value"])
+
+        # Get current entry
+        result = await db.execute(
+            select(Co2Variable).where(
+                Co2Variable.variable_name == var_name,
+                Co2Variable.is_current == True
+            )
+        )
+        current = result.scalar_one_or_none()
+
+        if current:
+            # For towt_co2_ef, historize: keep old entry, create new
+            if var_name == "towt_co2_ef" and abs(current.variable_value - val) > 0.0001:
+                current.is_current = False
+                new_entry = Co2Variable(
+                    variable_name=var_name,
+                    variable_value=val,
+                    unit=defaults["unit"],
+                    description=defaults["description"],
+                    effective_date=_date.today(),
+                    is_current=True,
+                )
+                db.add(new_entry)
+            else:
+                current.variable_value = val
+        else:
+            entry = Co2Variable(
+                variable_name=var_name,
+                variable_value=val,
+                unit=defaults["unit"],
+                description=defaults["description"],
+                effective_date=_date.today(),
+                is_current=True,
+            )
+            db.add(entry)
+
+    await db.flush()
+    await log_activity(db, user, "admin", "update_co2", None, None, "Mise à jour variables décarbonation")
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
+    return RedirectResponse(url="/admin/settings", status_code=303)
+
+
+# ─── MRV PARAMETERS ─────────────────────────────────────────
+@router.post("/mrv/update", response_class=HTMLResponse)
+async def mrv_params_update(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    form = await request.form()
+
+    for param_name, defaults in MRV_DEFAULTS.items():
+        val_str = form.get(f"mrv_{param_name}", "")
+        val = pf(val_str, defaults["value"])
+
+        result = await db.execute(
+            select(MrvParameter).where(MrvParameter.parameter_name == param_name)
+        )
+        param = result.scalar_one_or_none()
+        if param:
+            param.parameter_value = val
+        else:
+            param = MrvParameter(
+                parameter_name=param_name,
+                parameter_value=val,
+                unit=defaults["unit"],
+                description=defaults["description"],
+            )
+            db.add(param)
+
+    await db.flush()
+    await log_activity(db, user, "admin", "update_mrv", None, None, "Mise à jour paramètres MRV")
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
+    return RedirectResponse(url="/admin/settings", status_code=303)
+
+
+# ─── EMISSION PARAMETERS UPDATE ──────────────────────────────
+@router.post("/emissions/update", response_class=HTMLResponse)
+async def emissions_update(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    form = await request.form()
+    from app.routers.kpi_router import DEFAULTS as KPI_DEFAULTS
+
+    for param_name, default_val in KPI_DEFAULTS.items():
+        val_str = form.get(f"em_{param_name}", "")
+        val = pf(val_str, default_val)
+
+        result = await db.execute(
+            select(EmissionParameter).where(EmissionParameter.parameter_name == param_name)
+        )
+        param = result.scalar_one_or_none()
+        if param:
+            param.parameter_value = val
+        else:
+            param = EmissionParameter(
+                parameter_name=param_name,
+                parameter_value=val,
+                unit="",
+                description=param_name,
+            )
+            db.add(param)
+
+    await db.flush()
+    await log_activity(db, user, "admin", "update_emissions", None, None, "Mise à jour paramètres émissions KPI")
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
+    return RedirectResponse(url="/admin/settings", status_code=303)
 
 
 # ─── ACTIVITY LOG ───────────────────────────────────────────

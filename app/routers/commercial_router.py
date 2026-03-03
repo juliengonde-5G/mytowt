@@ -15,7 +15,9 @@ from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.order import Order, OrderAssignment, PALETTE_FORMATS, PALETTE_COEFF
 from app.models.kpi import LegKPI
+from app.models.co2_variable import Co2Variable, CO2_DEFAULTS
 from app.utils.activity import log_activity
+from app.routers.kpi_router import compute_decarbonation, get_co2_variables
 
 router = APIRouter(prefix="/commercial", tags=["commercial"])
 
@@ -94,10 +96,25 @@ async def commercial_home(
         "confirme": "Confirmé", "annule": "Annulé",
     }
 
+    # Compute decarbonation per order
+    co2_vars = await get_co2_variables(db)
+    order_decarb = {}
+    for order in orders:
+        if order.leg and order.total_weight:
+            distance = order.leg.computed_distance or (
+                order.leg.distance_nm * (order.leg.elongation_coeff or 1.25) if order.leg.distance_nm else 0
+            )
+            decarb = compute_decarbonation(order.total_weight, distance, co2_vars)
+            order_decarb[order.id] = decarb
+        else:
+            order_decarb[order.id] = {"decarb_t": 0, "decarb_kg": 0, "fill_rate_pct": 0}
+
     return templates.TemplateResponse("commercial/index.html", {
         "request": request, "user": user,
         "orders": orders, "statuses": statuses,
         "selected_status": status,
+        "order_decarb": order_decarb,
+        "co2_vars": co2_vars,
         "active_module": "commercial",
     })
 

@@ -20,7 +20,7 @@
         <table class="data-table">
             <thead><tr>
                 <th>Réf.</th><th>Client</th><th>Palettes</th><th>Format</th><th>Frais</th><th>Total</th>
-                <th>Route souhaitée</th><th>Affectation</th><th>Statut</th><th>PJ</th><th style="text-align:right;">Actions</th>
+                <th>Route souhaitée</th><th>Affectation</th><th>CO₂ décarb.</th><th>Statut</th><th>PJ</th><th style="text-align:right;">Actions</th>
             </tr></thead>
             <tbody>
                 {% for order in orders %}
@@ -44,6 +44,15 @@
                         {% if order.leg %}
                         <span style="color:var(--towt-blue);font-weight:500;">{{ order.leg.vessel.name }}</span><br>
                         <span style="font-family:monospace;">{{ order.leg.leg_code }}</span>
+                        {% else %}
+                        <span style="color:#ccc;">—</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:11px;">
+                        {% set d = order_decarb.get(order.id, {}) %}
+                        {% if d.get('decarb_kg', 0) > 0 %}
+                        <span style="color:#10B981;font-weight:600;">{{ '%.1f'|format(d.decarb_kg) }} kg</span>
+                        <br><span style="font-size:9px;color:#888;">{{ '%.3f'|format(d.decarb_t) }} t CO₂</span>
                         {% else %}
                         <span style="color:#ccc;">—</span>
                         {% endif %}

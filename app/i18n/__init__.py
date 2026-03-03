@@ -136,6 +136,22 @@ TRANSLATIONS = {
     "cargo_in_batches": {"fr": "dans les batchs", "en": "in batches", "es": "en lotes", "pt-br": "nos lotes", "vi": "trong các lô"},
     "cargo_ordered": {"fr": "commandée(s)", "en": "ordered", "es": "pedida(s)", "pt-br": "pedido(s)", "vi": "đã đặt"},
 
+    # ═══ CO2 DECARBONATION ═══
+    "co2_decarbonation": {"fr": "Décarbonation", "en": "Decarbonation", "es": "Descarbonización", "pt-br": "Descarbonização", "vi": "Giảm carbon"},
+    "co2_for_shipment": {"fr": "Décarbonation pour cette expédition — Transport à la voile vs conventionnel",
+                         "en": "Decarbonation for this shipment — Sailing vs conventional transport",
+                         "es": "Descarbonización para este envío — Transporte a vela vs convencional",
+                         "pt-br": "Descarbonização para esta remessa — Transporte à vela vs convencional",
+                         "vi": "Giảm carbon cho lô hàng này — Vận tải buồm so với thông thường"},
+    "co2_avoided_tonnes": {"fr": "tonnes CO₂ décarbonées", "en": "tonnes CO₂ decarbonized",
+                           "es": "toneladas CO₂ descarbonizadas", "pt-br": "toneladas CO₂ descarbonizadas",
+                           "vi": "tấn CO₂ giảm"},
+
+    # ═══ NAV (additional) ═══
+    "nav_passengers": {"fr": "Passagers", "en": "Passengers", "es": "Pasajeros", "pt-br": "Passageiros", "vi": "Hành khách"},
+    "nav_onboard": {"fr": "On Board", "en": "On Board", "es": "A bordo", "pt-br": "A bordo", "vi": "Trên tàu"},
+    "nav_mrv": {"fr": "MRV Fuel", "en": "MRV Fuel", "es": "MRV Combustible", "pt-br": "MRV Combustível", "vi": "MRV Nhiên liệu"},
+
     # ═══ SETTINGS ═══
     "settings_title": {"fr": "Paramètres", "en": "Settings", "es": "Configuración", "pt-br": "Configurações", "vi": "Cài đặt"},
     "settings_language": {"fr": "Langue de l'interface", "en": "Interface language", "es": "Idioma de la interfaz", "pt-br": "Idioma da interface", "vi": "Ngôn ngữ giao diện"},

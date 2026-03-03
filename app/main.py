@@ -104,6 +104,6 @@ app.include_router(crew_router, dependencies=[Depends(require_permission("crew",
 app.include_router(cargo_router, dependencies=[Depends(require_permission("cargo", "C"))])
 app.include_router(cargo_ext_router)
 app.include_router(onboard_router, dependencies=[Depends(require_permission("captain", "C"))])
-app.include_router(passenger_router, dependencies=[Depends(require_permission("captain", "C"))])
+app.include_router(passenger_router, dependencies=[Depends(require_permission("passengers", "C"))])
 app.include_router(passenger_ext_router)
 app.include_router(mrv_router, dependencies=[Depends(require_permission("mrv", "C"))])

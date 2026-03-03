@@ -57,8 +57,10 @@
                     <a href="/onboard" class="nav-item {% if active_module == 'captain' %}active{% endif %}">
                         <i data-lucide="compass"></i><span>On Board</span>
                     </a>
+                    {% endif %}
+                    {% if has_any_access(user, 'passengers') or has_any_access(user, 'captain') %}
                     <a href="/passengers" class="nav-item {% if active_module == 'passengers' %}active{% endif %}">
-                        <i data-lucide="users"></i><span>Passagers</span>
+                        <i data-lucide="users-round"></i><span>Passagers</span>
                     </a>
                     {% endif %}
                     {% if has_any_access(user, 'crew') %}
@@ -79,7 +81,7 @@
                 </div>
                 <div class="nav-section">
                     <span class="nav-section-label">Administration</span>
-                    {% if user and user.role in ('administrateur', 'admin') %}
+                    {% if user and user.role in ('administrateur', 'admin', 'data_analyst') %}
                     <a href="/admin/settings" class="nav-item {% if active_module == 'settings' %}active{% endif %}">
                         <i data-lucide="settings"></i><span>{{ t('nav_settings', lang|default('fr')) }}</span>
                     </a>

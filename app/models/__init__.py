@@ -13,6 +13,7 @@ from app.models.onboard import SofEvent, OnboardNotification, CargoDocument
 from app.models.passenger import Passenger, PassengerBooking, PassengerPayment, PassengerDocument, CabinPriceGrid, PreBoardingForm
 from app.models.activity import ActivityLog
 from app.models.mrv import MrvEvent, MrvParameter
+from app.models.co2_variable import Co2Variable
 
 __all__ = [
     "User", "Port", "Vessel", "Leg",
@@ -26,4 +27,5 @@ __all__ = [
     "Passenger", "PassengerBooking", "PassengerPayment", "PassengerDocument", "CabinPriceGrid",
     "ActivityLog",
     "MrvEvent", "MrvParameter",
+    "Co2Variable",
 ]

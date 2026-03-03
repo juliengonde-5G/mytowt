@@ -109,6 +109,20 @@
                 </div>
             </div>
         </div>
+
+        <!-- Décarbonation -->
+        <div class="kpi-card kpi-card-decarb">
+            <div class="kpi-card-icon">
+                <i data-lucide="sprout"></i>
+            </div>
+            <div class="kpi-card-body">
+                <span class="kpi-card-value">{{ '%.1f'|format(totals.decarb_t) }}</span>
+                <span class="kpi-card-unit">tonnes CO₂ décarbonées</span>
+                <div class="kpi-card-sub">
+                    EF TOWT : {{ co2_vars.towt_co2_ef }} · EF Conv. : {{ co2_vars.conventional_co2_ef }} gCO₂/t.km
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- DETAIL TABLE -->
@@ -126,6 +140,7 @@
                     <th>Tonnes</th>
                     <th>Occup.</th>
                     <th>CO₂ évité</th>
+                    <th>Décarb.</th>
                     <th>NOx évité</th>
                     <th>SOx évité</th>
                     <th>CO₂/t</th>
@@ -158,6 +173,7 @@
                         </div>
                     </td>
                     <td class="text-green">{{ '%.1f'|format(kpi.co2_avoided_kg) }} kg</td>
+                    <td class="text-decarb">{{ '%.2f'|format(kpi.decarb_t) }} t</td>
                     <td>{{ '%.2f'|format(kpi.nox_avoided_kg) }} kg</td>
                     <td>{{ '%.2f'|format(kpi.sox_avoided_kg) }} kg</td>
                     <td>{{ kpi.co2_per_ton_kg }}</td>
@@ -171,6 +187,7 @@
                     <td>{{ '%.0f'|format(totals.cargo_tons) }}</td>
                     <td>{{ totals.occupation_avg }}%</td>
                     <td class="text-green">{{ '%.1f'|format(totals.co2_avoided_kg) }} kg</td>
+                    <td class="text-decarb">{{ '%.2f'|format(totals.decarb_t) }} t</td>
                     <td>{{ '%.2f'|format(totals.nox_avoided_kg) }} kg</td>
                     <td>{{ '%.2f'|format(totals.sox_avoided_kg) }} kg</td>
                     <td>{{ totals.co2_per_ton_avg }}</td>
@@ -215,6 +232,7 @@
     .kpi-card-occ { border-left-color:var(--towt-blue); }
     .kpi-card-dist { border-left-color:var(--towt-sky); }
     .kpi-card-eff { border-left-color:#F59E0B; }
+    .kpi-card-decarb { border-left-color:#10B981; }
 
     .kpi-card-icon {
         width:44px; height:44px; border-radius:12px;
@@ -226,6 +244,7 @@
     .kpi-card-occ .kpi-card-icon { background:rgba(9,85,97,0.1); color:var(--towt-blue); }
     .kpi-card-dist .kpi-card-icon { background:rgba(158,198,210,0.2); color:var(--towt-sky-dark); }
     .kpi-card-eff .kpi-card-icon { background:rgba(245,158,11,0.12); color:#F59E0B; }
+    .kpi-card-decarb .kpi-card-icon { background:rgba(16,185,129,0.12); color:#10B981; }
 
     .kpi-card-body { flex:1; }
     .kpi-card-value { display:block; font-size:28px; font-weight:700; color:var(--towt-gray); line-height:1; }
@@ -240,6 +259,7 @@
 
     .port-badge { display:inline-block; background:var(--towt-light); padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; color:var(--towt-blue); font-family:monospace; }
     .text-green { color:#22863A; font-weight:500; }
+    .text-decarb { color:#10B981; font-weight:500; }
 
     .cargo-input {
         width:70px; padding:4px 6px; border:1px solid #e0e0e0;
