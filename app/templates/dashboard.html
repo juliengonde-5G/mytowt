@@ -230,7 +230,7 @@
         <h3><i data-lucide="map-pin" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;"></i> {{ t('dash_tracking_map', lang) }}</h3>
         <span id="map-last-update" style="font-size:11px;color:#999;"></span>
     </div>
-    <div id="fleet-map" style="height:420px;border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:24px;background:#e8f0f6;position:relative;z-index:1;"></div>
+    <div id="fleet-map" style="height:420px;border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:24px;background:#e8f0f6;position:relative;"></div>
 
     <!-- Upcoming -->
     {% if upcoming_legs %}
@@ -315,9 +315,14 @@
 </script>
 
 <style>
+    /* Leaflet reset — override global * {box-sizing:border-box;padding:0} that breaks tile layout */
     #fleet-map{border:1px solid #e2e8f0;overflow:hidden;}
-    #fleet-map .leaflet-tile-pane img{max-width:none!important;max-height:none!important;}
     #fleet-map .leaflet-container{font-family:inherit;}
+    #fleet-map .leaflet-tile-pane,
+    #fleet-map .leaflet-tile-container{padding:0;}
+    .leaflet-container img{max-width:none!important;max-height:none!important;}
+    .leaflet-container *,.leaflet-container *::before,.leaflet-container *::after{box-sizing:content-box;}
+    .leaflet-control-container *,.leaflet-control-container *::before,.leaflet-control-container *::after{box-sizing:border-box;}
     .vessel-popup{font-family:'Poppins',sans-serif;min-width:180px;}
     .vessel-popup h4{margin:0 0 6px 0;font-size:14px;color:var(--towt-blue,#095561);}
     .vessel-popup .vp-row{display:flex;justify-content:space-between;font-size:12px;color:#555;padding:2px 0;}
@@ -335,15 +340,20 @@ window.addEventListener('load', function(){
         return;
     }
 
-    const map = L.map('fleet-map',{scrollWheelZoom:true}).setView([46.5,-2],5);
+    const map = L.map('fleet-map',{scrollWheelZoom:true}).setView([20,0],2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-        attribution:'© OpenStreetMap',
+        attribution:'&copy; OpenStreetMap',
         maxZoom:18,
     }).addTo(map);
 
     // Force recalculation after layout is stable
-    setTimeout(function(){ map.invalidateSize(); }, 300);
-    setTimeout(function(){ map.invalidateSize(); }, 800);
+    setTimeout(function(){ map.invalidateSize(); }, 200);
+    setTimeout(function(){ map.invalidateSize(); }, 600);
+    setTimeout(function(){ map.invalidateSize(); }, 1500);
+    // Also react to container resize (sidebar toggle etc.)
+    if(window.ResizeObserver){
+        new ResizeObserver(function(){ map.invalidateSize(); }).observe(mapEl);
+    }
 
     // Custom vessel icon
     function vesselIcon(color){
