@@ -17,6 +17,7 @@ from app.models.vessel import Vessel
 from app.models.packing_list import PackingList, PackingListBatch, PackingListAudit
 from app.i18n import get_lang_from_request
 from app.utils.activity import log_activity
+from app.utils.notifications import notify_cargo_progress
 from app.routers.kpi_router import compute_decarbonation, get_co2_variables
 
 router = APIRouter(prefix="/cargo", tags=["cargo"])
@@ -1342,8 +1343,10 @@ async def client_save_batches(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(PackingList).options(selectinload(PackingList.batches))
-        .where(PackingList.token == token)
+        select(PackingList).options(
+            selectinload(PackingList.batches),
+            selectinload(PackingList.order),
+        ).where(PackingList.token == token)
     )
     pl = result.scalar_one_or_none()
     if not pl or pl.is_locked:
@@ -1358,10 +1361,24 @@ async def client_save_batches(
             await audit_batch_changes(db, pl.id, batch, form_data, "Client")
             apply_batch_fields(batch, form_data)
 
+    was_draft = pl.status == "draft"
     if pl.status == "draft":
         pl.status = "submitted"
 
     await db.flush()
+
+    # Notify operations when client submits packing list
+    if was_draft and pl.status == "submitted":
+        order = pl.order
+        if order and order.leg_id:
+            order_ref = order.reference if order else "?"
+            completion = pl.completion_pct
+            await notify_cargo_progress(
+                db, order.leg_id, order_ref,
+                "Soumission client", completion,
+            )
+            await db.flush()
+
     return RedirectResponse(url=f"/p/{token}?saved=1", status_code=303)
 
 

@@ -161,6 +161,44 @@
         </div>
     </div>
 
+    <!-- ═══ PERFORMANCE METRICS (when ATA available) ═══ -->
+    {% if perf %}
+    <div class="section-block perf-section">
+        <h3 class="section-title"><i data-lucide="gauge" style="width:16px;height:16px;"></i> Performance navigation</h3>
+        <div class="perf-grid">
+            <div class="perf-card">
+                <div class="perf-label">Durée estimée</div>
+                <div class="perf-value">{{ perf.estimated_days }} j <span class="perf-sub">({{ perf.estimated_hours }} h)</span></div>
+            </div>
+            <div class="perf-card">
+                <div class="perf-label">Durée réelle</div>
+                <div class="perf-value">{{ perf.actual_days }} j <span class="perf-sub">({{ perf.actual_hours }} h)</span></div>
+            </div>
+            <div class="perf-card {% if perf.delta_hours > 0 %}perf-negative{% elif perf.delta_hours < 0 %}perf-positive{% endif %}">
+                <div class="perf-label">Écart</div>
+                <div class="perf-value">
+                    {% if perf.delta_hours > 0 %}+{% endif %}{{ perf.delta_hours }} h
+                    <span class="perf-sub">({% if perf.delta_pct > 0 %}+{% endif %}{{ perf.delta_pct }}%)</span>
+                </div>
+            </div>
+            {% if perf.opex_forecast is defined %}
+            <div class="perf-card">
+                <div class="perf-label">OPEX prév.</div>
+                <div class="perf-value">{{ '{:,.0f}'.format(perf.opex_forecast).replace(',', ' ') }} €</div>
+            </div>
+            <div class="perf-card">
+                <div class="perf-label">OPEX réel</div>
+                <div class="perf-value">{{ '{:,.0f}'.format(perf.opex_actual).replace(',', ' ') }} €</div>
+            </div>
+            <div class="perf-card {% if perf.opex_delta > 0 %}perf-negative{% elif perf.opex_delta < 0 %}perf-positive{% endif %}">
+                <div class="perf-label">Écart OPEX</div>
+                <div class="perf-value">{% if perf.opex_delta > 0 %}+{% endif %}{{ '{:,.0f}'.format(perf.opex_delta).replace(',', ' ') }} €</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- ═══ FLOW 2: PARALLEL ACTIVITIES ═══ -->
     {% if operations or docker_shifts %}
     {% set crew_actions = ['embarquement', 'debarquement', 'medicale'] %}
@@ -434,6 +472,15 @@
     .hold-badge.arriere{background:rgba(135,189,43,0.12);color:#5a8010}
     .rate-badge{padding:2px 8px;border-radius:100px;font-size:11px;font-weight:600}
     .rate-badge.positive{background:#ECFDF5;color:#059669}.rate-badge.negative{background:#FEF2F2;color:#DC2626}
+    /* Performance metrics */
+    .perf-section{background:linear-gradient(135deg,#f0f9ff 0%,#f8fafc 100%);border:1px solid #e0e7ef;}
+    .perf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px;}
+    .perf-card{background:white;border-radius:8px;padding:14px 16px;border:1px solid #e8e8e8;}
+    .perf-card.perf-positive{border-left:4px solid #16a34a;background:rgba(22,163,106,0.03);}
+    .perf-card.perf-negative{border-left:4px solid #DC2626;background:rgba(220,38,38,0.03);}
+    .perf-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px;}
+    .perf-value{font-size:18px;font-weight:700;color:#333;}
+    .perf-sub{font-size:12px;font-weight:400;color:#888;}
 </style>
 
 <script>

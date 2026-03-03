@@ -14,7 +14,9 @@ from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.operation import EscaleOperation, DockerShift
 from app.models.crew import CrewMember, CrewAssignment
+from app.models.finance import LegFinance, OpexParameter
 from app.utils.activity import log_activity
+from app.utils.notifications import notify_arrival, notify_departure
 
 router = APIRouter(prefix="/escale", tags=["escale"])
 
@@ -108,6 +110,50 @@ def is_leg_terminated(leg):
 
 def is_leg_locked(leg):
     return leg.status == "completed"
+
+
+async def update_finance_actual_duration(db: AsyncSession, leg: Leg):
+    """Recalculate finance OPEX actual based on real navigation duration.
+
+    When ATA is set, we can compute the actual sea days:
+    - If both ETD and ATA available: actual_hours = ATA - ETD
+    - Recalculate sea_cost_actual = opex_daily × actual_sea_days
+    """
+    if not leg.ata:
+        return
+    # Get departure time: ATD of previous leg, or ETD of this leg
+    departure_time = leg.etd
+    if departure_time and leg.ata:
+        actual_hours = (leg.ata - departure_time).total_seconds() / 3600
+        actual_sea_days = actual_hours / 24 if actual_hours > 0 else 0
+    else:
+        actual_sea_days = 0
+
+    # Estimated sea_days for comparison
+    estimated_hours = leg.estimated_duration_hours or 0
+    estimated_sea_days = estimated_hours / 24
+
+    # Get OPEX daily rate
+    opex_result = await db.execute(
+        select(OpexParameter).where(OpexParameter.parameter_name == "opex_daily_rate")
+    )
+    opex_param = opex_result.scalar_one_or_none()
+    opex_daily = opex_param.parameter_value if opex_param else 11600
+
+    # Get or create LegFinance
+    fin_result = await db.execute(select(LegFinance).where(LegFinance.leg_id == leg.id))
+    fin = fin_result.scalar_one_or_none()
+    if not fin:
+        fin = LegFinance(leg_id=leg.id)
+        db.add(fin)
+
+    # Update actual OPEX based on real navigation duration
+    fin.sea_cost_actual = round(opex_daily * actual_sea_days, 0)
+    # Ensure forecast is also computed if empty
+    if not fin.sea_cost_forecast:
+        fin.sea_cost_forecast = round(opex_daily * estimated_sea_days, 0)
+    fin.compute()
+    await db.flush()
 
 
 async def propagate_from_leg(db: AsyncSession, leg: Leg):
@@ -232,6 +278,29 @@ async def escale_home(
             leg_terminated = is_leg_terminated(selected_leg)
             leg_locked = is_leg_locked(selected_leg)
 
+    # Compute performance metrics when ATA is available
+    perf = None
+    if selected_leg and selected_leg.ata and selected_leg.etd:
+        actual_hours = (selected_leg.ata - selected_leg.etd).total_seconds() / 3600
+        estimated_hours = selected_leg.estimated_duration_hours or 0
+        delta_hours = actual_hours - estimated_hours if estimated_hours else 0
+        perf = {
+            "actual_hours": round(actual_hours, 1),
+            "actual_days": round(actual_hours / 24, 1),
+            "estimated_hours": round(estimated_hours, 1),
+            "estimated_days": round(estimated_hours / 24, 1),
+            "delta_hours": round(delta_hours, 1),
+            "delta_days": round(delta_hours / 24, 1),
+            "delta_pct": round((delta_hours / estimated_hours * 100), 1) if estimated_hours else 0,
+        }
+        # Load finance for OPEX comparison
+        fin_result = await db.execute(select(LegFinance).where(LegFinance.leg_id == selected_leg.id))
+        fin = fin_result.scalar_one_or_none()
+        if fin:
+            perf["opex_forecast"] = fin.sea_cost_forecast or 0
+            perf["opex_actual"] = fin.sea_cost_actual or 0
+            perf["opex_delta"] = round((fin.sea_cost_actual or 0) - (fin.sea_cost_forecast or 0), 0)
+
     return templates.TemplateResponse("escale/index.html", {
         "request": request, "user": user,
         "vessels": vessels, "selected_vessel": selected_vessel, "vessel_obj": vessel_obj,
@@ -243,6 +312,7 @@ async def escale_home(
         "quay_start": quay_start_str, "quay_end": quay_end_str,
         "leg_terminated": leg_terminated, "leg_locked": leg_locked,
         "operation_types": OPERATION_TYPES, "actions_by_type": ACTIONS_BY_TYPE,
+        "perf": perf,
         "active_module": "escale",
     })
 
@@ -265,15 +335,29 @@ async def update_port_status(
         raise HTTPException(404)
 
     now = parse_datetime(status_time) or datetime.now(timezone.utc)
+    vessel_name = leg.vessel.name if leg.vessel else "Navire"
+    port_name = leg.arrival_port.name if leg.arrival_port else leg.arrival_port_locode
 
     if new_status == "a_quai":
         leg.ata = now
+        leg.status = "in_progress"
         await propagate_from_leg(db, leg)
+        # Recalculate finance with actual navigation duration
+        await update_finance_actual_duration(db, leg)
+        # Notify company: arrival at dock
+        await notify_arrival(db, leg, vessel_name, port_name)
+
     elif new_status == "pilote_depart":
         if not leg.ata:
             leg.ata = now - timedelta(hours=1)
         leg.atd = now
+        leg.status = "completed"
         await propagate_from_leg(db, leg)
+        # Recalculate finance with final actual data
+        await update_finance_actual_duration(db, leg)
+        # Notify company: departure
+        dep_port_name = leg.arrival_port.name if leg.arrival_port else leg.arrival_port_locode
+        await notify_departure(db, leg, vessel_name, dep_port_name)
 
     await db.flush()
     await log_activity(db, user, "escale", "port_status", "Leg", lid, f"Statut port → {new_status}")

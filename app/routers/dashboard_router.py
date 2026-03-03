@@ -16,6 +16,7 @@ from app.models.order import Order
 from app.models.finance import LegFinance
 from app.models.operation import EscaleOperation
 from app.models.packing_list import PackingList
+from app.models.onboard import OnboardNotification
 from app.utils.activity import log_activity
 
 router = APIRouter(tags=["dashboard"])
@@ -261,6 +262,16 @@ async def dashboard(
     )
     cargo_notifications = notif_result.scalars().all()
 
+    # Company-wide notifications (most recent unread)
+    notif_company_result = await db.execute(
+        select(OnboardNotification)
+        .options(selectinload(OnboardNotification.leg))
+        .where(OnboardNotification.is_read == False)
+        .order_by(OnboardNotification.created_at.desc())
+        .limit(20)
+    )
+    company_notifications = notif_company_result.scalars().all()
+
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "user": user,
         "vessel_statuses": vessel_statuses,
@@ -269,6 +280,7 @@ async def dashboard(
         "co2_avoided_kg": co2_avoided_total, "avg_fill_rate": avg_fill_rate,
         "upcoming_legs": upcoming_legs, "alerts": alerts,
         "cargo_notifications": cargo_notifications,
+        "company_notifications": company_notifications,
         "current_year": current_year, "active_module": "dashboard",
     })
 
@@ -286,6 +298,40 @@ async def dismiss_cargo_notification(
         pl.status = "reviewed"
     await db.flush()
     await log_activity(db, user, "dashboard", "dismiss", "PackingList", pl_id, "Notification cargo acquittée")
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/"})
+    return RedirectResponse(url="/", status_code=303)
+
+
+# ─── DISMISS COMPANY NOTIFICATION ───────────────────────────
+@router.post("/notifications/{nid}/dismiss", response_class=HTMLResponse)
+async def dismiss_company_notification(
+    nid: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(OnboardNotification).where(OnboardNotification.id == nid))
+    notif = result.scalar_one_or_none()
+    if notif:
+        notif.is_read = True
+    await db.flush()
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/"})
+    return RedirectResponse(url="/", status_code=303)
+
+
+@router.post("/notifications/dismiss-all", response_class=HTMLResponse)
+async def dismiss_all_notifications(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(OnboardNotification).where(OnboardNotification.is_read == False)
+    )
+    for notif in result.scalars().all():
+        notif.is_read = True
+    await db.flush()
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/"})
     return RedirectResponse(url="/", status_code=303)

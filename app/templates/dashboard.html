@@ -40,6 +40,44 @@
     </div>
     {% endif %}
 
+    <!-- COMPANY NOTIFICATIONS -->
+    {% if company_notifications %}
+    <div class="company-notif-section" style="margin-bottom:20px;">
+        <div class="section-header" style="display:flex;align-items:center;gap:8px;">
+            <h3><i data-lucide="bell-ring" style="width:18px;height:18px;"></i> Notifications ({{ company_notifications|length }})</h3>
+            <form method="POST" action="/notifications/dismiss-all" style="margin-left:auto;">
+                <button type="submit" class="btn btn-sm btn-secondary" style="font-size:11px;">Tout marquer lu</button>
+            </form>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
+            {% for notif in company_notifications %}
+            <div class="company-notif-card {{ notif.category }}">
+                <div class="notif-left">
+                    <span class="notif-category-icon">
+                        {% if notif.category == 'escale' %}⚓{% elif notif.category == 'cargo' %}📦{% else %}🔔{% endif %}
+                    </span>
+                    <div>
+                        <strong>{{ notif.title }}</strong>
+                        {% if notif.detail %}
+                        <div style="font-size:11px;color:#666;margin-top:2px;white-space:pre-line;">{{ notif.detail[:150] }}{% if notif.detail|length > 150 %}…{% endif %}</div>
+                        {% endif %}
+                        <div style="font-size:10px;color:#aaa;margin-top:2px;">{{ notif.created_at.strftime('%d/%m/%Y %H:%M') if notif.created_at else '' }}</div>
+                    </div>
+                </div>
+                <div class="notif-actions">
+                    {% if notif.leg_id %}
+                    <a href="/escale?leg_id={{ notif.leg_id }}" class="btn btn-sm btn-secondary"><i data-lucide="eye" style="width:12px;height:12px;"></i></a>
+                    {% endif %}
+                    <form method="POST" action="/notifications/{{ notif.id }}/dismiss" style="display:inline;">
+                        <button type="submit" class="btn btn-sm btn-primary"><i data-lucide="check" style="width:12px;height:12px;"></i></button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- ALERTS -->
     {% if alerts %}
     <div class="alerts-section">
@@ -212,6 +250,11 @@
     .notif-left{display:flex;align-items:center;gap:10px}
     .notif-icon{font-size:20px}
     .notif-actions{display:flex;gap:6px}
+    .company-notif-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-left:4px solid var(--towt-blue);}
+    .company-notif-card.escale{border-left-color:#16a34a;}
+    .company-notif-card.cargo{border-left-color:#F59E0B;}
+    .company-notif-card.crew{border-left-color:#60A5FA;}
+    .notif-category-icon{font-size:20px;flex-shrink:0;}
 </style>
 
 <script>
