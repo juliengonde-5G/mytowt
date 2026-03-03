@@ -24,7 +24,7 @@ __all__ = [
     "CrewMember", "CrewAssignment",
     "PackingList", "PackingListBatch", "PackingListAudit",
     "SofEvent", "OnboardNotification", "CargoDocument",
-    "Passenger", "PassengerBooking", "PassengerPayment", "PassengerDocument", "CabinPriceGrid",
+    "Passenger", "PassengerBooking", "PassengerPayment", "PassengerDocument", "CabinPriceGrid", "PreBoardingForm",
     "ActivityLog",
     "MrvEvent", "MrvParameter",
     "Co2Variable",

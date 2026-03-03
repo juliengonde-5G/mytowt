@@ -219,6 +219,10 @@ async def dashboard(
 
     # CO2 avoided + fill rate
     from app.models.kpi import LegKPI
+    from app.routers.kpi_router import get_emission_params
+    emission_params = await get_emission_params(db)
+    co2_conv_factor = emission_params.get("conventional_co2_per_ton_nm", 0.0152)
+    co2_sail_factor = emission_params.get("sail_co2_per_ton_nm", 0.00198)
     kpi_legs_result = await db.execute(
         select(Leg).options(selectinload(Leg.vessel), selectinload(Leg.kpi))
         .where(Leg.year == current_year, Leg.status != "cancelled")
@@ -230,8 +234,8 @@ async def dashboard(
         cargo = kl.kpi.cargo_tons if kl.kpi else 0
         distance = kl.computed_distance or 0
         if cargo and distance:
-            co2_conv = cargo * distance * 0.0152
-            co2_sail = cargo * distance * 0.00198
+            co2_conv = cargo * distance * co2_conv_factor
+            co2_sail = cargo * distance * co2_sail_factor
             co2_avoided_total += (co2_conv - co2_sail)
         if kl.vessel and kl.vessel.dwt and cargo:
             fill_rates.append(min(100, (cargo / kl.vessel.dwt) * 100))

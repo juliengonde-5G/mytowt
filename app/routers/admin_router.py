@@ -652,7 +652,7 @@ async def import_ports(
                         port = Port(
                             locode=locode,
                             name=name,
-                            country=country,
+                            country_code=country,
                             latitude=lat,
                             longitude=lon,
                         )
