@@ -54,8 +54,10 @@
             <span style="color:#888;">{{ selected_leg.vessel.name }} — {{ selected_leg.departure_port.country_code|flag }} {{ selected_leg.departure_port.name }} → {{ selected_leg.arrival_port.country_code|flag }} {{ selected_leg.arrival_port.name }}</span>
         </div>
         <div class="vessel-status-badge {{ vessel_status }}">
-            {% if vessel_status == 'a_quai' %}
+            {% if vessel_status == 'a_quai' and selected_leg.ata %}
             <i data-lucide="anchor" style="width:14px;height:14px;"></i> À quai — {{ selected_leg.arrival_port.country_code|flag }} {{ selected_leg.arrival_port.name }}
+            {% elif vessel_status == 'a_quai' %}
+            <i data-lucide="anchor" style="width:14px;height:14px;"></i> À quai — {{ selected_leg.departure_port.country_code|flag }} {{ selected_leg.departure_port.name }}
             {% else %}
             <i data-lucide="waves" style="width:14px;height:14px;"></i> En mer → {{ selected_leg.arrival_port.country_code|flag }} {{ selected_leg.arrival_port.name }}
             {% endif %}
@@ -152,11 +154,13 @@
             </div>
             <div class="flow-connector {% if atd_time %}done{% endif %}"></div>
 
-            <div class="flow-step {% if atd_time %}done{% endif %}">
+            {% set next_etd = next_leg.etd if next_leg and next_leg.etd else None %}
+            {% set next_atd = next_leg.atd if next_leg and next_leg.atd else None %}
+            <div class="flow-step {% if next_atd %}done{% endif %}">
                 <div class="flow-icon">🏁</div>
                 <div class="flow-label">ETD</div>
-                <div class="flow-time">{{ selected_leg.etd.strftime('%d/%m %H:%M') if selected_leg.etd else 'TBC' }}</div>
-                <div class="flow-sub">Appareillage</div>
+                <div class="flow-time">{% if next_atd %}{{ next_atd.strftime('%d/%m %H:%M') }}{% elif next_etd %}{{ next_etd.strftime('%d/%m %H:%M') }}{% else %}TBC{% endif %}</div>
+                <div class="flow-sub">Appareillage{% if next_leg %} → {{ next_leg.arrival_port.country_code|flag }} {{ next_leg.arrival_port.locode }}{% endif %}</div>
             </div>
         </div>
     </div>

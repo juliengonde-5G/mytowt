@@ -239,6 +239,7 @@ async def escale_home(
         legs = legs_result.scalars().all()
 
     selected_leg = None
+    next_leg = None
     operations = []
     docker_shifts = []
     vessel_status = "en_mer"
@@ -268,8 +269,41 @@ async def escale_home(
                 .order_by(DockerShift.planned_start.asc().nulls_last())
             )
             docker_shifts = ds_result.scalars().all()
-            port_status = compute_port_status(selected_leg)
-            vessel_status = "a_quai" if port_status == "a_quai" else "en_mer"
+
+            # Query next leg (departing from this leg's arrival port)
+            if vessel_obj:
+                next_result = await db.execute(
+                    select(Leg).options(
+                        selectinload(Leg.departure_port),
+                        selectinload(Leg.arrival_port),
+                    )
+                    .where(
+                        Leg.vessel_id == vessel_obj.id,
+                        Leg.sequence > selected_leg.sequence,
+                    )
+                    .order_by(Leg.sequence)
+                    .limit(1)
+                )
+                next_leg = next_result.scalar_one_or_none()
+
+            # ── Determine vessel status ──
+            # Compare current time with leg dates
+            now_naive = datetime.now()
+            departure_time = selected_leg.atd or selected_leg.etd
+
+            if selected_leg.ata:
+                # Vessel has arrived at destination → at berth
+                vessel_status = "a_quai"
+                port_status = compute_port_status(selected_leg)
+            elif selected_leg.atd or (departure_time and now_naive >= departure_time):
+                # Vessel has departed (or past ETD) → at sea
+                vessel_status = "en_mer"
+                port_status = "pilote_arrivee"
+            else:
+                # Vessel hasn't departed yet → still at departure port
+                vessel_status = "a_quai"
+                port_status = "pilote_arrivee"
+
             qs, qe = get_quay_bounds(selected_leg)
             if qs:
                 quay_start_str = qs.strftime('%Y-%m-%dT%H:%M')
@@ -305,7 +339,7 @@ async def escale_home(
         "request": request, "user": user,
         "vessels": vessels, "selected_vessel": selected_vessel, "vessel_obj": vessel_obj,
         "current_year": current_year, "years": years,
-        "legs": legs, "selected_leg": selected_leg, "leg_id": leg_id,
+        "legs": legs, "selected_leg": selected_leg, "next_leg": next_leg, "leg_id": leg_id,
         "operations": operations, "docker_shifts": docker_shifts,
         "vessel_status": vessel_status, "port_status": port_status,
         "port_statuses": PORT_STATUSES,
