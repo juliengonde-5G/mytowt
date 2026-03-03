@@ -288,15 +288,15 @@ async def escale_home(
                 next_leg = next_result.scalar_one_or_none()
 
             # ── Determine vessel status ──
-            # Compare current time with leg dates
-            now_naive = datetime.now()
+            # Compare current time with leg dates (must be tz-aware for comparison)
+            now_utc = datetime.now(timezone.utc)
             departure_time = selected_leg.atd or selected_leg.etd
 
             if selected_leg.ata:
                 # Vessel has arrived at destination → at berth
                 vessel_status = "a_quai"
                 port_status = compute_port_status(selected_leg)
-            elif selected_leg.atd or (departure_time and now_naive >= departure_time):
+            elif selected_leg.atd or (departure_time and now_utc >= departure_time):
                 # Vessel has departed (or past ETD) → at sea
                 vessel_status = "en_mer"
                 port_status = "pilote_arrivee"
