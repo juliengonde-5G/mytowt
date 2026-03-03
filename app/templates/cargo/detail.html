@@ -40,7 +40,7 @@
             <div class="progress-bar" style="width:120px;"><div class="progress-fill" style="width:{{ pl.completion_pct }}%"></div><span class="progress-text">{{ pl.completion_pct }}%</span></div>
         </div>
         <div class="summary-item"><span class="summary-label">Lien client</span>
-            <input type="text" value="{{ request.url.scheme }}://{{ request.url.netloc }}/p/{{ pl.token }}" class="form-input" style="font-size:10px;padding:4px 6px;width:220px;" readonly onclick="this.select()">
+            <input type="text" value="{{ site_url }}/p/{{ pl.token }}" class="form-input" style="font-size:10px;padding:4px 6px;width:220px;" readonly onclick="this.select()">
         </div>
     </div>
 

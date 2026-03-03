@@ -50,7 +50,10 @@
 
     <!-- VESSELS -->
     <div class="settings-section" id="sec-vessels" style="display:none;">
-        <h3>Navires & configuration</h3>
+        <div class="sec-header">
+            <h3>Navires & configuration</h3>
+            <button class="btn btn-primary btn-sm" onclick="openModal('/admin/vessels/create')"><i data-lucide="plus"></i> Nouveau navire</button>
+        </div>
         <div class="table-container">
             <table class="data-table">
                 <thead><tr><th>Code</th><th>Nom</th><th>Capacité (pal.)</th><th>Vitesse (nds)</th><th>Élongation</th><th style="text-align:right;">Actions</th></tr></thead>

@@ -76,3 +76,7 @@ templates.env.globals["can_view"] = can_view
 templates.env.globals["can_edit"] = can_edit
 templates.env.globals["can_delete"] = can_delete
 templates.env.globals["has_any_access"] = has_any_access
+
+# Register site URL for external links (portals)
+from app.config import get_settings
+templates.env.globals["site_url"] = get_settings().SITE_URL

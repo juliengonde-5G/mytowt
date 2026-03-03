@@ -73,6 +73,11 @@
                         <i data-lucide="file-box"></i><span>{{ t('nav_cargo', lang|default('fr')) }}</span>
                     </a>
                     {% endif %}
+                    {% if has_any_access(user, 'claims') %}
+                    <a href="/claims" class="nav-item {% if active_module == 'claims' %}active{% endif %}">
+                        <i data-lucide="shield-alert"></i><span>Claims</span>
+                    </a>
+                    {% endif %}
                     {% if has_any_access(user, 'mrv') %}
                     <a href="/mrv" class="nav-item {% if active_module == 'mrv' %}active{% endif %}">
                         <i data-lucide="fuel"></i><span>MRV Fuel</span>
@@ -81,6 +86,9 @@
                 </div>
                 <div class="nav-section">
                     <span class="nav-section-label">Administration</span>
+                    <a href="/admin/my-account" class="nav-item {% if active_module == 'my-account' %}active{% endif %}">
+                        <i data-lucide="user-cog"></i><span>Mon compte</span>
+                    </a>
                     {% if user and user.role in ('administrateur', 'admin', 'data_analyst') %}
                     <a href="/admin/settings" class="nav-item {% if active_module == 'settings' %}active{% endif %}">
                         <i data-lucide="settings"></i><span>{{ t('nav_settings', lang|default('fr')) }}</span>

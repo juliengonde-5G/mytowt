@@ -39,6 +39,7 @@ _MATRIX = {
     ("administrateur", "cargo"):       {"C", "M", "S"},
     ("administrateur", "mrv"):         {"C", "M", "S"},
     ("administrateur", "passengers"):  {"C", "M", "S"},
+    ("administrateur", "claims"):      {"C", "M", "S"},
 
     # ─── OPERATION ───────────────────────────────────────
     # Planning, Commercial, Escale, KPI, On board, Passagers, Equipage, Cargo, MRV
@@ -51,6 +52,7 @@ _MATRIX = {
     ("operation", "cargo"):       {"C", "M", "S"},
     ("operation", "mrv"):         {"C", "M"},
     ("operation", "passengers"):  {"C", "M"},
+    ("operation", "claims"):      {"C", "M", "S"},
 
     # ─── ARMEMENT (CREW) ────────────────────────────────
     # Planning, Escale, KPI, Equipage
@@ -72,6 +74,7 @@ _MATRIX = {
     ("technique", "cargo"):       {"C"},
     ("technique", "mrv"):         {"C", "M"},
     ("technique", "passengers"):  {"C"},
+    ("technique", "claims"):      {"C"},
 
     # ─── DATA ANALYST ────────────────────────────────────
     # Planning, Escale, Finance, KPI, MRV + admin data params
@@ -84,6 +87,7 @@ _MATRIX = {
     ("data_analyst", "crew"):        {"C"},
     ("data_analyst", "cargo"):       {"C"},
     ("data_analyst", "mrv"):         {"C", "M"},
+    ("data_analyst", "claims"):      {"C"},
 
     # ─── MARINS ──────────────────────────────────────────
     # Planning, Escale, KPI, Equipage — lecture seule
@@ -124,6 +128,7 @@ _MATRIX = {
     ("manager_maritime", "cargo"):       {"C", "M"},
     ("manager_maritime", "mrv"):         {"C", "M"},
     ("manager_maritime", "passengers"):  {"C", "M"},
+    ("manager_maritime", "claims"):      {"C", "M"},
 }
 
 # Legacy role mapping (old roles → new roles)
@@ -150,7 +155,7 @@ ROLES = [
 # All modules
 MODULES = [
     "planning", "commercial", "escale", "finance",
-    "kpi", "captain", "crew", "cargo", "mrv", "passengers",
+    "kpi", "captain", "crew", "cargo", "claims", "mrv", "passengers",
 ]
 
 # Module display names
@@ -165,6 +170,7 @@ MODULE_NAMES = {
     "cargo": "Cargo Docs",
     "mrv": "MRV Fuel",
     "passengers": "Passagers",
+    "claims": "Claims / Sinistres",
 }
 
 

@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 heures
 
+    # External URL (for portal links shared with clients/passengers)
+    SITE_URL: str = "http://51.178.59.174"
+
     # TOWT Fleet
     FLEET: dict = {
         1: {"name": "Anemos", "code": 1},

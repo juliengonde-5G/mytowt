@@ -283,6 +283,56 @@ async def user_delete(
 
 
 # ─── VESSELS ─────────────────────────────────────────────────
+@router.get("/vessels/create", response_class=HTMLResponse)
+async def vessel_create_form(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    return templates.TemplateResponse("admin/vessel_form.html", {
+        "request": request, "user": user, "vessel": None,
+    })
+
+
+@router.post("/vessels/create", response_class=HTMLResponse)
+async def vessel_create_submit(
+    request: Request,
+    code: int = Form(...),
+    name: str = Form(...),
+    imo_number: str = Form(""),
+    flag: str = Form(""),
+    dwt: str = Form(""),
+    capacity_palettes: str = Form("0"),
+    default_speed: str = Form("8"),
+    default_elongation: str = Form("1.25"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # Check unique code
+    existing = await db.execute(select(Vessel).where(Vessel.code == code))
+    if existing.scalar_one_or_none():
+        return templates.TemplateResponse("admin/vessel_form.html", {
+            "request": request, "user": user, "vessel": None,
+            "error": f"Le code navire {code} existe déjà.",
+        })
+    vessel = Vessel(
+        code=code, name=name.strip(),
+        imo_number=imo_number.strip() or None,
+        flag=flag.strip() or None,
+        dwt=pf(dwt, 0) if dwt else None,
+        capacity_palettes=int(pf(capacity_palettes, 0)),
+        default_speed=pf(default_speed, 8),
+        default_elongation=pf(default_elongation, 1.25),
+    )
+    db.add(vessel)
+    await db.flush()
+    await log_activity(db, user=user, action="create", module="admin",
+                       entity_type="vessel", entity_id=vessel.id,
+                       entity_label=vessel.name, ip_address=get_client_ip(request))
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings#vessels"})
+    return RedirectResponse(url="/admin/settings#vessels", status_code=303)
+
+
 @router.get("/vessels/{vid}/edit", response_class=HTMLResponse)
 async def vessel_edit_form(
     vid: int, request: Request,
