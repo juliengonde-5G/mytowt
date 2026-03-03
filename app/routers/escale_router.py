@@ -316,8 +316,13 @@ async def escale_home(
     # Compute performance metrics when ATA is available
     perf = None
     if selected_leg and selected_leg.ata and selected_leg.etd:
-        actual_hours = (selected_leg.ata - selected_leg.etd).total_seconds() / 3600
+        # Actual duration: ATD → ATA (fallback to ETD if no ATD)
+        departure_actual = selected_leg.atd or selected_leg.etd
+        actual_hours = (selected_leg.ata - departure_actual).total_seconds() / 3600
+        # Estimated duration: from model, or ETD → ETA
         estimated_hours = selected_leg.estimated_duration_hours or 0
+        if not estimated_hours and selected_leg.eta:
+            estimated_hours = (selected_leg.eta - selected_leg.etd).total_seconds() / 3600
         delta_hours = actual_hours - estimated_hours if estimated_hours else 0
         perf = {
             "actual_hours": round(actual_hours, 1),
