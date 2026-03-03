@@ -44,7 +44,8 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True,
+    allow_origins=["http://51.178.59.174", "http://localhost", "http://127.0.0.1"],
+    allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
 
@@ -95,7 +96,8 @@ app.include_router(auth_router)
 app.include_router(dashboard_router)
 app.include_router(planning_router, dependencies=[Depends(require_permission("planning", "C"))])
 app.include_router(api_ports_router)
-app.include_router(admin_router)
+from app.routers.admin_router import require_admin
+app.include_router(admin_router, dependencies=[Depends(require_admin)])
 app.include_router(kpi_router, dependencies=[Depends(require_permission("kpi", "C"))])
 app.include_router(commercial_router, dependencies=[Depends(require_permission("commercial", "C"))])
 app.include_router(escale_router, dependencies=[Depends(require_permission("escale", "C"))])

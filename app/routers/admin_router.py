@@ -12,6 +12,16 @@ import io
 from app.database import get_db
 from app.auth import get_current_user
 from app.models.user import User
+
+ADMIN_ROLES = {"administrateur", "admin", "data_analyst"}
+
+
+async def require_admin(user: User = Depends(get_current_user)):
+    """Require admin or data_analyst role for settings access."""
+    if user.role not in ADMIN_ROLES:
+        raise HTTPException(403, detail="Admin access required")
+    return user
+
 from app.models.vessel import Vessel
 from app.models.port import Port
 from app.models.leg import Leg
