@@ -174,10 +174,15 @@ async def dashboard(
                 location = leg.arrival_port.name if leg.arrival_port else leg.arrival_port_locode
                 current_leg = leg
                 break
-            elif leg.eta and leg.eta > now and not leg.ata:
+            elif leg.atd and not leg.ata:
                 status = "en_mer"
                 current_leg = leg
-                location = f"→ {leg.arrival_port.name}"
+                location = f"→ {leg.arrival_port.name}" if leg.arrival_port else "→ ?"
+                break
+            elif not leg.atd and not leg.ata and leg.etd and leg.etd > now:
+                status = "a_quai"
+                location = leg.departure_port.name if leg.departure_port else leg.departure_port_locode
+                current_leg = leg
                 break
 
         if status == "unknown" and legs:

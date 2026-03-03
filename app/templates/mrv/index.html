@@ -27,12 +27,7 @@
 
 {% block content %}
 <style>
-    .vessel-pills{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;}
-    .vessel-pill{padding:6px 16px;border-radius:20px;font-size:0.85rem;font-weight:500;
-        text-decoration:none;color:#888;background:white;
-        border:1px solid #e0e0e0;transition:all .2s;}
-    .vessel-pill:hover{border-color:var(--towt-blue);}
-    .vessel-pill.active{background:var(--towt-blue);color:#fff;border-color:var(--towt-blue);}
+    /* Vessel tabs — same style as planning page */
 
     .mrv-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px;}
     .mrv-card{background:white;border-radius:10px;padding:16px;border:1px solid #e0e0e0;box-shadow:var(--shadow);}
@@ -62,12 +57,12 @@
     .params-grid input{width:100%;padding:6px 8px;border:1px solid #e0e0e0;border-radius:6px;font-size:0.85rem;font-family:'Poppins',sans-serif;}
 </style>
 
-<!-- Vessel pills -->
-<div class="vessel-pills">
+<!-- Vessel tabs (same as planning) -->
+<div class="vessel-tabs">
     {% for v in vessels %}
     <a href="/mrv?vessel={{ v.code }}&year={{ current_year }}"
-       class="vessel-pill {% if v.code == selected_vessel %}active{% endif %}">
-        {{ v.name }}
+       class="vessel-tab {% if v.code == selected_vessel %}active{% endif %}">
+        <i data-lucide="ship"></i> {{ v.name }}
     </a>
     {% endfor %}
 </div>
