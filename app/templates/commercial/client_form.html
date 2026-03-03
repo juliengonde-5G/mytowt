@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{% if edit_client %}Modifier{% else %}Nouveau{% endif %} Client{% endblock %}
+{% block page_title %}{% if edit_client %}Modifier {{ edit_client.name }}{% else %}Nouveau client{% endif %}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/commercial/pricing/clients" class="btn btn-secondary btn-sm"><i data-lucide="arrow-left"></i> Retour</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:700px;">
+    <form method="POST" action="{% if edit_client %}/commercial/pricing/clients/{{ edit_client.id }}/edit{% else %}/commercial/pricing/clients/create{% endif %}">
+        <!-- Type & Nom -->
+        <div class="form-row" style="display:grid;grid-template-columns:200px 1fr;gap:16px;margin-bottom:16px;">
+            <div class="form-group">
+                <label class="form-label">Type de client *</label>
+                <select name="client_type" class="form-select" required>
+                    <option value="freight_forwarder" {% if edit_client and edit_client.client_type == 'freight_forwarder' %}selected{% endif %}>🚛 Freight Forwarder</option>
+                    <option value="shipper" {% if edit_client and edit_client.client_type == 'shipper' %}selected{% endif %}>📦 Chargeur</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Nom de l'entreprise *</label>
+                <input type="text" name="name" class="form-input" required value="{{ edit_client.name if edit_client else '' }}" placeholder="Ex: CMA CGM Logistics">
+            </div>
+        </div>
+
+        <!-- Contact -->
+        <div style="background:#f8fafc;border-radius:8px;padding:16px;margin-bottom:16px;">
+            <h4 style="margin:0 0 12px;color:var(--towt-blue);font-size:14px;"><i data-lucide="user" style="width:14px;height:14px;vertical-align:middle;"></i> Contact</h4>
+            <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+                <div class="form-group">
+                    <label class="form-label">Nom du contact</label>
+                    <input type="text" name="contact_name" class="form-input" value="{{ edit_client.contact_name if edit_client and edit_client.contact_name else '' }}" placeholder="Jean Dupont">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="contact_email" class="form-input" value="{{ edit_client.contact_email if edit_client and edit_client.contact_email else '' }}" placeholder="contact@example.com">
+                </div>
+            </div>
+            <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-group">
+                    <label class="form-label">Téléphone</label>
+                    <input type="text" name="contact_phone" class="form-input" value="{{ edit_client.contact_phone if edit_client and edit_client.contact_phone else '' }}" placeholder="+33 6 12 34 56 78">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Pays</label>
+                    <input type="text" name="country" class="form-input" value="{{ edit_client.country if edit_client and edit_client.country else '' }}" placeholder="France">
+                </div>
+            </div>
+        </div>
+
+        <!-- Address & Notes -->
+        <div class="form-group" style="margin-bottom:12px;">
+            <label class="form-label">Adresse</label>
+            <textarea name="address" class="form-input" rows="2" placeholder="Adresse postale...">{{ edit_client.address if edit_client and edit_client.address else '' }}</textarea>
+        </div>
+        <div class="form-group" style="margin-bottom:20px;">
+            <label class="form-label">Notes</label>
+            <textarea name="notes" class="form-input" rows="2" placeholder="Notes internes...">{{ edit_client.notes if edit_client and edit_client.notes else '' }}</textarea>
+        </div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:12px;justify-content:flex-end;">
+            <a href="/commercial/pricing/clients" class="btn btn-secondary">Annuler</a>
+            <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> {% if edit_client %}Enregistrer{% else %}Créer le client{% endif %}</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

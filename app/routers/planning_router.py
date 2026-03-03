@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.utils.activity import log_activity, get_client_ip
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional
@@ -16,7 +17,6 @@ from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg, LegStatus
 from app.models.port import Port
-from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/planning", tags=["planning"])
 
@@ -420,7 +420,12 @@ async def leg_create_submit(
 
     db.add(leg)
     await db.flush()
-    await log_activity(db, user, "planning", "create", "Leg", leg.id, f"Création leg {leg.leg_code}")
+
+    await log_activity(db, user=user, action="create", module="planning",
+                       entity_type="leg", entity_id=leg.id,
+                       entity_label=leg.leg_code,
+                       detail=f"{leg.departure_port_locode} → {leg.arrival_port_locode}",
+                       ip_address=get_client_ip(request))
 
     # Resequence all legs
     await resequence_and_recalc(db, _vessel_id, _year)
@@ -547,7 +552,6 @@ async def leg_edit_submit(
         leg.eta = compute_eta(leg.etd, leg.distance_nm, _speed, _elongation)
 
     await db.flush()
-    await log_activity(db, user, "planning", "update", "Leg", leg_id, f"Modification leg {leg.leg_code}")
 
     # Resequence and recalculate chain
     await resequence_and_recalc(db, _vessel_id, _year)
@@ -577,9 +581,12 @@ async def leg_delete(
     year = leg.year
     leg_code = leg.leg_code
 
+    await log_activity(db, user=user, action="delete", module="planning",
+                       entity_type="leg", entity_id=leg_id, entity_label=leg_code,
+                       ip_address=get_client_ip(request))
+
     await db.delete(leg)
     await db.flush()
-    await log_activity(db, user, "planning", "delete", "Leg", leg_id, f"Suppression leg {leg_code}")
     await resequence_and_recalc(db, vessel_id, year)
 
     if request.headers.get("HX-Request"):
@@ -791,25 +798,21 @@ async def pdf_commercial(
             legs_by_vessel[vname] = []
         legs_by_vessel[vname].append(leg)
 
-    # Group by route (dep → arr), sorted by date within each route
+    # Group by route (dep → arr)
     legs_by_route = {}
     for leg in legs:
         route = f"{leg.departure_port.name} → {leg.arrival_port.name}"
         if route not in legs_by_route:
             legs_by_route[route] = []
         legs_by_route[route].append(leg)
-    for route in legs_by_route:
-        legs_by_route[route].sort(key=lambda l: l.etd or l.eta or datetime.max)
 
-    # Group by destination port, sorted by date
+    # Group by destination port
     legs_by_dest = {}
     for leg in legs:
         dest = leg.arrival_port.name
         if dest not in legs_by_dest:
             legs_by_dest[dest] = []
         legs_by_dest[dest].append(leg)
-    for dest in legs_by_dest:
-        legs_by_dest[dest].sort(key=lambda l: l.etd or l.eta or datetime.max)
 
     # All unique ports for the selectors
     all_destinations = sorted(set(

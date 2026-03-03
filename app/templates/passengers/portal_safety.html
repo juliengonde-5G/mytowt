@@ -1,0 +1,86 @@
+{% extends "passengers/portal_base.html" %}
+{% block portal_title %}{% if lang == 'en' %}Safety on Board{% else %}Sécurité à bord{% endif %}{% endblock %}
+
+{% block portal_content %}
+<h1>🛟 {% if lang == 'en' %}Safety on Board{% else %}Sécurité à bord{% endif %}</h1>
+
+<div class="card content-section">
+{% if lang == 'en' %}
+<h2>Safety equipment</h2>
+<p>{{ vessel.name if vessel else 'The vessel' }} is fully equipped with all mandatory safety gear in accordance with international maritime regulations (SOLAS):</p>
+<ul>
+    <li>Life jackets for every person on board</li>
+    <li>Life raft(s) with capacity for all crew and passengers</li>
+    <li>EPIRB (Emergency Position-Indicating Radio Beacon)</li>
+    <li>Fire extinguishers and fire blankets</li>
+    <li>First aid kit and medical supplies</li>
+    <li>MOB (Man Overboard) equipment including lifebuoys and strobe lights</li>
+    <li>VHF radio and satellite communication for distress calls</li>
+</ul>
+
+<h2>Safety briefing</h2>
+<p>Upon boarding, the Captain or a designated officer will conduct a comprehensive safety briefing covering:</p>
+<ul>
+    <li>Location of life jackets and how to put them on</li>
+    <li>Location of the life raft and emergency exits</li>
+    <li>Man overboard procedures</li>
+    <li>Fire prevention and firefighting equipment</li>
+    <li>Restricted areas on the vessel</li>
+    <li>General rules of conduct at sea</li>
+</ul>
+
+<h2>Rules for passengers</h2>
+<ul>
+    <li><strong>Always follow the crew's instructions</strong>, especially during maneuvers and rough weather</li>
+    <li><strong>Wear your life jacket</strong> when instructed or when on deck in rough conditions</li>
+    <li><strong>One hand for yourself, one hand for the ship</strong> — always hold on when moving around</li>
+    <li><strong>Never go on deck alone at night</strong> without informing the watch officer</li>
+    <li><strong>Do not throw anything overboard</strong> — respect the ocean</li>
+    <li><strong>No smoking</strong> inside the vessel; smoking on deck only in designated areas</li>
+    <li><strong>Inform the crew immediately</strong> of any injury, illness, or unsafe condition</li>
+</ul>
+
+<h2>Medical</h2>
+<p>A first aid kit is available on board. The crew is trained in basic first aid. In case of a serious medical emergency, the vessel can contact maritime rescue services via satellite.</p>
+<p><strong>Important:</strong> Please declare all medical conditions, allergies, and ongoing treatments in your pre-boarding questionnaire. This information is confidential and essential for your safety.</p>
+{% else %}
+<h2>Équipements de sécurité</h2>
+<p>Le {{ vessel.name if vessel else 'navire' }} est entièrement équipé de tous les équipements de sécurité obligatoires conformément aux réglementations maritimes internationales (SOLAS) :</p>
+<ul>
+    <li>Gilets de sauvetage pour chaque personne à bord</li>
+    <li>Radeau(x) de survie avec capacité pour tout l'équipage et les passagers</li>
+    <li>Balise EPIRB (balise de détresse)</li>
+    <li>Extincteurs et couvertures anti-feu</li>
+    <li>Trousse de premiers secours et matériel médical</li>
+    <li>Équipement MOB (homme à la mer) avec bouées et feux stroboscopiques</li>
+    <li>Radio VHF et communication satellite pour les appels de détresse</li>
+</ul>
+
+<h2>Briefing de sécurité</h2>
+<p>À l'embarquement, le Capitaine ou un officier désigné conduira un briefing de sécurité complet couvrant :</p>
+<ul>
+    <li>Emplacement des gilets de sauvetage et comment les enfiler</li>
+    <li>Emplacement du radeau de survie et des sorties de secours</li>
+    <li>Procédures homme à la mer</li>
+    <li>Prévention incendie et équipements de lutte contre le feu</li>
+    <li>Zones restreintes du navire</li>
+    <li>Règles générales de conduite en mer</li>
+</ul>
+
+<h2>Règles pour les passagers</h2>
+<ul>
+    <li><strong>Suivez toujours les instructions de l'équipage</strong>, particulièrement pendant les manœuvres et par gros temps</li>
+    <li><strong>Portez votre gilet de sauvetage</strong> quand on vous le demande ou sur le pont par gros temps</li>
+    <li><strong>Une main pour vous, une main pour le bateau</strong> — tenez-vous toujours en vous déplaçant</li>
+    <li><strong>Ne montez jamais sur le pont seul la nuit</strong> sans prévenir l'officier de quart</li>
+    <li><strong>Ne jetez rien par-dessus bord</strong> — respectez l'océan</li>
+    <li><strong>Interdiction de fumer</strong> à l'intérieur du navire ; fumage sur le pont uniquement dans les zones désignées</li>
+    <li><strong>Informez immédiatement l'équipage</strong> de toute blessure, maladie ou situation dangereuse</li>
+</ul>
+
+<h2>Médical</h2>
+<p>Une trousse de premiers secours est disponible à bord. L'équipage est formé aux gestes de premiers secours. En cas d'urgence médicale grave, le navire peut contacter les services de sauvetage maritime par satellite.</p>
+<p><strong>Important :</strong> Merci de déclarer toutes conditions médicales, allergies et traitements en cours dans votre questionnaire pré-embarquement. Ces informations sont confidentielles et essentielles pour votre sécurité.</p>
+{% endif %}
+</div>
+{% endblock %}

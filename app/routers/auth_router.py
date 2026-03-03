@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.database import get_db
 from app.models.user import User
 from app.auth import verify_password, create_session_token, COOKIE_NAME
-from app.utils.activity import log_activity
+from app.utils.activity import log_activity, get_client_ip
 
 router = APIRouter(tags=["auth"])
 
@@ -31,15 +31,23 @@ async def login_submit(
         select(User).where(User.username == username, User.is_active == True)
     )
     user = result.scalar_one_or_none()
+    ip = get_client_ip(request)
 
     if not user or not verify_password(password, user.hashed_password):
+        # Log failed login
+        await log_activity(db, action="login_fail", module="auth",
+                           detail=f"username: {username}", ip_address=ip)
+        await db.commit()
         return templates.TemplateResponse("auth/login.html", {
             "request": request,
             "error": "Identifiant ou mot de passe incorrect",
         })
 
-    # Log activity
-    await log_activity(db, user, "auth", "login", "User", user.id, f"Connexion {user.username}")
+    # Log successful login
+    await log_activity(db, user=user, action="login", module="auth",
+                       entity_type="user", entity_id=user.id,
+                       entity_label=user.full_name, ip_address=ip)
+    await db.commit()
 
     # Create session
     token = create_session_token(user.id)
@@ -55,7 +63,19 @@ async def login_submit(
 
 
 @router.get("/logout")
-async def logout(request: Request):
+async def logout(request: Request, db: AsyncSession = Depends(get_db)):
+    # Try to log the logout
+    from app.auth import get_current_user_optional
+    try:
+        user = await get_current_user_optional(request, db)
+        if user:
+            await log_activity(db, user=user, action="logout", module="auth",
+                               entity_type="user", entity_id=user.id,
+                               entity_label=user.full_name,
+                               ip_address=get_client_ip(request))
+            await db.commit()
+    except Exception:
+        pass
     response = RedirectResponse(url="/login", status_code=303)
     response.delete_cookie(COOKIE_NAME)
     return response

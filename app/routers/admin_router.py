@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.utils.activity import log_activity, get_client_ip
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import Optional
@@ -12,6 +13,13 @@ import io
 from app.database import get_db
 from app.auth import get_current_user
 from app.models.user import User
+from app.models.vessel import Vessel
+from app.models.port import Port
+from app.models.leg import Leg
+from app.models.finance import OpexParameter, PortConfig
+from app.models.emission_parameter import EmissionParameter
+from app.models.co2_variable import Co2Variable, CO2_DEFAULTS
+from app.models.mrv import MrvParameter, MRV_DEFAULTS
 
 ADMIN_ROLES = {"administrateur", "admin", "data_analyst"}
 
@@ -22,21 +30,12 @@ async def require_admin(user: User = Depends(get_current_user)):
         raise HTTPException(403, detail="Admin access required")
     return user
 
-from app.models.vessel import Vessel
-from app.models.port import Port
-from app.models.leg import Leg
-from app.models.finance import OpexParameter, PortConfig
-from app.models.emission_parameter import EmissionParameter
-from app.models.co2_variable import Co2Variable, CO2_DEFAULTS
-from app.models.mrv import MrvParameter, MRV_DEFAULTS
-from app.utils.activity import log_activity
-
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 USER_ROLES = [
     {"value": "administrateur", "label": "Administrateur"},
     {"value": "operation", "label": "Opération"},
-    {"value": "armement", "label": "Armement / Équipage"},
+    {"value": "armement", "label": "Armement"},
     {"value": "technique", "label": "Technique"},
     {"value": "data_analyst", "label": "Data Analyst"},
     {"value": "marins", "label": "Marins"},
@@ -78,11 +77,6 @@ async def settings_home(
     vessels_result = await db.execute(select(Vessel).order_by(Vessel.code))
     vessels = vessels_result.scalars().all()
 
-    # Port count
-    port_count_result = await db.execute(select(func.count(Port.id)))
-    port_count = port_count_result.scalar() or 0
-    port_msg = request.query_params.get("port_msg", "")
-
     # Port configs
     ports_result = await db.execute(
         select(PortConfig).options(selectinload(PortConfig.port)).order_by(PortConfig.port_locode)
@@ -96,23 +90,6 @@ async def settings_home(
     # Emission params
     emission_result = await db.execute(select(EmissionParameter).order_by(EmissionParameter.parameter_name))
     emission_params = emission_result.scalars().all()
-
-    # CO2 decarbonation variables (current values)
-    co2_result = await db.execute(
-        select(Co2Variable).where(Co2Variable.is_current == True).order_by(Co2Variable.variable_name)
-    )
-    co2_variables = co2_result.scalars().all()
-
-    # CO2 history for TOWT CO2 EF (historized)
-    co2_history_result = await db.execute(
-        select(Co2Variable).where(Co2Variable.variable_name == "towt_co2_ef")
-        .order_by(Co2Variable.effective_date.desc())
-    )
-    co2_history = co2_history_result.scalars().all()
-
-    # MRV parameters
-    mrv_result = await db.execute(select(MrvParameter).order_by(MrvParameter.parameter_name))
-    mrv_params = mrv_result.scalars().all()
 
     # Locked legs count
     locked_result = await db.execute(
@@ -158,24 +135,44 @@ async def settings_home(
         key=lambda r: (r["dep_name"], r["arr_name"])
     )
 
+    # Insurance contracts
+    from app.models.finance import InsuranceContract
+    ins_result = await db.execute(select(InsuranceContract).order_by(InsuranceContract.guarantee_type))
+    insurance_contracts = ins_result.scalars().all()
+
+    # CO2 variables
+    co2_result = await db.execute(
+        select(Co2Variable).where(Co2Variable.is_current == True).order_by(Co2Variable.variable_name)
+    )
+    co2_vars = co2_result.scalars().all()
+    co2_dict = {v.variable_name: v for v in co2_vars}
+
+    # CO2 history (TOWT EF only)
+    co2_hist_result = await db.execute(
+        select(Co2Variable).where(Co2Variable.variable_name == "towt_co2_ef")
+        .order_by(Co2Variable.effective_date.desc())
+    )
+    co2_history = co2_hist_result.scalars().all()
+
+    # MRV params
+    mrv_result = await db.execute(select(MrvParameter).order_by(MrvParameter.parameter_name))
+    mrv_params = mrv_result.scalars().all()
+
     return templates.TemplateResponse("admin/settings.html", {
         "request": request, "user": user,
         "users": users, "vessels": vessels,
         "port_configs": port_configs,
-        "port_count": port_count,
-        "port_msg": port_msg,
         "opex_params": opex_params,
         "emission_params": emission_params,
-        "co2_variables": co2_variables,
-        "co2_history": co2_history,
-        "co2_defaults": CO2_DEFAULTS,
-        "mrv_params": mrv_params,
-        "mrv_defaults": MRV_DEFAULTS,
         "locked_count": locked_count,
         "pricing_grid": pricing_grid,
         "existing_routes": existing_routes,
         "route_ports": route_ports,
         "cabin_type_labels": CABIN_TYPE_LABELS,
+        "insurance_contracts": insurance_contracts,
+        "co2_vars": co2_vars, "co2_dict": co2_dict, "co2_history": co2_history,
+        "co2_defaults": CO2_DEFAULTS,
+        "mrv_params": mrv_params, "mrv_defaults": MRV_DEFAULTS,
         "active_module": "settings",
     })
 
@@ -222,8 +219,11 @@ async def user_create_submit(
     pwd_hash = hash_password(password)
     new_user = User(username=username, email=email, hashed_password=pwd_hash, full_name=full_name, role=role)
     db.add(new_user)
+    await log_activity(db, user=user, action="create", module="admin",
+                       entity_type="user", entity_id=new_user.id,
+                       entity_label=new_user.full_name, detail=f"role: {new_user.role}",
+                       ip_address=get_client_ip(request))
     await db.flush()
-    await log_activity(db, user, "admin", "create", "User", new_user.id, f"Création utilisateur {username}")
     return RedirectResponse(url="/admin/users", status_code=303)
 
 
@@ -260,7 +260,6 @@ async def user_edit_submit(
     if password and password.strip():
         edit_user.hashed_password = _hp(password)
     await db.flush()
-    await log_activity(db, user, "admin", "update", "User", uid, f"Modification utilisateur {edit_user.username}")
     return RedirectResponse(url="/admin/users", status_code=303)
 
 
@@ -273,65 +272,17 @@ async def user_delete(
     result = await db.execute(select(User).where(User.id == uid))
     u = result.scalar_one_or_none()
     if u and u.id != user.id:
-        uname = u.username
+        await log_activity(db, user=user, action="delete", module="admin",
+                           entity_type="user", entity_id=uid, entity_label=u.full_name,
+                           ip_address=get_client_ip(request))
         await db.delete(u)
         await db.flush()
-        await log_activity(db, user, "admin", "delete", "User", uid, f"Suppression utilisateur {uname}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/users"})
     return RedirectResponse(url="/admin/users", status_code=303)
 
 
 # ─── VESSELS ─────────────────────────────────────────────────
-@router.get("/vessels/create", response_class=HTMLResponse)
-async def vessel_create_form(
-    request: Request,
-    user: User = Depends(get_current_user),
-):
-    return templates.TemplateResponse("admin/vessel_form.html", {
-        "request": request, "user": user, "vessel": None,
-    })
-
-
-@router.post("/vessels/create", response_class=HTMLResponse)
-async def vessel_create_submit(
-    request: Request,
-    name: str = Form(...),
-    code: str = Form(...),
-    imo_number: str = Form(""),
-    flag: str = Form(""),
-    dwt: str = Form(""),
-    capacity_palettes: str = Form("0"),
-    default_speed: str = Form("8"),
-    default_elongation: str = Form("1.25"),
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    code_int = int(pf(code, 0))
-    existing = await db.execute(select(Vessel).where(Vessel.code == code_int))
-    if existing.scalar_one_or_none():
-        return templates.TemplateResponse("admin/vessel_form.html", {
-            "request": request, "user": user, "vessel": None,
-            "error": f"Le code navire {code_int} existe déjà.",
-        })
-    vessel = Vessel(
-        code=code_int,
-        name=name.strip(),
-        imo_number=imo_number.strip() or None,
-        flag=flag.strip() or None,
-        dwt=pf(dwt) or None,
-        capacity_palettes=int(pf(capacity_palettes, 0)),
-        default_speed=pf(default_speed, 8),
-        default_elongation=pf(default_elongation, 1.25),
-    )
-    db.add(vessel)
-    await db.flush()
-    await log_activity(db, user, "admin", "create", "Vessel", vessel.id, f"Création navire {vessel.name}")
-    if request.headers.get("HX-Request"):
-        return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
-    return RedirectResponse(url="/admin/settings", status_code=303)
-
-
 @router.get("/vessels/{vid}/edit", response_class=HTMLResponse)
 async def vessel_edit_form(
     vid: int, request: Request,
@@ -351,9 +302,6 @@ async def vessel_edit_form(
 async def vessel_edit_submit(
     vid: int, request: Request,
     name: str = Form(...),
-    imo_number: str = Form(""),
-    flag: str = Form(""),
-    dwt: str = Form(""),
     capacity_palettes: str = Form("0"),
     default_speed: str = Form("8"),
     default_elongation: str = Form("1.25"),
@@ -365,40 +313,10 @@ async def vessel_edit_submit(
     if not vessel:
         raise HTTPException(status_code=404)
     vessel.name = name
-    vessel.imo_number = imo_number.strip() or None
-    vessel.flag = flag.strip() or None
-    vessel.dwt = pf(dwt) or None
     vessel.capacity_palettes = int(pf(capacity_palettes, 0))
     vessel.default_speed = pf(default_speed, 8)
     vessel.default_elongation = pf(default_elongation, 1.25)
     await db.flush()
-    await log_activity(db, user, "admin", "update", "Vessel", vid, f"Modification navire {vessel.name}")
-    if request.headers.get("HX-Request"):
-        return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
-    return RedirectResponse(url="/admin/settings", status_code=303)
-
-
-@router.delete("/vessels/{vid}", response_class=HTMLResponse)
-async def vessel_delete(
-    vid: int, request: Request,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(select(Vessel).where(Vessel.id == vid))
-    vessel = result.scalar_one_or_none()
-    if not vessel:
-        raise HTTPException(status_code=404)
-    leg_count_result = await db.execute(select(func.count(Leg.id)).where(Leg.vessel_id == vid))
-    leg_count = leg_count_result.scalar() or 0
-    if leg_count > 0:
-        return HTMLResponse(
-            content=f"<div class='toast toast-error'>Impossible : {leg_count} legs associés</div>",
-            status_code=400,
-        )
-    vname = vessel.name
-    await db.delete(vessel)
-    await db.flush()
-    await log_activity(db, user, "admin", "delete", "Vessel", vid, f"Suppression navire {vname}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
     return RedirectResponse(url="/admin/settings", status_code=303)
@@ -425,7 +343,6 @@ async def opex_update(
         )
         db.add(param)
     await db.flush()
-    await log_activity(db, user, "admin", "update_opex", "OpexParameter", None, f"OPEX → {pf(opex_daily_rate, 11600)} €/j")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
     return RedirectResponse(url="/admin/settings", status_code=303)
@@ -446,7 +363,6 @@ async def lock_completed_legs(
         leg.status = "completed"
         count += 1
     await db.flush()
-    await log_activity(db, user, "admin", "lock_legs", None, None, f"Verrouillage {count} legs terminés")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": f"/admin/settings?locked={count}"})
     return RedirectResponse(url="/admin/settings", status_code=303)
@@ -463,48 +379,330 @@ async def unlock_leg(
     if leg:
         leg.status = "planned"
         await db.flush()
-        await log_activity(db, user, "admin", "unlock_leg", "Leg", lid, f"Déverrouillage leg {leg.leg_code}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
     return RedirectResponse(url="/admin/settings", status_code=303)
 
 
-# ─── GLOBAL EXPORT ───────────────────────────────────────────
-@router.get("/export/global", response_class=StreamingResponse)
+# ─── DATABASE MANAGEMENT ─────────────────────────────────────
+
+# Helper: export a table to CSV
+def _table_to_csv(rows, columns):
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow(columns)
+    for row in rows:
+        writer.writerow([getattr(row, c, '') for c in columns])
+    return output.getvalue()
+
+def _date_fmt(val):
+    if val is None: return ''
+    try: return val.strftime('%d/%m/%Y %H:%M')
+    except: return str(val)
+
+# Table definitions for export/purge
+TABLE_DEFS = {
+    "legs": {"label": "Legs", "tables": ["legs"]},
+    "orders": {"label": "Commandes", "tables": ["orders", "order_assignments"]},
+    "passengers": {"label": "Passagers", "tables": ["passenger_bookings", "passengers", "passenger_payments", "passenger_documents", "preboarding_forms", "passenger_audit_logs"]},
+    "cargo": {"label": "Cargo", "tables": ["packing_lists", "packing_list_batches", "packing_list_audit"]},
+    "finance": {"label": "Finance", "tables": ["leg_finances"]},
+    "claims": {"label": "Claims", "tables": ["claims", "claim_documents", "claim_timeline"]},
+    "crew": {"label": "Équipage", "tables": ["crew_members", "crew_assignments"]},
+    "crew_assignments": {"label": "Affectations", "tables": ["crew_assignments"]},
+    "sof": {"label": "SOF", "tables": ["sof_events"]},
+    "messages": {"label": "Messages", "tables": ["portal_messages"]},
+    "notifications": {"label": "Notifications", "tables": ["notifications"]},
+    "config": {"label": "Config", "tables": ["vessels", "ports", "port_configs", "opex_parameters", "emission_parameters", "cabin_price_grid", "insurance_contracts"]},
+}
+
+
+@router.get("/export/global")
 async def export_global(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    legs_result = await db.execute(
-        select(Leg).options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
-        .order_by(Leg.year, Leg.vessel_id, Leg.sequence)
-    )
-    legs = legs_result.scalars().all()
-    output = io.StringIO()
-    writer = csv.writer(output, delimiter=";")
-    writer.writerow([
-        "Leg", "Navire", "Année", "Départ", "Arrivée",
-        "ETD", "ETA", "ATD", "ATA",
-        "Distance NM", "Durée jours", "Statut",
-    ])
-    for leg in legs:
-        writer.writerow([
-            leg.leg_code, leg.vessel.name, leg.year,
-            f"{leg.departure_port.locode} {leg.departure_port.name}",
-            f"{leg.arrival_port.locode} {leg.arrival_port.name}",
-            leg.etd.strftime('%d/%m/%Y') if leg.etd else '',
-            leg.eta.strftime('%d/%m/%Y') if leg.eta else '',
-            leg.atd.strftime('%d/%m/%Y') if leg.atd else '',
-            leg.ata.strftime('%d/%m/%Y') if leg.ata else '',
-            leg.computed_distance or '', 
-            round((leg.estimated_duration_hours or 0) / 24, 1),
-            leg.status,
-        ])
-    output.seek(0)
+    import zipfile
+    from sqlalchemy import text
+    zip_buffer = io.BytesIO()
+    now_str = datetime.now().strftime("%Y%m%d_%H%M")
+
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # Get all table names from the database
+        result = await db.execute(text(
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"
+        ))
+        tables = [r[0] for r in result.fetchall()]
+
+        for table_name in tables:
+            try:
+                cols_result = await db.execute(text(
+                    f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}' ORDER BY ordinal_position"
+                ))
+                columns = [r[0] for r in cols_result.fetchall()]
+                rows_result = await db.execute(text(f'SELECT * FROM "{table_name}" LIMIT 50000'))
+                rows = rows_result.fetchall()
+
+                output = io.StringIO()
+                writer = csv.writer(output, delimiter=";")
+                writer.writerow(columns)
+                for row in rows:
+                    writer.writerow([_date_fmt(v) if hasattr(v, 'strftime') else ('' if v is None else str(v)) for v in row])
+
+                zf.writestr(f"{table_name}.csv", output.getvalue())
+            except Exception:
+                continue
+
+    zip_buffer.seek(0)
     return StreamingResponse(
-        iter([output.getvalue()]), media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=export_global_towt.csv"},
+        iter([zip_buffer.getvalue()]),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename=towt_export_complet_{now_str}.zip"},
     )
+
+
+@router.get("/export/selective")
+async def export_selective(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    import zipfile
+    from sqlalchemy import text
+    tables_param = request.query_params.getlist("tables")
+    if not tables_param:
+        return RedirectResponse(url="/admin/settings#database", status_code=303)
+
+    zip_buffer = io.BytesIO()
+    now_str = datetime.now().strftime("%Y%m%d_%H%M")
+    selected_tables = set()
+    for key in tables_param:
+        if key in TABLE_DEFS:
+            selected_tables.update(TABLE_DEFS[key]["tables"])
+
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for table_name in sorted(selected_tables):
+            try:
+                cols_result = await db.execute(text(
+                    f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}' ORDER BY ordinal_position"
+                ))
+                columns = [r[0] for r in cols_result.fetchall()]
+                if not columns:
+                    continue
+                rows_result = await db.execute(text(f'SELECT * FROM "{table_name}" LIMIT 50000'))
+                rows = rows_result.fetchall()
+
+                output = io.StringIO()
+                writer = csv.writer(output, delimiter=";")
+                writer.writerow(columns)
+                for row in rows:
+                    writer.writerow([_date_fmt(v) if hasattr(v, 'strftime') else ('' if v is None else str(v)) for v in row])
+
+                zf.writestr(f"{table_name}.csv", output.getvalue())
+            except Exception:
+                continue
+
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        iter([zip_buffer.getvalue()]),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename=towt_export_selection_{now_str}.zip"},
+    )
+
+
+@router.get("/export/files")
+async def export_files(
+    user: User = Depends(get_current_user),
+):
+    import zipfile, os
+    zip_buffer = io.BytesIO()
+    now_str = datetime.now().strftime("%Y%m%d_%H%M")
+
+    upload_dirs = [
+        ("/app/uploads/passenger_docs", "passenger_docs"),
+        ("/app/data/claims", "claims"),
+        ("app/static/uploads/orders", "orders"),
+    ]
+
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for dir_path, prefix in upload_dirs:
+            if os.path.exists(dir_path):
+                for root, dirs, files in os.walk(dir_path):
+                    for fname in files:
+                        full_path = os.path.join(root, fname)
+                        arc_name = os.path.join(prefix, os.path.relpath(full_path, dir_path))
+                        try:
+                            zf.write(full_path, arc_name)
+                        except Exception:
+                            continue
+
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        iter([zip_buffer.getvalue()]),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename=towt_fichiers_{now_str}.zip"},
+    )
+
+
+@router.post("/database/purge-selective", response_class=HTMLResponse)
+async def purge_selective(
+    request: Request,
+    confirm_text: str = Form(""),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if confirm_text.strip() != "SUPPRIMER":
+        return RedirectResponse(url="/admin/settings#database", status_code=303)
+    form = await request.form()
+    tables_param = form.getlist("tables")
+    if not tables_param:
+        return RedirectResponse(url="/admin/settings#database", status_code=303)
+
+    from sqlalchemy import text
+
+    # Order matters for FK constraints — delete children first
+    purge_order = [
+        "notifications", "messages", "sof", "claims",
+        "cargo", "passengers", "finance", "crew_assignments", "orders", "legs",
+    ]
+
+    table_sql = {
+        "notifications": ["DELETE FROM notifications"],
+        "messages": ["DELETE FROM portal_messages"],
+        "sof": ["DELETE FROM sof_events WHERE event_type NOT IN ('CLAIM_DECLARED','CLAIM_UPDATED')"],
+        "claims": ["DELETE FROM claim_timeline", "DELETE FROM claim_documents", "DELETE FROM claims"],
+        "cargo": ["DELETE FROM packing_list_audit", "DELETE FROM packing_list_batches", "DELETE FROM packing_lists"],
+        "passengers": [
+            "DELETE FROM passenger_audit_logs", "DELETE FROM preboarding_forms",
+            "DELETE FROM passenger_documents", "DELETE FROM passenger_payments",
+            "DELETE FROM passengers", "DELETE FROM passenger_bookings",
+        ],
+        "orders": ["DELETE FROM order_assignments", "DELETE FROM orders"],
+        "finance": ["DELETE FROM leg_finances"],
+        "crew_assignments": ["DELETE FROM crew_assignments"],
+        "legs": [
+            "DELETE FROM sof_events", "DELETE FROM escale_operations",
+            "DELETE FROM onboard_notifications", "DELETE FROM cargo_documents",
+            "DELETE FROM docker_shifts", "DELETE FROM leg_finances", "DELETE FROM leg_kpis",
+            "DELETE FROM legs",
+        ],
+    }
+
+    for key in purge_order:
+        if key in tables_param and key in table_sql:
+            for sql in table_sql[key]:
+                try:
+                    await db.execute(text(sql))
+                except Exception:
+                    pass
+    await db.commit()
+    return RedirectResponse(url="/admin/settings#database", status_code=303)
+
+
+@router.post("/database/reset", response_class=HTMLResponse)
+async def reset_database(
+    request: Request,
+    confirm_text: str = Form(""),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    form = await request.form()
+    if confirm_text.strip() != "REINITIALISER" or not form.get("confirm_checkbox"):
+        return RedirectResponse(url="/admin/settings#database", status_code=303)
+
+    from sqlalchemy import text
+
+    # Delete everything in dependency order, keep users + config
+    purge_sql = [
+        "DELETE FROM notifications",
+        "DELETE FROM portal_messages",
+        "DELETE FROM claim_timeline",
+        "DELETE FROM claim_documents",
+        "DELETE FROM claims",
+        "DELETE FROM packing_list_audit",
+        "DELETE FROM packing_list_batches",
+        "DELETE FROM packing_lists",
+        "DELETE FROM passenger_audit_logs",
+        "DELETE FROM preboarding_forms",
+        "DELETE FROM passenger_documents",
+        "DELETE FROM passenger_payments",
+        "DELETE FROM passengers",
+        "DELETE FROM passenger_bookings",
+        "DELETE FROM order_assignments",
+        "DELETE FROM orders",
+        "DELETE FROM crew_assignments",
+        "DELETE FROM sof_events",
+        "DELETE FROM onboard_notifications",
+        "DELETE FROM cargo_documents",
+        "DELETE FROM docker_shifts",
+        "DELETE FROM escale_operations",
+        "DELETE FROM leg_finances",
+        "DELETE FROM leg_kpis",
+        "DELETE FROM legs",
+    ]
+    for sql in purge_sql:
+        try:
+            await db.execute(text(sql))
+        except Exception:
+            pass
+    await db.commit()
+    return RedirectResponse(url="/admin/settings#database", status_code=303)
+
+
+@router.get("/database/stats", response_class=HTMLResponse)
+async def database_stats(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import text
+    result = await db.execute(text(
+        "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"
+    ))
+    tables = [r[0] for r in result.fetchall()]
+    stats = []
+    for t in tables:
+        try:
+            cnt = await db.execute(text(f'SELECT COUNT(*) FROM "{t}"'))
+            count = cnt.scalar() or 0
+            stats.append((t, count))
+        except Exception:
+            stats.append((t, "?"))
+
+    html = '<div class="db-stat-grid">'
+    for name, count in stats:
+        html += f'<div class="db-stat-item"><span>{name}</span><strong>{count}</strong></div>'
+    html += '</div>'
+    return HTMLResponse(html)
+
+
+@router.post("/database/cleanup-notifications", response_class=HTMLResponse)
+async def cleanup_notifications(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import text
+    await db.execute(text(
+        "DELETE FROM notifications WHERE is_archived = TRUE AND created_at < NOW() - INTERVAL '30 days'"
+    ))
+    await db.commit()
+    return RedirectResponse(url="/admin/settings#database", status_code=303)
+
+
+@router.post("/database/cleanup-audit", response_class=HTMLResponse)
+async def cleanup_audit(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import text
+    await db.execute(text(
+        "DELETE FROM packing_list_audit WHERE created_at < NOW() - INTERVAL '12 months'"
+    ))
+    await db.execute(text(
+        "DELETE FROM passenger_audit_logs WHERE created_at < NOW() - INTERVAL '12 months'"
+    ))
+    await db.commit()
+    return RedirectResponse(url="/admin/settings#database", status_code=303)
 
 
 # ─── USER LANGUAGE ────────────────────────────────────────────
@@ -519,7 +717,6 @@ async def update_language(
     if language in SUPPORTED_LANGUAGES:
         user.language = language
         await db.flush()
-        await log_activity(db, user, "admin", "update_language", "User", user.id, f"Langue → {language}")
     url = "/admin/settings"
     response = RedirectResponse(url=url, status_code=303)
     response.set_cookie("towt_lang", language, max_age=365*24*3600)
@@ -550,7 +747,6 @@ async def pricing_add(
     )
     db.add(entry)
     await db.flush()
-    await log_activity(db, user, "admin", "create", "CabinPricing", entry.id, f"Tarif cabine {cabin_type} {origin_locode}→{destination_locode}")
     return RedirectResponse(url="/admin/settings#pricing", status_code=303)
 
 
@@ -572,7 +768,6 @@ async def pricing_edit(
         entry.notes = notes.strip() or None
         entry.is_active = is_active == "on"
         await db.flush()
-        await log_activity(db, user, "admin", "update", "CabinPricing", price_id, f"Modification tarif cabine")
     return RedirectResponse(url="/admin/settings#pricing", status_code=303)
 
 
@@ -587,285 +782,320 @@ async def pricing_delete(
     if entry:
         await db.delete(entry)
         await db.flush()
-        await log_activity(db, user, "admin", "delete", "CabinPricing", price_id, "Suppression tarif cabine")
     return HTMLResponse("", status_code=200)
 
 
-# ─── PORT IMPORT ──────────────────────────────────────────────
-@router.post("/ports/import", response_class=HTMLResponse)
-async def import_ports(
+# ─── INSURANCE CONTRACTS ─────────────────────────────────────
+@router.post("/settings/insurance/add", response_class=HTMLResponse)
+async def insurance_add(
     request: Request,
+    guarantee_type: str = Form(...),
+    insurer_name: str = Form(...),
+    insurer_email: str = Form(""),
+    insurer_phone: str = Form(""),
+    insurer_address: str = Form(""),
+    broker_reference: str = Form(""),
+    franchise_amount: str = Form("0"),
+    guarantee_ceiling: str = Form("0"),
+    policy_number: str = Form(""),
+    notes: str = Form(""),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    import httpx
-    url = "https://service.unece.org/trade/locode/loc242csv.zip"
-    try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.get(url)
-        if resp.status_code != 200:
-            return RedirectResponse(url="/admin/settings?port_msg=Erreur téléchargement UN/LOCODE", status_code=303)
-
-        import zipfile
-        zip_buffer = io.BytesIO(resp.content)
-        with zipfile.ZipFile(zip_buffer) as zf:
-            csv_files = [n for n in zf.namelist() if n.endswith(".csv")]
-            if not csv_files:
-                return RedirectResponse(url="/admin/settings?port_msg=Aucun CSV dans le ZIP", status_code=303)
-
-            imported = 0
-            for csv_name in csv_files:
-                with zf.open(csv_name) as f:
-                    import codecs
-                    reader = csv.reader(codecs.iterdecode(f, "latin-1"))
-                    for row in reader:
-                        if len(row) < 8:
-                            continue
-                        country = row[1].strip() if row[1] else ""
-                        location = row[2].strip() if row[2] else ""
-                        name = row[3].strip() if row[3] else ""
-                        if not country or not location or not name:
-                            continue
-                        locode = f"{country}{location}"
-                        func_code = row[6].strip() if len(row) > 6 else ""
-                        if "1" not in func_code and "2" not in func_code and "3" not in func_code:
-                            continue
-                        existing = await db.execute(select(Port).where(Port.locode == locode))
-                        if existing.scalar_one_or_none():
-                            continue
-                        coords = row[10].strip() if len(row) > 10 else ""
-                        lat, lon = None, None
-                        if coords:
-                            parts = coords.split()
-                            if len(parts) == 2:
-                                try:
-                                    lat_str, lon_str = parts
-                                    lat_deg = float(lat_str[:2]) + float(lat_str[2:4]) / 60
-                                    if lat_str[-1] == "S":
-                                        lat_deg = -lat_deg
-                                    lon_deg = float(lon_str[:3]) + float(lon_str[3:5]) / 60
-                                    if lon_str[-1] == "W":
-                                        lon_deg = -lon_deg
-                                    lat, lon = round(lat_deg, 4), round(lon_deg, 4)
-                                except (ValueError, IndexError):
-                                    pass
-                        port = Port(
-                            locode=locode,
-                            name=name,
-                            country_code=country,
-                            latitude=lat,
-                            longitude=lon,
-                        )
-                        db.add(port)
-                        imported += 1
-            await db.flush()
-            await log_activity(db, user, "admin", "import_ports", None, None, f"Import {imported} ports UN/LOCODE")
-            msg = f"Import terminé : {imported} nouveaux ports ajoutés"
-    except Exception as e:
-        msg = f"Erreur import : {str(e)}"
-
-    if request.headers.get("HX-Request"):
-        return HTMLResponse(content="", headers={"HX-Redirect": f"/admin/settings?port_msg={msg}"})
-    return RedirectResponse(url=f"/admin/settings?port_msg={msg}", status_code=303)
+    from app.models.finance import InsuranceContract
+    entry = InsuranceContract(
+        guarantee_type=guarantee_type,
+        insurer_name=insurer_name,
+        insurer_email=insurer_email or None,
+        insurer_phone=insurer_phone or None,
+        insurer_address=insurer_address or None,
+        broker_reference=broker_reference or None,
+        franchise_amount=pf(franchise_amount, 0),
+        guarantee_ceiling=pf(guarantee_ceiling, 0),
+        policy_number=policy_number or None,
+        notes=notes or None,
+    )
+    db.add(entry)
+    await db.flush()
+    return RedirectResponse(url="/admin/settings#insurance", status_code=303)
 
 
-# ─── CO2 DECARBONATION VARIABLES ─────────────────────────────
-@router.post("/co2/update", response_class=HTMLResponse)
-async def co2_update(
+@router.post("/settings/insurance/{ins_id}/edit", response_class=HTMLResponse)
+async def insurance_edit(
+    ins_id: int, request: Request,
+    insurer_name: str = Form(...),
+    insurer_email: str = Form(""),
+    insurer_phone: str = Form(""),
+    insurer_address: str = Form(""),
+    broker_reference: str = Form(""),
+    franchise_amount: str = Form("0"),
+    guarantee_ceiling: str = Form("0"),
+    policy_number: str = Form(""),
+    is_active: Optional[str] = Form(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.finance import InsuranceContract
+    entry = await db.get(InsuranceContract, ins_id)
+    if entry:
+        entry.insurer_name = insurer_name
+        entry.insurer_email = insurer_email or None
+        entry.insurer_phone = insurer_phone or None
+        entry.insurer_address = insurer_address or None
+        entry.broker_reference = broker_reference or None
+        entry.franchise_amount = pf(franchise_amount, 0)
+        entry.guarantee_ceiling = pf(guarantee_ceiling, 0)
+        entry.policy_number = policy_number or None
+        entry.is_active = is_active == "on"
+        await db.flush()
+    return RedirectResponse(url="/admin/settings#insurance", status_code=303)
+
+
+# ─── MON COMPTE (accessible à tous les rôles) ─────────────────
+@router.get("/my-account", response_class=HTMLResponse)
+async def my_account(
+    request: Request,
+    success: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.i18n import SUPPORTED_LANGUAGES
+    return templates.TemplateResponse("admin/my_account.html", {
+        "request": request,
+        "user": user,
+        "languages": SUPPORTED_LANGUAGES,
+        "active_module": "my-account",
+        "success": success,
+        "error": error,
+    })
+
+
+@router.post("/my-account/password", response_class=HTMLResponse)
+async def my_account_password(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.auth import verify_password, hash_password
+    if not verify_password(current_password, user.hashed_password):
+        return RedirectResponse(url="/admin/my-account?error=Mot+de+passe+actuel+incorrect", status_code=303)
+    if new_password != confirm_password:
+        return RedirectResponse(url="/admin/my-account?error=Les+mots+de+passe+ne+correspondent+pas", status_code=303)
+    if len(new_password) < 4:
+        return RedirectResponse(url="/admin/my-account?error=Le+mot+de+passe+doit+faire+au+moins+4+caractères", status_code=303)
+    user.hashed_password = hash_password(new_password)
+    await db.flush()
+    return RedirectResponse(url="/admin/my-account?success=Mot+de+passe+modifié+avec+succès", status_code=303)
+
+
+@router.post("/my-account/language", response_class=HTMLResponse)
+async def my_account_language(
+    request: Request,
+    language: str = Form(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.i18n import SUPPORTED_LANGUAGES
+    if language in SUPPORTED_LANGUAGES:
+        user.language = language
+        await db.flush()
+    return RedirectResponse(url="/admin/my-account?success=Langue+modifiée+avec+succès", status_code=303)
+
+
+# ─── ACTIVITY LOGS ──────────────────────────────────────────
+@router.get("/activity-logs", response_class=HTMLResponse)
+async def activity_logs(
     request: Request,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(1, ge=1),
+    action: Optional[str] = Query(None),
+    module: Optional[str] = Query(None),
+    user_id: Optional[int] = Query(None),
+):
+    from app.models.activity_log import ActivityLog
+    from sqlalchemy import desc
+
+    per_page = 50
+    q = select(ActivityLog)
+
+    if action:
+        q = q.where(ActivityLog.action == action)
+    if module:
+        q = q.where(ActivityLog.module == module)
+    if user_id:
+        q = q.where(ActivityLog.user_id == user_id)
+
+    # Count
+    count_q = select(func.count()).select_from(q.subquery())
+    total = (await db.execute(count_q)).scalar() or 0
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    # Fetch page
+    q = q.order_by(desc(ActivityLog.created_at)).offset((page - 1) * per_page).limit(per_page)
+    result = await db.execute(q)
+    logs = result.scalars().all()
+
+    # Action labels
+    action_labels = {
+        "login": "🔑 Connexion",
+        "logout": "🚪 Déconnexion",
+        "login_fail": "🚫 Échec",
+        "create": "➕ Création",
+        "update": "✏️ Modification",
+        "delete": "🗑️ Suppression",
+    }
+
+    # Build HTML
+    rows = []
+    for log in logs:
+        ts = log.created_at.strftime("%d/%m/%Y %H:%M") if log.created_at else ""
+        a_label = action_labels.get(log.action, log.action)
+        a_cls = f"al-{log.action}"
+
+        entity = ""
+        if log.entity_type:
+            entity = f'<span style="font-size:11px;color:#888;">{log.entity_type}</span>'
+            if log.entity_label:
+                entity += f' <strong style="font-size:12px;">{log.entity_label}</strong>'
+
+        detail_html = ""
+        if log.detail:
+            detail_html = f'<div style="font-size:10px;color:#888;margin-top:2px;">{log.detail}</div>'
+
+        rows.append(f'''<tr>
+            <td class="al-time">{ts}</td>
+            <td>{log.user_name or '<span style="color:#ccc;">—</span>'}</td>
+            <td><span class="al-action {a_cls}">{a_label}</span></td>
+            <td><span class="al-module">{log.module}</span></td>
+            <td>{entity}{detail_html}</td>
+            <td class="al-ip">{log.ip_address or ''}</td>
+        </tr>''')
+
+    # Pagination
+    pag = ""
+    if total_pages > 1:
+        pag = '<div style="display:flex;gap:4px;justify-content:center;margin-top:12px;">'
+        if page > 1:
+            pag += f'<button class="btn btn-sm btn-secondary" onclick="loadActivityLogs({page-1})"><i data-lucide="chevron-left"></i></button>'
+        pag += f'<span style="padding:6px 12px;font-size:12px;color:#666;">Page {page}/{total_pages} ({total} entrées)</span>'
+        if page < total_pages:
+            pag += f'<button class="btn btn-sm btn-secondary" onclick="loadActivityLogs({page+1})"><i data-lucide="chevron-right"></i></button>'
+        pag += '</div>'
+
+    if not rows:
+        html = '<div style="text-align:center;padding:40px;color:#888;"><i data-lucide="clipboard-list" style="width:32px;height:32px;"></i><p style="margin-top:8px;">Aucune activité enregistrée</p></div>'
+    else:
+        html = f'''<div class="table-container"><table class="data-table">
+            <thead><tr>
+                <th>Date</th><th>Utilisateur</th><th>Action</th><th>Module</th><th>Détails</th><th>IP</th>
+            </tr></thead>
+            <tbody>{"".join(rows)}</tbody>
+        </table></div>{pag}'''
+
+    return HTMLResponse(content=html)
+
+
+# ─── CO2 DECARBONATION VARIABLES ────────────────────────────
+@router.post("/co2/update", response_class=HTMLResponse)
+async def update_co2_variables(
+    request: Request,
+    user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     form = await request.form()
-    from datetime import date as _date
-
-    for var_name, defaults in CO2_DEFAULTS.items():
-        val_str = form.get(f"co2_{var_name}", "")
-        val = pf(val_str, defaults["value"])
-
-        # Get current entry
-        result = await db.execute(
-            select(Co2Variable).where(
-                Co2Variable.variable_name == var_name,
-                Co2Variable.is_current == True
+    from datetime import date
+    today = date.today()
+    for var_name, info in CO2_DEFAULTS.items():
+        form_val = form.get(f"co2_{var_name}", "")
+        if form_val:
+            new_val = pf(form_val, info["value"])
+            result = await db.execute(
+                select(Co2Variable).where(Co2Variable.variable_name == var_name, Co2Variable.is_current == True)
             )
-        )
-        current = result.scalar_one_or_none()
-
-        if current:
-            # For towt_co2_ef, historize: keep old entry, create new
-            if var_name == "towt_co2_ef" and abs(current.variable_value - val) > 0.0001:
-                current.is_current = False
-                new_entry = Co2Variable(
-                    variable_name=var_name,
-                    variable_value=val,
-                    unit=defaults["unit"],
-                    description=defaults["description"],
-                    effective_date=_date.today(),
-                    is_current=True,
-                )
-                db.add(new_entry)
-            else:
-                current.variable_value = val
-        else:
-            entry = Co2Variable(
-                variable_name=var_name,
-                variable_value=val,
-                unit=defaults["unit"],
-                description=defaults["description"],
-                effective_date=_date.today(),
-                is_current=True,
-            )
-            db.add(entry)
-
+            existing = result.scalar_one_or_none()
+            if existing and abs(existing.variable_value - new_val) > 0.0001:
+                # Historize TOWT CO2 EF
+                if var_name == "towt_co2_ef":
+                    existing.is_current = False
+                    new_var = Co2Variable(
+                        variable_name=var_name, variable_value=new_val,
+                        unit=info["unit"], description=info.get("description", ""),
+                        effective_date=today, is_current=True,
+                    )
+                    db.add(new_var)
+                else:
+                    existing.variable_value = new_val
+            elif not existing:
+                db.add(Co2Variable(
+                    variable_name=var_name, variable_value=new_val,
+                    unit=info["unit"], description=info.get("description", ""),
+                    effective_date=today, is_current=True,
+                ))
     await db.flush()
-    await log_activity(db, user, "admin", "update_co2", None, None, "Mise à jour variables décarbonation")
+    await log_activity(db, user, "admin", "update", "Co2Variable", None, "Mise à jour variables CO2")
+    url = "/admin/settings"
     if request.headers.get("HX-Request"):
-        return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
-    return RedirectResponse(url="/admin/settings", status_code=303)
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
 
 
 # ─── MRV PARAMETERS ─────────────────────────────────────────
 @router.post("/mrv/update", response_class=HTMLResponse)
-async def mrv_params_update(
+async def update_mrv_parameters(
     request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     form = await request.form()
-
-    for param_name, defaults in MRV_DEFAULTS.items():
-        val_str = form.get(f"mrv_{param_name}", "")
-        val = pf(val_str, defaults["value"])
-
-        result = await db.execute(
-            select(MrvParameter).where(MrvParameter.parameter_name == param_name)
-        )
-        param = result.scalar_one_or_none()
-        if param:
-            param.parameter_value = val
-        else:
-            param = MrvParameter(
-                parameter_name=param_name,
-                parameter_value=val,
-                unit=defaults["unit"],
-                description=defaults["description"],
+    for param_name, info in MRV_DEFAULTS.items():
+        form_val = form.get(f"mrv_{param_name}", "")
+        if form_val:
+            new_val = pf(form_val, info["value"])
+            result = await db.execute(
+                select(MrvParameter).where(MrvParameter.parameter_name == param_name)
             )
-            db.add(param)
-
+            existing = result.scalar_one_or_none()
+            if existing:
+                existing.parameter_value = new_val
+            else:
+                db.add(MrvParameter(
+                    parameter_name=param_name, parameter_value=new_val,
+                    unit=info["unit"], description=info.get("description", ""),
+                ))
     await db.flush()
-    await log_activity(db, user, "admin", "update_mrv", None, None, "Mise à jour paramètres MRV")
+    await log_activity(db, user, "admin", "update", "MrvParameter", None, "Mise à jour paramètres MRV")
+    url = "/admin/settings"
     if request.headers.get("HX-Request"):
-        return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
-    return RedirectResponse(url="/admin/settings", status_code=303)
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
 
 
-# ─── EMISSION PARAMETERS UPDATE ──────────────────────────────
+# ─── EMISSIONS UPDATE ────────────────────────────────────────
 @router.post("/emissions/update", response_class=HTMLResponse)
-async def emissions_update(
+async def update_emission_params(
     request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     form = await request.form()
-    from app.routers.kpi_router import DEFAULTS as KPI_DEFAULTS
-
-    for param_name, default_val in KPI_DEFAULTS.items():
-        val_str = form.get(f"em_{param_name}", "")
-        val = pf(val_str, default_val)
-
-        result = await db.execute(
-            select(EmissionParameter).where(EmissionParameter.parameter_name == param_name)
-        )
-        param = result.scalar_one_or_none()
-        if param:
-            param.parameter_value = val
-        else:
-            param = EmissionParameter(
-                parameter_name=param_name,
-                parameter_value=val,
-                unit="",
-                description=param_name,
+    for key in form.keys():
+        if key.startswith("ep_"):
+            param_name = key[3:]
+            new_val = pf(form.get(key), 0)
+            result = await db.execute(
+                select(EmissionParameter).where(EmissionParameter.parameter_name == param_name)
             )
-            db.add(param)
-
+            ep = result.scalar_one_or_none()
+            if ep:
+                ep.parameter_value = new_val
     await db.flush()
-    await log_activity(db, user, "admin", "update_emissions", None, None, "Mise à jour paramètres émissions KPI")
+    await log_activity(db, user, "admin", "update", "EmissionParameter", None, "Mise à jour émissions KPI")
+    url = "/admin/settings"
     if request.headers.get("HX-Request"):
-        return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
-    return RedirectResponse(url="/admin/settings", status_code=303)
-
-
-# ─── ACTIVITY LOG ───────────────────────────────────────────
-@router.get("/activity-log", response_class=HTMLResponse)
-async def activity_log_page(
-    request: Request,
-    module: Optional[str] = Query(None),
-    username: Optional[str] = Query(None),
-    page: int = Query(1),
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    from app.models.activity import ActivityLog
-    PAGE_SIZE = 50
-    query = select(ActivityLog).order_by(ActivityLog.timestamp.desc())
-    if module:
-        query = query.where(ActivityLog.module == module)
-    if username:
-        query = query.where(ActivityLog.username.ilike(f"%{username}%"))
-
-    count_q = select(func.count(ActivityLog.id))
-    if module:
-        count_q = count_q.where(ActivityLog.module == module)
-    if username:
-        count_q = count_q.where(ActivityLog.username.ilike(f"%{username}%"))
-    total = (await db.execute(count_q)).scalar() or 0
-
-    offset = (page - 1) * PAGE_SIZE
-    result = await db.execute(query.offset(offset).limit(PAGE_SIZE))
-    entries = result.scalars().all()
-    total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
-
-    modules_result = await db.execute(
-        select(ActivityLog.module).distinct().order_by(ActivityLog.module)
-    )
-    modules = [r[0] for r in modules_result.all()]
-
-    return templates.TemplateResponse("admin/activity_log.html", {
-        "request": request, "user": user,
-        "entries": entries,
-        "modules": modules,
-        "selected_module": module,
-        "search_username": username or "",
-        "page": page, "total_pages": total_pages, "total": total,
-        "active_module": "settings",
-    })
-
-
-@router.get("/activity-log/export/csv", response_class=StreamingResponse)
-async def activity_log_export(
-    module: Optional[str] = Query(None),
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    from app.models.activity import ActivityLog
-    query = select(ActivityLog).order_by(ActivityLog.timestamp.desc())
-    if module:
-        query = query.where(ActivityLog.module == module)
-    result = await db.execute(query.limit(5000))
-    entries = result.scalars().all()
-
-    output = io.StringIO()
-    writer = csv.writer(output, delimiter=";")
-    writer.writerow(["Date/Heure", "Utilisateur", "Module", "Action", "Type", "ID", "Détail"])
-    for e in entries:
-        writer.writerow([
-            e.timestamp.strftime("%d/%m/%Y %H:%M") if e.timestamp else "",
-            e.username or "", e.module or "", e.action or "",
-            e.resource_type or "", e.resource_id or "", e.detail or "",
-        ])
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]), media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=activity_log_towt.csv"},
-    )
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)

@@ -1,0 +1,245 @@
+{% extends "passengers/portal_base.html" %}
+{% block portal_title %}{% if lang == 'en' %}Your Crossing{% else %}Votre Traversée{% endif %}{% endblock %}
+
+{% block portal_content %}
+{% set leg = booking.leg %}
+{% set vessel = booking.vessel or (leg.vessel if leg else None) %}
+
+<!-- HERO -->
+<div class="home-hero">
+    <div class="home-hero-bg"></div>
+    <div class="home-hero-content">
+        <div class="home-hero-greeting">
+            {% if lang == 'en' %}Welcome aboard,{% else %}Bienvenue à bord,{% endif %}
+            <strong>{{ booking.passengers[0].first_name if booking.passengers else '' }}</strong> 👋
+        </div>
+        {% if leg %}
+        <div class="home-hero-route">
+            <div class="home-port">
+                <span class="home-port-flag">🏗️</span>
+                <span class="home-port-name">{{ leg.departure_port.name }}</span>
+                <span class="home-port-code">{{ leg.departure_port.locode }}</span>
+            </div>
+            <div class="home-route-arrow">
+                <svg width="60" height="20"><path d="M0 10 H50 M42 4 L52 10 L42 16" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+                <span class="home-vessel-name">🚢 {{ vessel.name if vessel else '' }}</span>
+            </div>
+            <div class="home-port">
+                <span class="home-port-flag">⚓</span>
+                <span class="home-port-name">{{ leg.arrival_port.name }}</span>
+                <span class="home-port-code">{{ leg.arrival_port.locode }}</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- COUNTDOWN & KEY INFO -->
+<div class="home-cards-row">
+    {% if leg and leg.etd %}
+    <div class="home-info-card home-countdown" id="countdown-card">
+        <div class="home-card-icon">⏱️</div>
+        <div class="home-card-body">
+            <span class="home-card-value" id="countdown-value">—</span>
+            <span class="home-card-label">{% if lang == 'en' %}until departure{% else %}avant le départ{% endif %}</span>
+            <span class="home-card-detail">{{ leg.etd.strftime('%d/%m/%Y') }}</span>
+        </div>
+    </div>
+    {% endif %}
+    {% if leg %}
+    <div class="home-info-card">
+        <div class="home-card-icon">📏</div>
+        <div class="home-card-body">
+            <span class="home-card-value">{{ '%.0f'|format(leg.distance_nm or 0) }} NM</span>
+            <span class="home-card-label">{% if lang == 'en' %}distance{% else %}distance{% endif %}</span>
+            {% if leg.estimated_duration_hours %}
+            <span class="home-card-detail">~{{ (leg.estimated_duration_hours / 24)|round(0)|int }} {% if lang == 'en' %}days at sea{% else %}jours en mer{% endif %}</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    <div class="home-info-card">
+        <div class="home-card-icon">🛏️</div>
+        <div class="home-card-body">
+            <span class="home-card-value">{{ cabin_type_labels.get(booking.cabin_number, booking.cabin_number or '—') }}</span>
+            <span class="home-card-label">{% if lang == 'en' %}your cabin{% else %}votre cabine{% endif %}</span>
+            <span class="home-card-detail">{{ booking.passengers|length }} {% if lang == 'en' %}passenger{{ 's' if booking.passengers|length > 1 }}{% else %}passager{{ 's' if booking.passengers|length > 1 }}{% endif %}</span>
+        </div>
+    </div>
+    <div class="home-info-card">
+        <div class="home-card-icon">📋</div>
+        <div class="home-card-body">
+            <span class="home-card-value home-status-{{ booking.status }}">
+                {% if lang == 'en' %}
+                {{ {'draft':'Draft','confirmed':'Confirmed','paid':'Paid','embarked':'On board','completed':'Completed'}.get(booking.status, booking.status) }}
+                {% else %}
+                {{ {'draft':'Brouillon','confirmed':'Confirmée','paid':'Payée','embarked':'Embarqué','completed':'Terminée'}.get(booking.status, booking.status) }}
+                {% endif %}
+            </span>
+            <span class="home-card-label">{% if lang == 'en' %}booking status{% else %}statut réservation{% endif %}</span>
+            <span class="home-card-detail">{{ booking.reference }}</span>
+        </div>
+    </div>
+</div>
+
+<!-- PREPARATION PROGRESS -->
+<div class="card">
+    <h2>🎯 {% if lang == 'en' %}Your preparation{% else %}Votre préparation{% endif %}</h2>
+    {% set total_docs = namespace(count=0, done=0) %}
+    {% set total_quest = namespace(count=0, done=0) %}
+    {% for pax in booking.passengers %}
+        {% for d in pax.documents %}
+            {% set total_docs.count = total_docs.count + 1 %}
+            {% if d.status == 'validated' %}{% set total_docs.done = total_docs.done + 1 %}{% endif %}
+        {% endfor %}
+        {% set total_quest.count = total_quest.count + 1 %}
+        {% set form = pax_forms.get(pax.id) %}
+        {% if form and form.signed %}{% set total_quest.done = total_quest.done + 1 %}{% endif %}
+    {% endfor %}
+
+    <div class="home-progress-grid">
+        <a href="/passenger/{{ token }}/admin?lang={{ lang }}" class="home-progress-item">
+            <div class="home-progress-icon">👤</div>
+            <div class="home-progress-body">
+                <div class="home-progress-title">{% if lang == 'en' %}Personal info{% else %}Infos personnelles{% endif %}</div>
+                <div class="home-progress-bar"><div class="home-progress-fill" style="width:{% if booking.passengers and booking.passengers[0].passport_number %}100{% else %}30{% endif %}%"></div></div>
+            </div>
+            <div class="home-progress-status">{% if booking.passengers and booking.passengers[0].passport_number %}✅{% else %}⚠️{% endif %}</div>
+        </a>
+        <a href="/passenger/{{ token }}/passenger-docs?lang={{ lang }}" class="home-progress-item">
+            <div class="home-progress-icon">📄</div>
+            <div class="home-progress-body">
+                <div class="home-progress-title">{% if lang == 'en' %}Documents{% else %}Documents{% endif %}</div>
+                <div class="home-progress-bar"><div class="home-progress-fill" style="width:{{ (total_docs.done / total_docs.count * 100) if total_docs.count > 0 else 0 }}%"></div></div>
+                <div class="home-progress-detail">{{ total_docs.done }}/{{ total_docs.count }}</div>
+            </div>
+            <div class="home-progress-status">{% if total_docs.done == total_docs.count and total_docs.count > 0 %}✅{% else %}⚠️{% endif %}</div>
+        </a>
+        <a href="/passenger/{{ token }}/questionnaire?lang={{ lang }}" class="home-progress-item">
+            <div class="home-progress-icon">📝</div>
+            <div class="home-progress-body">
+                <div class="home-progress-title">{% if lang == 'en' %}Questionnaire{% else %}Questionnaire{% endif %}</div>
+                <div class="home-progress-bar"><div class="home-progress-fill" style="width:{{ (total_quest.done / total_quest.count * 100) if total_quest.count > 0 else 0 }}%"></div></div>
+                <div class="home-progress-detail">{{ total_quest.done }}/{{ total_quest.count }}</div>
+            </div>
+            <div class="home-progress-status">{% if total_quest.done == total_quest.count and total_quest.count > 0 %}✅{% else %}⚠️{% endif %}</div>
+        </a>
+        <a href="/passenger/{{ token }}/admin?lang={{ lang }}#payments" class="home-progress-item">
+            <div class="home-progress-icon">💶</div>
+            <div class="home-progress-body">
+                <div class="home-progress-title">{% if lang == 'en' %}Payment{% else %}Paiement{% endif %}</div>
+                <div class="home-progress-bar"><div class="home-progress-fill" style="width:{% if booking.status in ('paid','embarked','completed') %}100{% elif booking.status == 'confirmed' %}50{% else %}10{% endif %}%"></div></div>
+            </div>
+            <div class="home-progress-status">{% if booking.status in ('paid','embarked','completed') %}✅{% elif booking.status == 'confirmed' %}🔶{% else %}⚠️{% endif %}</div>
+        </a>
+    </div>
+</div>
+
+<!-- QUICK LINKS -->
+<div class="home-quick-grid">
+    <a href="/passenger/{{ token }}/vessel?lang={{ lang }}" class="home-quick-card">
+        <span class="home-quick-icon">🚢</span>
+        <span class="home-quick-label">{% if lang == 'en' %}The Vessel{% else %}Le Navire{% endif %}</span>
+    </a>
+    <a href="/passenger/{{ token }}/voyage?lang={{ lang }}" class="home-quick-card">
+        <span class="home-quick-icon">🗺️</span>
+        <span class="home-quick-label">{% if lang == 'en' %}The Voyage{% else %}Le Voyage{% endif %}</span>
+    </a>
+    <a href="/passenger/{{ token }}/life?lang={{ lang }}" class="home-quick-card">
+        <span class="home-quick-icon">⚓</span>
+        <span class="home-quick-label">{% if lang == 'en' %}Life on Board{% else %}La Vie à bord{% endif %}</span>
+    </a>
+    <a href="/passenger/{{ token }}/destination?lang={{ lang }}" class="home-quick-card">
+        <span class="home-quick-icon">🌍</span>
+        <span class="home-quick-label">{% if lang == 'en' %}Your Destination{% else %}Votre Destination{% endif %}</span>
+    </a>
+    <a href="/passenger/{{ token }}/safety?lang={{ lang }}" class="home-quick-card">
+        <span class="home-quick-icon">🛟</span>
+        <span class="home-quick-label">{% if lang == 'en' %}Safety{% else %}Sécurité{% endif %}</span>
+    </a>
+    <a href="/passenger/{{ token }}/messages?lang={{ lang }}" class="home-quick-card">
+        <span class="home-quick-icon">💬</span>
+        <span class="home-quick-label">{% if lang == 'en' %}Talk to us{% else %}Parlez avec nous{% endif %}</span>
+    </a>
+</div>
+
+<!-- CROSSING BOOK -->
+<div class="card" style="text-align:center;">
+    <h2>📖 {% if lang == 'en' %}Crossing Book{% else %}Book de traversée{% endif %}</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:12px;">{% if lang == 'en' %}Download your crossing book with all voyage details.{% else %}Téléchargez votre book de traversée avec tous les détails du voyage.{% endif %}</p>
+    <div style="display:flex;gap:10px;justify-content:center;">
+        <a href="/passenger/{{ token }}/book" class="btn btn-primary">📖 Book FR</a>
+        <a href="/passenger/{{ token }}/book/en" class="btn btn-primary" style="background:#0a6b7a;">📖 Book EN</a>
+    </div>
+</div>
+
+<style>
+    /* Hero */
+    .home-hero{position:relative;border-radius:16px;overflow:hidden;margin-bottom:20px;min-height:160px;display:flex;align-items:center;}
+    .home-hero-bg{position:absolute;inset:0;background:linear-gradient(135deg,#095561 0%,#0e7a8c 50%,#0a6b7a 100%);z-index:0;}
+    .home-hero-content{position:relative;z-index:1;padding:28px 32px;width:100%;color:white;}
+    .home-hero-greeting{font-size:22px;margin-bottom:16px;font-weight:300;}
+    .home-hero-greeting strong{font-weight:700;}
+    .home-hero-route{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;}
+    .home-port{text-align:center;}
+    .home-port-flag{font-size:28px;display:block;}
+    .home-port-name{font-size:18px;font-weight:700;display:block;}
+    .home-port-code{font-size:11px;opacity:0.6;}
+    .home-route-arrow{display:flex;flex-direction:column;align-items:center;gap:4px;}
+    .home-vessel-name{font-size:11px;opacity:0.7;white-space:nowrap;}
+
+    /* Info cards row */
+    .home-cards-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;}
+    .home-info-card{background:white;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,0.06);padding:16px;display:flex;gap:12px;align-items:center;}
+    .home-card-icon{font-size:28px;flex-shrink:0;}
+    .home-card-body{flex:1;}
+    .home-card-value{display:block;font-size:20px;font-weight:700;color:#095561;}
+    .home-card-label{font-size:11px;color:#888;text-transform:uppercase;}
+    .home-card-detail{font-size:11px;color:#aaa;margin-top:2px;}
+    .home-countdown{border-left:4px solid #F59E0B;}
+    .home-status-draft{color:#D97706;} .home-status-confirmed{color:#2563EB;} .home-status-paid{color:#16a34a;} .home-status-embarked{color:#095561;} .home-status-completed{color:#87BD2B;}
+
+    /* Progress */
+    .home-progress-grid{display:flex;flex-direction:column;gap:8px;}
+    .home-progress-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;background:#f8fafb;text-decoration:none;color:inherit;transition:all .15s;}
+    .home-progress-item:hover{background:#eef5f6;transform:translateX(2px);}
+    .home-progress-icon{font-size:22px;flex-shrink:0;}
+    .home-progress-body{flex:1;}
+    .home-progress-title{font-size:13px;font-weight:600;color:#333;margin-bottom:4px;}
+    .home-progress-bar{height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;}
+    .home-progress-fill{height:100%;background:linear-gradient(90deg,#87BD2B,#6fa020);border-radius:3px;transition:width .5s;}
+    .home-progress-detail{font-size:10px;color:#888;margin-top:2px;}
+    .home-progress-status{font-size:18px;flex-shrink:0;}
+
+    /* Quick links */
+    .home-quick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:20px;}
+    .home-quick-card{background:white;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,0.06);padding:20px 16px;text-align:center;text-decoration:none;color:#333;transition:all .15s;}
+    .home-quick-card:hover{box-shadow:0 4px 14px rgba(0,0,0,0.1);transform:translateY(-2px);}
+    .home-quick-icon{font-size:32px;display:block;margin-bottom:8px;}
+    .home-quick-label{font-size:12px;font-weight:600;color:#095561;}
+</style>
+
+{% if booking.leg and booking.leg.etd %}
+<script>
+(function(){
+    const etd = new Date("{{ booking.leg.etd.isoformat() }}");
+    function update(){
+        const now = new Date();
+        const diff = etd - now;
+        const el = document.getElementById('countdown-value');
+        if(!el) return;
+        if(diff <= 0){
+            el.textContent = "{% if lang == 'en' %}Departed!{% else %}Parti !{% endif %}";
+            return;
+        }
+        const days = Math.floor(diff / 86400000);
+        const hrs = Math.floor((diff % 86400000) / 3600000);
+        if(days > 0) el.textContent = days + " {% if lang == 'en' %}day{% else %}jour{% endif %}" + (days > 1 ? "s" : "") + " " + hrs + "h";
+        else el.textContent = hrs + "h " + Math.floor((diff % 3600000) / 60000) + "min";
+    }
+    update();
+    setInterval(update, 60000);
+})();
+</script>
+{% endif %}
+{% endblock %}

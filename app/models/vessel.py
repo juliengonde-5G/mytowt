@@ -12,10 +12,11 @@ class Vessel(Base):
     imo_number = Column(String(20), nullable=True)
     flag = Column(String(50), nullable=True)
     dwt = Column(Float, nullable=True)  # Deadweight tonnage
-    lightship_mt = Column(Float, nullable=True)  # Lightship weight (metric tons) for MRV cargo calculation
     capacity_palettes = Column(Integer, nullable=True)  # Max palette capacity
     default_speed = Column(Float, default=8.0)  # Default exploitation speed in knots
     default_elongation = Column(Float, default=1.25)  # Default elongation coefficient
+    opex_daily_sea = Column(Float, nullable=True)  # OPEX journalier en mer (€/jour)
+    max_palettes = Column(Integer, default=850)  # Capacité max palettes
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

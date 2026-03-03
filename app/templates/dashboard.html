@@ -1,22 +1,68 @@
 {% extends "base.html" %}
 {% block title %}my_TOWT - Tableau de bord{% endblock %}
-{% block page_title %}Tableau de bord{% endblock %}
+{% block page_title %}{{ t('page_dashboard', lang) }}{% endblock %}
 
 {% block content %}
 <div class="dashboard">
     <div class="welcome-banner">
         <div class="welcome-text">
-            <h2>Bienvenue, {{ user.full_name }}</h2>
-            <p>TOWT — Transport à la voile · Gestion de la flotte</p>
+            <h2>{{ t('dash_welcome', lang) }} {{ user.full_name }}</h2>
+            <p>{{ t('dash_subtitle', lang) }}</p>
         </div>
         <div class="welcome-date"><span id="current-date"></span></div>
     </div>
+
+    <!-- NOTIFICATIONS CENTER -->
+    {% set unread_notifs = notifications|selectattr('is_read', 'false')|list %}
+    {% set read_notifs = notifications|selectattr('is_read', 'true')|list %}
+    {% if notifications %}
+    <div class="notif-center" style="margin-bottom:20px;">
+        <div class="section-header" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <h3><i data-lucide="bell" style="width:18px;height:18px;"></i> {{ t("dash_notifications", lang) }}{% if unread_notifs %} <span style="background:#dc2626;color:white;font-size:11px;padding:2px 8px;border-radius:100px;font-weight:600;margin-left:6px;">{{ unread_notifs|length }}</span>{% endif %}</h3>
+            {% if read_notifs %}
+            <form method="POST" action="/notifications/archive-read" style="margin-left:auto;">
+                <button type="submit" class="btn btn-sm btn-secondary" style="font-size:11px;"><i data-lucide="archive" style="width:12px;height:12px;"></i> {{ t('dash_archive_read', lang) }}</button>
+            </form>
+            {% endif %}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+            {% for n in notifications %}
+            <div class="dash-notif-card {% if n.is_read %}notif-read{% endif %}">
+                <span class="dash-notif-icon">{{ n.icon }}</span>
+                <div class="dash-notif-body">
+                    <div class="dash-notif-title">
+                        <span class="dash-notif-type dash-nt-{{ n.type }}">{{ n.type_label }}</span>
+                        <span class="dash-notif-time">{{ n.created_at.strftime('%d/%m %H:%M') if n.created_at else '' }}</span>
+                    </div>
+                    <div class="dash-notif-text">{{ n.title }}</div>
+                    {% if n.detail %}<div class="dash-notif-detail">{{ n.detail }}</div>{% endif %}
+                </div>
+                <div class="dash-notif-actions">
+                    {% if n.link %}<a href="{{ n.link }}" class="btn btn-sm btn-secondary" style="font-size:10px;padding:4px 8px;"><i data-lucide="external-link" style="width:12px;height:12px;"></i></a>{% endif %}
+                    <form method="POST" action="/notifications/{{ n.id }}/toggle-read" style="display:inline;">
+                        <button type="submit" class="btn btn-sm {% if n.is_read %}btn-secondary{% else %}btn-primary{% endif %}" style="font-size:10px;padding:4px 8px;" title="{{ 'Marquer non lu' if n.is_read else 'Marquer lu' }}">
+                            <i data-lucide="{{ 'eye-off' if n.is_read else 'eye' }}" style="width:12px;height:12px;"></i>
+                        </button>
+                    </form>
+                    {% if n.is_read %}
+                    <form method="POST" action="/notifications/{{ n.id }}/archive" style="display:inline;">
+                        <button type="submit" class="btn btn-sm btn-secondary" style="font-size:10px;padding:4px 8px;" title="Archiver">
+                            <i data-lucide="archive" style="width:12px;height:12px;"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 
     <!-- CARGO NOTIFICATIONS -->
     {% if cargo_notifications %}
     <div class="cargo-notif-section" style="margin-bottom:20px;">
         <div class="section-header" style="display:flex;align-items:center;gap:8px;">
-            <h3><i data-lucide="package-check" style="width:18px;height:18px;"></i> Packing Lists à traiter ({{ cargo_notifications|length }})</h3>
+            <h3><i data-lucide="package-check" style="width:18px;height:18px;"></i> {{ t('dash_packing_to_review', lang) }} ({{ cargo_notifications|length }})</h3>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
             {% for pl in cargo_notifications %}
@@ -29,9 +75,9 @@
                     </div>
                 </div>
                 <div class="notif-actions">
-                    <a href="/cargo/{{ pl.id }}" class="btn btn-sm btn-secondary"><i data-lucide="eye" style="width:12px;height:12px;"></i> Voir</a>
+                    <a href="/cargo/{{ pl.id }}" class="btn btn-sm btn-secondary"><i data-lucide="eye" style="width:12px;height:12px;"></i> {{ t('dash_view', lang) }}</a>
                     <form method="POST" action="/notifications/cargo/{{ pl.id }}/dismiss" style="display:inline;">
-                        <button type="submit" class="btn btn-sm btn-primary"><i data-lucide="check" style="width:12px;height:12px;"></i> Traité</button>
+                        <button type="submit" class="btn btn-sm btn-primary"><i data-lucide="check" style="width:12px;height:12px;"></i> {{ t('dash_treated', lang) }}</button>
                     </form>
                 </div>
             </div>
@@ -40,36 +86,31 @@
     </div>
     {% endif %}
 
-    <!-- COMPANY NOTIFICATIONS -->
+    <!-- COMPANY NOTIFICATIONS (OnboardNotification) -->
     {% if company_notifications %}
     <div class="company-notif-section" style="margin-bottom:20px;">
         <div class="section-header" style="display:flex;align-items:center;gap:8px;">
-            <h3><i data-lucide="bell-ring" style="width:18px;height:18px;"></i> Notifications ({{ company_notifications|length }})</h3>
-            <form method="POST" action="/notifications/dismiss-all" style="margin-left:auto;">
-                <button type="submit" class="btn btn-sm btn-secondary" style="font-size:11px;">Tout marquer lu</button>
+            <h3><i data-lucide="radio" style="width:18px;height:18px;"></i> Notifications compagnie ({{ company_notifications|length }})</h3>
+            {% if company_notifications|length > 1 %}
+            <form method="POST" action="/notifications/company/dismiss-all" style="margin-left:auto;">
+                <button type="submit" class="btn btn-sm btn-secondary" style="font-size:11px;"><i data-lucide="check-check" style="width:12px;height:12px;"></i> Tout marquer lu</button>
             </form>
+            {% endif %}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
-            {% for notif in company_notifications %}
-            <div class="company-notif-card {{ notif.category }}">
+            {% for cn in company_notifications %}
+            <div class="cargo-notif-card" style="border-left-color:#2563EB;">
                 <div class="notif-left">
-                    <span class="notif-category-icon">
-                        {% if notif.category == 'escale' %}⚓{% elif notif.category == 'cargo' %}📦{% else %}🔔{% endif %}
-                    </span>
+                    <span class="notif-icon">{% if cn.category == 'escale' %}⚓{% elif cn.category == 'cargo' %}📦{% else %}🔔{% endif %}</span>
                     <div>
-                        <strong>{{ notif.title }}</strong>
-                        {% if notif.detail %}
-                        <div style="font-size:11px;color:#666;margin-top:2px;white-space:pre-line;">{{ notif.detail[:150] }}{% if notif.detail|length > 150 %}…{% endif %}</div>
-                        {% endif %}
-                        <div style="font-size:10px;color:#aaa;margin-top:2px;">{{ notif.created_at.strftime('%d/%m/%Y %H:%M') if notif.created_at else '' }}</div>
+                        <strong>{{ cn.title }}</strong>
+                        {% if cn.detail %}<div style="font-size:11px;color:#888;white-space:pre-line;">{{ cn.detail }}</div>{% endif %}
+                        <div style="font-size:10px;color:#aaa;">{{ cn.created_at.strftime('%d/%m/%Y %H:%M') if cn.created_at else '' }}</div>
                     </div>
                 </div>
                 <div class="notif-actions">
-                    {% if notif.leg_id %}
-                    <a href="/escale?leg_id={{ notif.leg_id }}" class="btn btn-sm btn-secondary"><i data-lucide="eye" style="width:12px;height:12px;"></i></a>
-                    {% endif %}
-                    <form method="POST" action="/notifications/{{ notif.id }}/dismiss" style="display:inline;">
-                        <button type="submit" class="btn btn-sm btn-primary"><i data-lucide="check" style="width:12px;height:12px;"></i></button>
+                    <form method="POST" action="/notifications/company/{{ cn.id }}/dismiss" style="display:inline;">
+                        <button type="submit" class="btn btn-sm btn-secondary" title="Marquer lu"><i data-lucide="check" style="width:12px;height:12px;"></i></button>
                     </form>
                 </div>
             </div>
@@ -83,7 +124,7 @@
     <div class="alerts-section">
         <div class="section-header" style="display:flex;align-items:center;gap:8px;">
             <h3><i data-lucide="bell" style="width:18px;height:18px;"></i> Alertes ({{ alerts|length }})</h3>
-            <button class="btn btn-sm btn-secondary" onclick="document.querySelector('.alerts-list').classList.toggle('collapsed')" style="margin-left:auto;font-size:11px;">Masquer/Afficher</button>
+            <button class="btn btn-sm btn-secondary" onclick="document.querySelector('.alerts-list').classList.toggle('collapsed')" style="margin-left:auto;font-size:11px;">{{ t('dash_hide_show', lang) }}</button>
         </div>
         <div class="alerts-list">
             {% for alert in alerts %}
@@ -106,48 +147,48 @@
             <div class="stat-card-icon blue"><i data-lucide="navigation"></i></div>
             <div class="stat-card-body">
                 <span class="stat-card-value">{{ total_legs }}</span>
-                <span class="stat-card-label">Legs {{ current_year }}</span>
+                <span class="stat-card-label">{{ t('dash_legs', lang) }} {{ current_year }}</span>
             </div>
         </div>
         <div class="stat-card">
             <div class="stat-card-icon green"><i data-lucide="package"></i></div>
             <div class="stat-card-body">
                 <span class="stat-card-value">{{ total_orders }}</span>
-                <span class="stat-card-label">Commandes actives</span>
+                <span class="stat-card-label">{{ t('dash_active_orders', lang) }}</span>
             </div>
         </div>
         <div class="stat-card">
             <div class="stat-card-icon sky"><i data-lucide="anchor"></i></div>
             <div class="stat-card-body">
                 <span class="stat-card-value">{{ escales_month }}</span>
-                <span class="stat-card-label">Escales ce mois</span>
+                <span class="stat-card-label">{{ t('dash_calls_month', lang) }}</span>
             </div>
         </div>
         <div class="stat-card">
             <div class="stat-card-icon warm"><i data-lucide="euro"></i></div>
             <div class="stat-card-body">
                 <span class="stat-card-value">{{ ca_forecast|eur }} €</span>
-                <span class="stat-card-label">CA prév. {{ current_year }}</span>
+                <span class="stat-card-label">{{ t('dash_revenue_forecast', lang) }} {{ current_year }}</span>
             </div>
         </div>
         <div class="stat-card">
             <div class="stat-card-icon" style="background:rgba(34,197,94,0.12);color:#16a34a;"><i data-lucide="leaf"></i></div>
             <div class="stat-card-body">
                 <span class="stat-card-value">{{ '%.1f'|format(co2_avoided_kg / 1000) }} t</span>
-                <span class="stat-card-label">CO₂ évité {{ current_year }}</span>
+                <span class="stat-card-label">{{ t('dash_co2_avoided', lang) }} {{ current_year }}</span>
             </div>
         </div>
         <div class="stat-card">
             <div class="stat-card-icon" style="background:rgba(139,92,246,0.12);color:#7c3aed;"><i data-lucide="bar-chart"></i></div>
             <div class="stat-card-body">
                 <span class="stat-card-value">{{ avg_fill_rate }}%</span>
-                <span class="stat-card-label">Remplissage moy.</span>
+                <span class="stat-card-label">{{ t('dash_fill_rate', lang) }}</span>
             </div>
         </div>
     </div>
 
     <!-- Fleet status -->
-    <div class="section-header"><h3>Flotte TOWT</h3></div>
+    <div class="section-header"><h3>{{ t('dash_fleet', lang) }}</h3></div>
     <div class="fleet-grid">
         {% for vs in vessel_statuses %}
         <div class="vessel-card">
@@ -169,30 +210,37 @@
             </div>
             {% if vs.current_leg %}
             <div class="vessel-leg-info">
-                <span style="font-family:monospace;color:var(--towt-blue);font-size:11px;">{{ vs.current_leg.leg_code }}</span>
+                <span style="font-family:'Poppins',sans-serif;color:var(--towt-blue);font-size:11px;">{{ vs.current_leg.leg_code }}</span>
                 {% if vs.current_leg.eta %}
                 <span style="font-size:11px;color:#888;">ETA {{ vs.current_leg.eta.strftime('%d/%m') }}</span>
                 {% endif %}
             </div>
             {% endif %}
             <div style="display:flex;gap:4px;margin-top:8px;">
-                <a href="/planning?vessel={{ vs.vessel.code }}" class="vessel-card-link">Planning <i data-lucide="arrow-right"></i></a>
-                <a href="/captain?vessel={{ vs.vessel.code }}" class="vessel-card-link captain">Capitaine <i data-lucide="compass"></i></a>
+                <a href="/planning?vessel={{ vs.vessel.code }}" class="vessel-card-link">{{ t('nav_planning', lang) }} <i data-lucide="arrow-right"></i></a>
+                <a href="/captain?vessel={{ vs.vessel.code }}" class="vessel-card-link captain">{{ t('nav_captain', lang) }} <i data-lucide="compass"></i></a>
             </div>
         </div>
         {% endfor %}
     </div>
 
+    <!-- Fleet Map -->
+    <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <h3><i data-lucide="map-pin" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;"></i> {{ t('dash_tracking_map', lang) }}</h3>
+        <span id="map-last-update" style="font-size:11px;color:#999;"></span>
+    </div>
+    <div id="fleet-map" style="height:420px;border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:24px;background:#e8f0f6;position:relative;z-index:1;"></div>
+
     <!-- Upcoming -->
     {% if upcoming_legs %}
-    <div class="section-header"><h3>Prochains départs</h3></div>
+    <div class="section-header"><h3>{{ t('dash_upcoming', lang) }}</h3></div>
     <div class="table-container">
         <table class="data-table">
-            <thead><tr><th>Leg</th><th>Navire</th><th>Route</th><th>ETD</th><th>ETA</th><th>Durée</th></tr></thead>
+            <thead><tr><th>{{ t('th_leg', lang) }}</th><th>{{ t('th_vessel', lang) }}</th><th>{{ t('th_route', lang) }}</th><th>ETD</th><th>ETA</th><th>{{ t('th_duration', lang) }}</th></tr></thead>
             <tbody>
                 {% for leg in upcoming_legs %}
                 <tr>
-                    <td><strong style="font-family:monospace;color:var(--towt-blue);">{{ leg.leg_code }}</strong></td>
+                    <td><strong style="font-family:'Poppins',sans-serif;color:var(--towt-blue);">{{ leg.leg_code }}</strong></td>
                     <td>{{ leg.vessel.name }}</td>
                     <td>{{ leg.departure_port.name }} → {{ leg.arrival_port.name }}</td>
                     <td>{{ leg.etd.strftime('%d/%m/%Y') if leg.etd else '—' }}</td>
@@ -206,12 +254,12 @@
     {% endif %}
 
     <!-- Quick access -->
-    <div class="section-header"><h3>Accès rapide</h3></div>
+    <div class="section-header"><h3>{{ t('dash_quick_access', lang) }}</h3></div>
     <div class="modules-grid">
-        <a href="/planning" class="module-card"><div class="module-icon" style="background:var(--towt-blue);"><i data-lucide="map"></i></div><h4>Planification</h4><p>Routes, escales, planning</p></a>
-        <a href="/commercial" class="module-card"><div class="module-icon" style="background:var(--towt-green);"><i data-lucide="package"></i></div><h4>Commercial</h4><p>Commandes, affectations</p></a>
-        <a href="/escale" class="module-card"><div class="module-icon" style="background:var(--towt-sky-dark);"><i data-lucide="anchor"></i></div><h4>Escale</h4><p>Opérations portuaires</p></a>
-        <a href="/finance" class="module-card"><div class="module-icon" style="background:#84AAB0;"><i data-lucide="euro"></i></div><h4>Finances</h4><p>Revenus, dépenses, marges</p></a>
+        <a href="/planning" class="module-card"><div class="module-icon" style="background:var(--towt-blue);"><i data-lucide="map"></i></div><h4>{{ t('qa_planning_title', lang) }}</h4><p>{{ t('qa_planning_desc', lang) }}</p></a>
+        <a href="/commercial" class="module-card"><div class="module-icon" style="background:var(--towt-green);"><i data-lucide="package"></i></div><h4>{{ t('qa_commercial_title', lang) }}</h4><p>{{ t('qa_commercial_desc', lang) }}</p></a>
+        <a href="/escale" class="module-card"><div class="module-icon" style="background:var(--towt-sky-dark);"><i data-lucide="anchor"></i></div><h4>{{ t('qa_escale_title', lang) }}</h4><p>{{ t('qa_escale_desc', lang) }}</p></a>
+        <a href="/finance" class="module-card"><div class="module-icon" style="background:#84AAB0;"><i data-lucide="euro"></i></div><h4>{{ t('qa_finance_title', lang) }}</h4><p>{{ t('qa_finance_desc', lang) }}</p></a>
         <a href="/kpi" class="module-card"><div class="module-icon" style="background:var(--towt-gray);"><i data-lucide="bar-chart-3"></i></div><h4>KPI</h4><p>Émissions, performance</p></a>
     </div>
 </div>
@@ -250,15 +298,132 @@
     .notif-left{display:flex;align-items:center;gap:10px}
     .notif-icon{font-size:20px}
     .notif-actions{display:flex;gap:6px}
-    .company-notif-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-left:4px solid var(--towt-blue);}
-    .company-notif-card.escale{border-left-color:#16a34a;}
-    .company-notif-card.cargo{border-left-color:#F59E0B;}
-    .company-notif-card.crew{border-left-color:#60A5FA;}
-    .notif-category-icon{font-size:20px;flex-shrink:0;}
+
+    /* Dashboard Notifications */
+    .dash-notif-card{display:flex;align-items:center;gap:12px;background:white;padding:10px 16px;border-radius:var(--radius);box-shadow:var(--shadow);border-left:4px solid var(--towt-blue);transition:all .15s}
+    .dash-notif-card.notif-read{opacity:.6;border-left-color:#ccc}
+    .dash-notif-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+    .dash-notif-icon{font-size:20px;flex-shrink:0;width:32px;text-align:center}
+    .dash-notif-body{flex:1;min-width:0}
+    .dash-notif-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .dash-notif-type{font-size:9px;padding:2px 8px;border-radius:100px;font-weight:600;text-transform:uppercase;white-space:nowrap}
+    .dash-nt-new_order{background:rgba(135,189,43,.12);color:#5a8010}
+    .dash-nt-new_cargo_message{background:rgba(9,85,97,.08);color:#095561}
+    .dash-nt-new_passenger_message{background:rgba(139,92,246,.1);color:#7c3aed}
+    .dash-nt-eosp{background:rgba(220,38,38,.08);color:#dc2626}
+    .dash-nt-sosp{background:rgba(59,130,246,.1);color:#2563eb}
+    .dash-nt-new_passenger_booking{background:rgba(245,158,11,.1);color:#d97706}
+    .dash-notif-time{font-size:10px;color:#aaa;margin-left:auto}
+    .dash-notif-text{font-size:13px;font-weight:600;color:#333;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .dash-notif-detail{font-size:11px;color:#888;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .dash-notif-actions{display:flex;gap:4px;flex-shrink:0}
 </style>
 
 <script>
     var opts = {weekday:'long',year:'numeric',month:'long',day:'numeric'};
     document.getElementById('current-date').textContent = new Date().toLocaleDateString('fr-FR', opts);
+</script>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<style>
+    #fleet-map{border:1px solid #e2e8f0;}
+    .vessel-popup{font-family:'Inter',sans-serif;min-width:180px;}
+    .vessel-popup h4{margin:0 0 6px 0;font-size:14px;color:var(--towt-blue,#095561);font-family:'Poppins',sans-serif;}
+    .vessel-popup .vp-row{display:flex;justify-content:space-between;font-size:12px;color:#555;padding:2px 0;}
+    .vessel-popup .vp-label{font-weight:600;color:#333;}
+    .vessel-popup .vp-time{font-size:11px;color:#999;margin-top:4px;border-top:1px solid #eee;padding-top:4px;}
+    .vessel-marker-label{background:rgba(9,85,97,0.9);color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;white-space:nowrap;font-family:'Poppins',sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);}
+</style>
+<script>
+(function(){
+    const mapEl = document.getElementById('fleet-map');
+    if(!mapEl) return;
+
+    const map = L.map('fleet-map',{scrollWheelZoom:true}).setView([46.5,-2],5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+        attribution:'© OpenStreetMap',
+        maxZoom:18,
+    }).addTo(map);
+
+    // Custom vessel icon
+    function vesselIcon(color){
+        return L.divIcon({
+            className:'',
+            html:'<div style="background:'+color+';width:14px;height:14px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,0.35);"></div>',
+            iconSize:[20,20],
+            iconAnchor:[10,10],
+        });
+    }
+
+    function sogColor(sog){
+        if(sog===null||sog===undefined) return '#9ca3af';
+        if(sog < 0.5) return '#87BD2B';  // at berth = green
+        if(sog < 5) return '#f59e0b';     // slow = amber
+        return '#2563eb';                   // sailing = blue
+    }
+
+    function formatDate(iso){
+        if(!iso) return '—';
+        const d=new Date(iso);
+        return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'})
+            +' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    }
+
+    fetch('/api/tracking/latest')
+        .then(r=>r.json())
+        .then(positions=>{
+            if(!positions||!positions.length){
+                mapEl.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;font-size:14px;"><i data-lucide="map-pin-off" style="width:18px;height:18px;margin-right:8px;"></i> Aucune position GPS disponible</div>';
+                return;
+            }
+            const bounds=[];
+            positions.forEach(p=>{
+                const color=sogColor(p.sog);
+                const marker=L.marker([p.lat,p.lon],{icon:vesselIcon(color)}).addTo(map);
+
+                // Label
+                const label=L.marker([p.lat,p.lon],{
+                    icon:L.divIcon({
+                        className:'',
+                        html:'<div class="vessel-marker-label">'+( p.vessel_name||'Navire #'+p.vessel_id)+'</div>',
+                        iconSize:[0,0],
+                        iconAnchor:[-14,8],
+                    }),
+                    interactive:false,
+                }).addTo(map);
+
+                // Popup
+                const sogText = p.sog!==null ? p.sog.toFixed(1)+' kn' : '—';
+                const cogText = p.cog!==null ? p.cog.toFixed(0)+'°' : '—';
+                const statusText = (p.sog!==null && p.sog < 0.5) ? '⚓ À quai' : '🌊 En mer';
+
+                marker.bindPopup(
+                    '<div class="vessel-popup">'+
+                    '<h4>🚢 '+(p.vessel_name||'Navire')+'</h4>'+
+                    '<div class="vp-row"><span class="vp-label">Statut</span><span>'+statusText+'</span></div>'+
+                    '<div class="vp-row"><span class="vp-label">SOG</span><span>'+sogText+'</span></div>'+
+                    '<div class="vp-row"><span class="vp-label">COG</span><span>'+cogText+'</span></div>'+
+                    '<div class="vp-row"><span class="vp-label">Position</span><span>'+p.lat.toFixed(4)+'°N, '+p.lon.toFixed(4)+'°E</span></div>'+
+                    '<div class="vp-time">📡 '+formatDate(p.recorded_at)+'</div>'+
+                    '</div>'
+                );
+                bounds.push([p.lat,p.lon]);
+            });
+
+            if(bounds.length===1) map.setView(bounds[0],10);
+            else if(bounds.length>1) map.fitBounds(bounds,{padding:[40,40],maxZoom:10});
+
+            // Last update timestamp
+            const latest=positions.reduce((a,b)=>new Date(a.recorded_at)>new Date(b.recorded_at)?a:b);
+            const upd=document.getElementById('map-last-update');
+            if(upd) upd.textContent='Dernière position : '+formatDate(latest.recorded_at);
+        })
+        .catch(err=>{
+            console.error('Tracking map error:',err);
+            mapEl.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;font-size:13px;">Erreur chargement carte</div>';
+        });
+})();
 </script>
 {% endblock %}

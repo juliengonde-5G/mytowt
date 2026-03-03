@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Depends, Query, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -262,15 +262,25 @@ async def dashboard(
     )
     cargo_notifications = notif_result.scalars().all()
 
-    # Company-wide notifications (most recent unread)
-    notif_company_result = await db.execute(
+    # Dashboard notifications
+    from app.models.notification import Notification
+    notifs_result = await db.execute(
+        select(Notification)
+        .where(Notification.is_archived == False)
+        .order_by(Notification.created_at.desc())
+        .limit(50)
+    )
+    notifications = notifs_result.scalars().all()
+
+    # Company-wide operational notifications (ATA/ATD/order confirmed)
+    company_notif_result = await db.execute(
         select(OnboardNotification)
         .options(selectinload(OnboardNotification.leg))
         .where(OnboardNotification.is_read == False)
         .order_by(OnboardNotification.created_at.desc())
         .limit(20)
     )
-    company_notifications = notif_company_result.scalars().all()
+    company_notifications = company_notif_result.scalars().all()
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "user": user,
@@ -280,6 +290,7 @@ async def dashboard(
         "co2_avoided_kg": co2_avoided_total, "avg_fill_rate": avg_fill_rate,
         "upcoming_legs": upcoming_legs, "alerts": alerts,
         "cargo_notifications": cargo_notifications,
+        "notifications": notifications,
         "company_notifications": company_notifications,
         "current_year": current_year, "active_module": "dashboard",
     })
@@ -297,47 +308,60 @@ async def dismiss_cargo_notification(
     if pl and pl.status == "submitted":
         pl.status = "reviewed"
     await db.flush()
-    await log_activity(db, user, "dashboard", "dismiss", "PackingList", pl_id, "Notification cargo acquittée")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/"})
     return RedirectResponse(url="/", status_code=303)
 
 
-# ─── DISMISS COMPANY NOTIFICATION ───────────────────────────
-@router.post("/notifications/{nid}/dismiss", response_class=HTMLResponse)
-async def dismiss_company_notification(
+# ─── NOTIFICATION ACTIONS ────────────────────────────────────
+@router.post("/notifications/{nid}/toggle-read", response_class=HTMLResponse)
+async def toggle_notification_read(
     nid: int, request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(OnboardNotification).where(OnboardNotification.id == nid))
-    notif = result.scalar_one_or_none()
+    from app.models.notification import Notification
+    notif = await db.get(Notification, nid)
     if notif:
-        notif.is_read = True
-    await db.flush()
+        notif.is_read = not notif.is_read
+        await db.flush()
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/"})
     return RedirectResponse(url="/", status_code=303)
 
 
-@router.post("/notifications/dismiss-all", response_class=HTMLResponse)
-async def dismiss_all_notifications(
+@router.post("/notifications/{nid}/archive", response_class=HTMLResponse)
+async def archive_notification(
+    nid: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.notification import Notification
+    notif = await db.get(Notification, nid)
+    if notif:
+        notif.is_archived = True
+        await db.flush()
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/"})
+    return RedirectResponse(url="/", status_code=303)
+
+
+@router.post("/notifications/archive-read", response_class=HTMLResponse)
+async def archive_all_read_notifications(
     request: Request,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.models.notification import Notification
     result = await db.execute(
-        select(OnboardNotification).where(OnboardNotification.is_read == False)
+        select(Notification).where(Notification.is_read == True, Notification.is_archived == False)
     )
-    for notif in result.scalars().all():
-        notif.is_read = True
+    for n in result.scalars().all():
+        n.is_archived = True
     await db.flush()
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/"})
     return RedirectResponse(url="/", status_code=303)
-
-
-# ─── CAPTAIN DASHBOARD ──────────────────────────────────────
 @router.get("/captain", response_class=HTMLResponse)
 async def captain_dashboard(
     request: Request,

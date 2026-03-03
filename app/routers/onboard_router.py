@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Request, Depends, Query, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.utils.activity import log_activity, get_client_ip
 from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
 
@@ -21,7 +22,6 @@ from app.models.onboard import (
     SofEvent, OnboardNotification, CargoDocument,
     SOF_EVENT_TYPES, CARGO_DOC_TYPES,
 )
-from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/onboard", tags=["onboard"])
 
@@ -63,6 +63,8 @@ async def onboard_home(
     notifications = []
     last_sof = None
 
+    next_leg = None  # leg export (départ du port)
+
     if vessel_obj:
         legs_result = await db.execute(
             select(Leg).options(
@@ -90,6 +92,18 @@ async def onboard_home(
                     current_leg = legs[-1]
 
         if current_leg:
+            # ─── Next leg (export) ───
+            next_leg_result = await db.execute(
+                select(Leg).options(
+                    selectinload(Leg.departure_port), selectinload(Leg.arrival_port),
+                ).where(
+                    Leg.vessel_id == vessel_obj.id,
+                    Leg.year == current_year,
+                    Leg.sequence > current_leg.sequence,
+                ).order_by(Leg.sequence).limit(1)
+            )
+            next_leg = next_leg_result.scalar_one_or_none()
+
             # ─── CREW on board ───
             crew_result = await db.execute(
                 select(CrewAssignment).options(selectinload(CrewAssignment.member))
@@ -165,7 +179,7 @@ async def onboard_home(
     return templates.TemplateResponse("onboard/index.html", {
         "request": request, "user": user,
         "vessels": vessels, "selected_vessel": selected_vessel, "vessel_obj": vessel_obj,
-        "legs": legs, "current_leg": current_leg,
+        "legs": legs, "current_leg": current_leg, "next_leg": next_leg,
         "crew_onboard": crew_onboard,
         "cargo_summary": cargo_summary,
         "sof_events": sof_events, "last_sof": last_sof,
@@ -210,7 +224,21 @@ async def sof_add_event(
     )
     db.add(evt)
     await db.flush()
-    await log_activity(db, user, "onboard", "create", "SofEvent", evt.id, f"SOF: {label}")
+
+    # Notification EOSP / SOSP
+    if event_type in ("EOSP", "SOSP"):
+        from app.models.notification import Notification
+        leg = await db.get(Leg, leg_id)
+        vessel_obj = await db.get(Vessel, leg.vessel_id) if leg else None
+        vessel_name = vessel_obj.name if vessel_obj else ""
+        db.add(Notification(
+            type=event_type.lower(),
+            title=f"{event_type} — {leg.leg_code if leg else ''}",
+            detail=f"{vessel_name} · {label}",
+            link=f"/onboard?vessel={vessel_obj.code if vessel_obj else ''}&leg_id={leg_id}#sof",
+            leg_id=leg_id,
+        ))
+        await db.flush()
 
     # Find vessel for redirect
     leg = await db.get(Leg, leg_id)
@@ -239,7 +267,6 @@ async def sof_edit_event(
     evt.event_time = event_time or evt.event_time
     evt.remarks = remarks if remarks is not None else evt.remarks
     await db.flush()
-    await log_activity(db, user, "onboard", "update", "SofEvent", event_id, "Modification SOF")
 
     leg = await db.get(Leg, evt.leg_id)
     vessel_obj = await db.get(Vessel, leg.vessel_id) if leg else None
@@ -257,7 +284,6 @@ async def sof_delete_event(
     if evt:
         await db.delete(evt)
         await db.flush()
-        await log_activity(db, user, "onboard", "delete", "SofEvent", event_id, "Suppression SOF")
     return HTMLResponse(content="", status_code=200)
 
 
@@ -274,7 +300,6 @@ async def dismiss_notification(
     if notif:
         notif.is_read = True
         await db.flush()
-        await log_activity(db, user, "onboard", "dismiss", "Notification", notif_id, "Notification acquittée")
     return HTMLResponse(content="", status_code=200)
 
 
@@ -292,7 +317,6 @@ async def dismiss_all_notifications(
         .values(is_read=True)
     )
     await db.flush()
-    await log_activity(db, user, "onboard", "dismiss_all", "Notification", leg_id, "Toutes notifications acquittées")
     leg = await db.get(Leg, leg_id)
     vessel_obj = await db.get(Vessel, leg.vessel_id) if leg else None
     vc = vessel_obj.code if vessel_obj else ""
@@ -814,8 +838,21 @@ async def cargo_doc_save(
             created_by=user.full_name,
         )
         db.add(doc)
+        await db.flush()
+
+        # ─── Add SOF event on document creation ───
+        sof_evt = SofEvent(
+            leg_id=leg_id,
+            event_type="CUSTOM",
+            event_label=f"📄 Document créé : {doc_label}",
+            event_date=date.today(),
+            event_time=datetime.now().strftime("%H:%M"),
+            remarks=f"Créé par {user.full_name} — /onboard/doc/{doc.id}/export/pdf",
+            created_by=user.full_name,
+        )
+        db.add(sof_evt)
+
     await db.flush()
-    await log_activity(db, user, "onboard", "save_doc", "CargoDocument", doc.id if doc else None, f"Document {doc_type}")
 
     # Redirect back to the document form so export buttons become available
     saved_doc_id = doc.id if doc else None

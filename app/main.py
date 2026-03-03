@@ -23,12 +23,43 @@ from app.routers.onboard_router import router as onboard_router
 from app.routers.passenger_router import router as passenger_router
 from app.routers.passenger_ext_router import ext_router as passenger_ext_router
 from app.routers.mrv_router import router as mrv_router
+from app.routers.claim_router import router as claim_router
+from app.routers.tracking_router import router as tracking_router
+from app.routers.pricing_router import router as pricing_router
+
+import os
+import stat
 
 settings = get_settings()
 
 
+def _fix_static_permissions():
+    """Fix file permissions on static and templates directories at startup to prevent 403."""
+    for base_dir in ["app/static", "app/templates"]:
+        if not os.path.isdir(base_dir):
+            continue
+        try:
+            os.chmod(base_dir, os.stat(base_dir).st_mode | stat.S_IROTH | stat.S_IXOTH | stat.S_IRGRP | stat.S_IXGRP)
+        except OSError:
+            pass
+        for root, dirs, files in os.walk(base_dir):
+            for d in dirs:
+                p = os.path.join(root, d)
+                try:
+                    os.chmod(p, os.stat(p).st_mode | stat.S_IROTH | stat.S_IXOTH | stat.S_IRGRP | stat.S_IXGRP)
+                except OSError:
+                    pass
+            for f in files:
+                p = os.path.join(root, f)
+                try:
+                    os.chmod(p, os.stat(p).st_mode | stat.S_IROTH | stat.S_IRGRP)
+                except OSError:
+                    pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _fix_static_permissions()
     await init_db()
     yield
 
@@ -109,3 +140,6 @@ app.include_router(onboard_router, dependencies=[Depends(require_permission("cap
 app.include_router(passenger_router, dependencies=[Depends(require_permission("passengers", "C"))])
 app.include_router(passenger_ext_router)
 app.include_router(mrv_router, dependencies=[Depends(require_permission("mrv", "C"))])
+app.include_router(claim_router, dependencies=[Depends(require_permission("captain", "C"))])
+app.include_router(pricing_router, dependencies=[Depends(require_permission("commercial", "C"))])
+app.include_router(tracking_router)  # API — no auth (called by Power Automate)

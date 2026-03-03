@@ -4,28 +4,42 @@ from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.order import Order, OrderAssignment
 from app.models.operation import EscaleOperation, DockerShift, operation_crew
-from app.models.finance import PortConfig, OpexParameter, LegFinance
+from app.models.finance import PortConfig, OpexParameter, LegFinance, InsuranceContract
 from app.models.emission_parameter import EmissionParameter
 from app.models.kpi import LegKPI
 from app.models.crew import CrewMember, CrewAssignment
 from app.models.packing_list import PackingList, PackingListBatch, PackingListAudit
 from app.models.onboard import SofEvent, OnboardNotification, CargoDocument
-from app.models.passenger import Passenger, PassengerBooking, PassengerPayment, PassengerDocument, CabinPriceGrid, PreBoardingForm
+from app.models.passenger import (
+    Passenger, PassengerBooking, PassengerPayment, PassengerDocument,
+    CabinPriceGrid, PreBoardingForm, PassengerAuditLog,
+)
 from app.models.activity import ActivityLog
 from app.models.mrv import MrvEvent, MrvParameter
 from app.models.co2_variable import Co2Variable
+from app.models.claim import Claim, ClaimDocument, ClaimTimeline
+from app.models.commercial import Client, RateGrid, RateGridLine, RateOffer
+from app.models.notification import Notification
+from app.models.portal_message import PortalMessage
+from app.models.vessel_position import VesselPosition
 
 __all__ = [
     "User", "Port", "Vessel", "Leg",
     "Order", "OrderAssignment",
     "EscaleOperation", "DockerShift", "operation_crew",
-    "PortConfig", "OpexParameter", "LegFinance",
+    "PortConfig", "OpexParameter", "LegFinance", "InsuranceContract",
     "EmissionParameter", "LegKPI",
     "CrewMember", "CrewAssignment",
     "PackingList", "PackingListBatch", "PackingListAudit",
     "SofEvent", "OnboardNotification", "CargoDocument",
-    "Passenger", "PassengerBooking", "PassengerPayment", "PassengerDocument", "CabinPriceGrid", "PreBoardingForm",
+    "Passenger", "PassengerBooking", "PassengerPayment", "PassengerDocument",
+    "CabinPriceGrid", "PreBoardingForm", "PassengerAuditLog",
     "ActivityLog",
     "MrvEvent", "MrvParameter",
     "Co2Variable",
+    "Claim", "ClaimDocument", "ClaimTimeline",
+    "Client", "RateGrid", "RateGridLine", "RateOffer",
+    "Notification",
+    "PortalMessage",
+    "VesselPosition",
 ]

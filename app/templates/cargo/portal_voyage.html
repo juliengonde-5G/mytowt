@@ -1,0 +1,94 @@
+{% extends "cargo/portal_base.html" %}
+{% block portal_title %}{{ t('cp_voyage', lang) }}{% endblock %}
+{% block extra_css %}
+.route-vis{display:flex;align-items:center;gap:16px;justify-content:center;padding:20px;flex-wrap:wrap}
+.route-port{text-align:center}
+.route-port .rp-name{font-size:16px;font-weight:700;color:#095561}
+.route-port .rp-code{font-size:11px;color:#888}
+.route-arrow{font-size:28px;color:#095561}
+table.sched{width:100%;border-collapse:collapse;font-size:13px}
+table.sched th{background:#f8fafb;padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#888;font-weight:600;border-bottom:2px solid #eee}
+table.sched td{padding:8px 10px;border-bottom:1px solid #f0f0f0}
+table.sched tr.cur{background:rgba(9,85,97,.06);font-weight:600}
+.actual{color:#16a34a;font-weight:600}
+.crew-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:10px}
+{% endblock %}
+
+{% block portal_content %}
+<h1>🗺️ {{ t('cp_voyage', lang) }}</h1>
+
+{% if leg %}
+<div class="card">
+  <h2>{{ t('cp_route', lang) }}</h2>
+  <div class="route-vis">
+    <div class="route-port">
+      <div class="rp-name">{{ leg.departure_port.name }}</div>
+      <div class="rp-code">{{ leg.departure_port.locode }}</div>
+    </div>
+    <div class="route-arrow">⛵ →</div>
+    <div class="route-port">
+      <div class="rp-name">{{ leg.arrival_port.name }}</div>
+      <div class="rp-code">{{ leg.arrival_port.locode }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>{{ t('cp_schedule', lang) }}</h2>
+  <div class="igrid">
+    <div class="ibox"><div class="il">{{ t('cp_leg_code', lang) }}</div><div class="iv">{{ leg.leg_code }}</div></div>
+    <div class="ibox"><div class="il">{{ t('cp_etd', lang) }}</div><div class="iv">{{ leg.etd.strftime('%d/%m/%Y %H:%M') if leg.etd else '—' }}</div></div>
+    <div class="ibox"><div class="il">{{ t('cp_eta', lang) }}</div><div class="iv">{{ leg.eta.strftime('%d/%m/%Y %H:%M') if leg.eta else '—' }}</div></div>
+    {% if leg.atd %}<div class="ibox"><div class="il">{{ t('cp_atd', lang) }}</div><div class="iv actual">{{ leg.atd.strftime('%d/%m/%Y %H:%M') }}</div></div>{% endif %}
+    {% if leg.ata %}<div class="ibox"><div class="il">{{ t('cp_ata', lang) }}</div><div class="iv actual">{{ leg.ata.strftime('%d/%m/%Y %H:%M') }}</div></div>{% endif %}
+    {% if leg.distance_nm %}<div class="ibox"><div class="il">{{ t('cp_distance', lang) }}</div><div class="iv">{{ leg.distance_nm }} NM</div></div>{% endif %}
+  </div>
+</div>
+
+{% if itinerary %}
+<div class="card">
+  <h2>{% if lang == 'en' %}Full itinerary{% elif lang == 'es' %}Itinerario completo{% elif lang == 'pt-br' %}Itinerário completo{% elif lang == 'vi' %}Lịch trình đầy đủ{% else %}Itinéraire complet{% endif %}</h2>
+  <div style="overflow-x:auto">
+  <table class="sched">
+    <thead><tr>
+      <th>{{ t('cp_leg_code', lang) }}</th>
+      <th>{{ t('cp_etd', lang) }}</th>
+      <th>{{ t('cp_eta', lang) }}</th>
+      <th>{{ t('cp_atd', lang) }}</th>
+      <th>{{ t('cp_ata', lang) }}</th>
+      <th>{{ t('cp_distance', lang) }}</th>
+    </tr></thead>
+    <tbody>
+    {% for l in itinerary %}
+    <tr {% if l.id == leg.id %}class="cur"{% endif %}>
+      <td>{{ l.leg_code }}</td>
+      <td>{{ l.etd.strftime('%d/%m/%Y') if l.etd else '—' }}</td>
+      <td>{{ l.eta.strftime('%d/%m/%Y') if l.eta else '—' }}</td>
+      <td>{% if l.atd %}<span class="actual">{{ l.atd.strftime('%d/%m/%Y') }}</span>{% else %}—{% endif %}</td>
+      <td>{% if l.ata %}<span class="actual">{{ l.ata.strftime('%d/%m/%Y') }}</span>{% else %}—{% endif %}</td>
+      <td>{{ l.distance_nm or '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+{% if crew %}
+<div class="card">
+  <h2>{{ t('cp_crew', lang) }}</h2>
+  <div class="crew-grid">
+    {% for c in crew %}
+    <div class="cc">
+      <div><div class="cr">{{ c.role or '—' }}</div><div class="cn">{{ c.crew_member_name or '—' }}</div></div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="card"><p>{{ t('cp_no_voyage_info', lang) }}</p></div>
+{% endif %}
+{% endblock %}

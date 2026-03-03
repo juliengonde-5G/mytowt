@@ -2,9 +2,10 @@
 import secrets
 from datetime import datetime, date
 from typing import Optional
-from fastapi import APIRouter, Request, Depends, Query, Form, HTTPException
+from fastapi import APIRouter, Request, Depends, Query, Form, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.utils.activity import log_activity, get_client_ip
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
@@ -12,15 +13,16 @@ from app.templating import templates
 from app.database import get_db
 from app.auth import get_current_user
 from app.models.user import User
-from app.utils.activity import log_activity
 from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.passenger import (
     Passenger, PassengerBooking, PassengerPayment, PassengerDocument,
-    CabinPriceGrid,
-    CABIN_CONFIG, BOOKING_STATUSES, PAYMENT_METHODS, PAYMENT_TYPES,
+    CabinPriceGrid, PassengerAuditLog,
+    CABIN_CONFIG, CABIN_CONFIG_BY_VESSEL, get_cabin_config, get_cabin_label,
+    BOOKING_STATUSES, PAYMENT_METHODS, PAYMENT_TYPES,
     PAYMENT_STATUSES, DOCUMENT_TYPES, DOCUMENT_STATUSES,
 )
+from app.models.portal_message import PortalMessage
 
 router = APIRouter(prefix="/passengers", tags=["passengers"])
 
@@ -65,9 +67,16 @@ async def passenger_list(
         if b.status in stats:
             stats[b.status] += 1
 
+    # Build cabin labels per booking
+    cabin_labels = {}
+    for b in bookings:
+        vc = b.vessel.code if b.vessel else None
+        cabin_labels[b.id] = get_cabin_label(vc, b.cabin_number)
+
     return templates.TemplateResponse("passengers/index.html", {
         "request": request, "user": user,
         "bookings": bookings, "stats": stats,
+        "cabin_labels": cabin_labels,
         "selected_status": status,
         "booking_statuses": BOOKING_STATUSES,
         "active_module": "passengers",
@@ -98,11 +107,20 @@ async def booking_create_form(
         for p in pricing_entries
     ]
 
+    # Build cabin data per vessel for JS
+    cabins_by_vessel = {"default": [{"number": c["number"], "ref": c["ref"], "name": c["name"]} for c in CABIN_CONFIG]}
+    for vc, cabs in CABIN_CONFIG_BY_VESSEL.items():
+        cabins_by_vessel[str(vc)] = [{"number": c["number"], "ref": c["ref"], "name": c["name"]} for c in cabs]
+    # Map leg_id → vessel_code
+    leg_vessel_map = {str(l.id): str(l.vessel.code) for l in legs}
+
     return templates.TemplateResponse("passengers/booking_form.html", {
         "request": request, "user": user,
         "legs": legs,
         "cabin_config": CABIN_CONFIG,
         "pricing_json": pricing_json,
+        "cabins_by_vessel_json": cabins_by_vessel,
+        "leg_vessel_map_json": leg_vessel_map,
         "active_module": "passengers",
     })
 
@@ -166,6 +184,10 @@ async def booking_create_submit(
     )
     db.add(booking)
     await db.flush()
+    await log_activity(db, user=user, action="create", module="passengers",
+                       entity_type="booking", entity_id=booking.id,
+                       entity_label=booking.reference,
+                       ip_address=get_client_ip(request))
 
     # Add passenger 1 (mandatory)
     pax1 = Passenger(
@@ -202,7 +224,18 @@ async def booking_create_submit(
             db.add(PassengerDocument(passenger_id=pax2.id, doc_type=doc_code, status="missing"))
 
     await db.flush()
-    await log_activity(db, user, "passengers", "create", "Booking", booking.id, f"Réservation {booking.reference}")
+
+    # Notification
+    from app.models.notification import Notification
+    db.add(Notification(
+        type="new_passenger_booking",
+        title=f"Nouvelle réservation {booking.reference}",
+        detail=f"{pax1_first.strip()} {pax1_last.strip()} — Cabine {cabin_number}",
+        link=f"/passengers/{booking.id}",
+        booking_id=booking.id,
+    ))
+    await db.flush()
+
     return RedirectResponse(url=f"/passengers/{booking.id}", status_code=303)
 
 
@@ -238,17 +271,33 @@ async def booking_detail(
         )
         pax_forms[pax.id] = form_result.scalar_one_or_none()
 
+    # Get real cabin label
+    vessel_code = booking.vessel.code if booking.vessel else None
+    cabin_full_label = get_cabin_label(vessel_code, booking.cabin_number)
+
+    # Load portal messages
+    msg_result = await db.execute(
+        select(PortalMessage)
+        .where(PortalMessage.booking_id == booking_id)
+        .order_by(PortalMessage.created_at)
+    )
+    portal_messages = msg_result.scalars().all()
+    unread_client_msgs = sum(1 for m in portal_messages if m.sender_type == "client" and not m.is_read)
+
     return templates.TemplateResponse("passengers/detail.html", {
         "request": request, "user": user,
         "booking": booking,
         "pax_forms": pax_forms,
-        "cabin_config": CABIN_CONFIG,
+        "cabin_full_label": cabin_full_label,
+        "cabin_config": get_cabin_config(vessel_code),
         "booking_statuses": BOOKING_STATUSES,
         "payment_methods": PAYMENT_METHODS,
         "payment_types": PAYMENT_TYPES,
         "document_types": DOCUMENT_TYPES,
         "document_statuses": DOCUMENT_STATUSES,
         "active_module": "passengers",
+        "portal_messages": portal_messages,
+        "unread_client_msgs": unread_client_msgs,
     })
 
 
@@ -265,9 +314,14 @@ async def booking_update_status(
     booking = await db.get(PassengerBooking, booking_id)
     if not booking:
         raise HTTPException(404)
+    old_status = booking.status
     booking.status = status
+    db.add(PassengerAuditLog(
+        booking_id=booking_id, action="status_change",
+        field_name="status", old_value=old_status, new_value=status,
+        changed_by=user.full_name,
+    ))
     await db.flush()
-    await log_activity(db, user, "passengers", "status", "Booking", booking_id, f"Statut → {status}")
     return RedirectResponse(url=f"/passengers/{booking_id}", status_code=303)
 
 
@@ -288,6 +342,18 @@ async def passenger_update(
     pax = await db.get(Passenger, pax_id)
     if not pax:
         raise HTTPException(404)
+    # Track changes for audit
+    changes = []
+    for field, new_val in [
+        ("first_name", first_name.strip()), ("last_name", last_name.strip()),
+        ("email", email.strip() or None), ("phone", phone.strip() or None),
+        ("nationality", nationality.strip() or None), ("passport_number", passport_number.strip() or None),
+        ("emergency_contact_name", emergency_contact_name.strip() or None),
+        ("emergency_contact_phone", emergency_contact_phone.strip() or None),
+    ]:
+        old_val = getattr(pax, field, None)
+        if str(old_val or '') != str(new_val or ''):
+            changes.append((field, str(old_val or ''), str(new_val or '')))
     pax.first_name = first_name.strip()
     pax.last_name = last_name.strip()
     pax.email = email.strip() or None
@@ -297,8 +363,14 @@ async def passenger_update(
     pax.passport_number = passport_number.strip() or None
     pax.emergency_contact_name = emergency_contact_name.strip() or None
     pax.emergency_contact_phone = emergency_contact_phone.strip() or None
+    for field, old_val, new_val in changes:
+        db.add(PassengerAuditLog(
+            booking_id=pax.booking_id, passenger_id=pax.id,
+            action="pax_updated", field_name=field,
+            old_value=old_val, new_value=new_val,
+            changed_by=user.full_name,
+        ))
     await db.flush()
-    await log_activity(db, user, "passengers", "update", "Passenger", pax_id, f"Passager {pax.first_name} {pax.last_name}")
     return RedirectResponse(url=f"/passengers/{pax.booking_id}", status_code=303)
 
 
@@ -342,7 +414,6 @@ async def add_passenger(
     for doc_code, _ in DOCUMENT_TYPES:
         db.add(PassengerDocument(passenger_id=pax.id, doc_type=doc_code, status="missing"))
     await db.flush()
-    await log_activity(db, user, "passengers", "add_passenger", "Booking", booking_id, f"Passager {pax.first_name} {pax.last_name}")
     return RedirectResponse(url=f"/passengers/{booking_id}", status_code=303)
 
 
@@ -376,12 +447,19 @@ async def add_payment(
     )
     db.add(payment)
 
+    # Audit log
+    db.add(PassengerAuditLog(
+        booking_id=booking_id, action="payment_added",
+        field_name=payment_type, old_value=None,
+        new_value=f"{amount}€ ({payment_method})",
+        changed_by=user.full_name,
+    ))
+
     # Auto-update booking status to confirmed if draft
     if booking.status == "draft":
         booking.status = "confirmed"
 
     await db.flush()
-    await log_activity(db, user, "passengers", "add_payment", "Booking", booking_id, f"Paiement {payment_type} {amount}€")
     return RedirectResponse(url=f"/passengers/{booking_id}#payments", status_code=303)
 
 
@@ -399,7 +477,6 @@ async def update_payment_status(
     if status == "received":
         payment.paid_date = date.today()
     await db.flush()
-    await log_activity(db, user, "passengers", "payment_status", "Payment", payment_id, f"Statut paiement → {status}")
 
     # Auto-update booking status if all payments received
     if status == "received":
@@ -431,6 +508,7 @@ async def update_doc_status(
     doc = await db.get(PassengerDocument, doc_id)
     if not doc:
         raise HTTPException(404)
+    old_status = doc.status
     doc.status = status
     if notes.strip():
         doc.notes = notes.strip()
@@ -438,9 +516,172 @@ async def update_doc_status(
         doc.reviewed_by = user.full_name
         doc.reviewed_at = func.now()
     await db.flush()
-    await log_activity(db, user, "passengers", "doc_status", "Document", doc_id, f"Statut doc → {status}")
     pax = await db.get(Passenger, doc.passenger_id)
+    db.add(PassengerAuditLog(
+        booking_id=pax.booking_id, passenger_id=pax.id,
+        action="doc_status_change", field_name=doc.doc_type,
+        old_value=old_status, new_value=status,
+        changed_by=user.full_name,
+    ))
+    await db.flush()
     return RedirectResponse(url=f"/passengers/{pax.booking_id}#documents", status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  DOCUMENT UPLOAD FROM BACKOFFICE
+# ═══════════════════════════════════════════════════════════════
+@router.post("/doc/{doc_id}/upload", response_class=HTMLResponse)
+async def backoffice_upload_doc(
+    doc_id: int, request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    import os, uuid
+    doc = await db.get(PassengerDocument, doc_id)
+    if not doc:
+        raise HTTPException(404)
+
+    upload_dir = "/app/uploads/passenger_docs"
+    os.makedirs(upload_dir, exist_ok=True)
+    ext = os.path.splitext(file.filename)[1] if file.filename else ".pdf"
+    safe_name = f"{doc.doc_type}_{doc.passenger_id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = os.path.join(upload_dir, safe_name)
+
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    doc.filename = file.filename
+    doc.file_path = file_path
+    doc.status = "uploaded"
+    await db.flush()
+
+    pax = await db.get(Passenger, doc.passenger_id)
+    db.add(PassengerAuditLog(
+        booking_id=pax.booking_id, passenger_id=pax.id,
+        action="doc_uploaded_backoffice", field_name=doc.doc_type,
+        old_value=None, new_value=file.filename,
+        changed_by=user.full_name,
+    ))
+    await db.flush()
+    return RedirectResponse(url=f"/passengers/{pax.booking_id}#documents", status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  DOCUMENT DOWNLOAD
+# ═══════════════════════════════════════════════════════════════
+@router.get("/doc/{doc_id}/download")
+async def download_doc(
+    doc_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from fastapi.responses import FileResponse
+    doc = await db.get(PassengerDocument, doc_id)
+    if not doc or not doc.file_path:
+        raise HTTPException(404, "Document non trouvé")
+    return FileResponse(doc.file_path, filename=doc.filename or f"document_{doc_id}")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PAYMENT EDIT (non-Revolut only)
+# ═══════════════════════════════════════════════════════════════
+@router.post("/payment/{payment_id}/edit", response_class=HTMLResponse)
+async def edit_payment(
+    payment_id: int, request: Request,
+    payment_type: str = Form(...),
+    payment_method: str = Form("virement"),
+    amount: float = Form(...),
+    due_date: str = Form(""),
+    notes: str = Form(""),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    payment = await db.get(PassengerPayment, payment_id)
+    if not payment:
+        raise HTTPException(404)
+    if payment.payment_method == "revolut":
+        raise HTTPException(403, "Impossible de modifier un paiement CB Revolut")
+
+    old_amount = float(payment.amount)
+    payment.payment_type = payment_type
+    payment.payment_method = payment_method
+    payment.amount = amount
+    payment.due_date = datetime.strptime(due_date, "%Y-%m-%d").date() if due_date.strip() else None
+    payment.notes = notes.strip() or None
+    await db.flush()
+
+    db.add(PassengerAuditLog(
+        booking_id=payment.booking_id, action="payment_edited",
+        field_name=payment_type,
+        old_value=f"{old_amount}€",
+        new_value=f"{amount}€ ({payment_method})",
+        changed_by=user.full_name,
+    ))
+    await db.flush()
+    return RedirectResponse(url=f"/passengers/{payment.booking_id}#payments", status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PAYMENT DELETE (non-Revolut only)
+# ═══════════════════════════════════════════════════════════════
+@router.post("/payment/{payment_id}/delete", response_class=HTMLResponse)
+async def delete_payment(
+    payment_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    payment = await db.get(PassengerPayment, payment_id)
+    if not payment:
+        raise HTTPException(404)
+    if payment.payment_method == "revolut":
+        raise HTTPException(403, "Impossible de supprimer un paiement CB Revolut")
+
+    booking_id = payment.booking_id
+    db.add(PassengerAuditLog(
+        booking_id=booking_id, action="payment_deleted",
+        field_name=payment.payment_type,
+        old_value=f"{float(payment.amount)}€ ({payment.payment_method})",
+        new_value=None,
+        changed_by=user.full_name,
+    ))
+    await db.delete(payment)
+    await db.flush()
+    return RedirectResponse(url=f"/passengers/{booking_id}#payments", status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  AUDIT HISTORY
+# ═══════════════════════════════════════════════════════════════
+@router.get("/{booking_id}/history", response_class=HTMLResponse)
+async def booking_history(
+    booking_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    booking = await db.get(PassengerBooking, booking_id)
+    if not booking:
+        raise HTTPException(404)
+
+    logs_result = await db.execute(
+        select(PassengerAuditLog)
+        .where(PassengerAuditLog.booking_id == booking_id)
+        .order_by(PassengerAuditLog.changed_at.desc())
+    )
+    logs = logs_result.scalars().all()
+
+    # Load passenger names for display
+    pax_result = await db.execute(
+        select(Passenger).where(Passenger.booking_id == booking_id)
+    )
+    pax_map = {p.id: p.full_name for p in pax_result.scalars().all()}
+
+    return templates.TemplateResponse("passengers/history.html", {
+        "request": request, "user": user,
+        "booking": booking, "logs": logs, "pax_map": pax_map,
+        "active_module": "passengers",
+    })
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -499,3 +740,46 @@ async def crossing_book_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={fname}"},
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# BACKOFFICE MESSAGING
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/{booking_id}/messages/send", response_class=HTMLResponse)
+async def backoffice_send_message(
+    booking_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    form = await request.form()
+    message_text = form.get("message", "").strip()
+    if message_text:
+        msg = PortalMessage(
+            booking_id=booking_id,
+            sender_type="company",
+            sender_name=user.username or "TOWT",
+            message=message_text,
+        )
+        db.add(msg)
+        await db.flush()
+    return RedirectResponse(url=f"/passengers/{booking_id}#messaging", status_code=303)
+
+
+@router.post("/{booking_id}/messages/read", response_class=HTMLResponse)
+async def backoffice_mark_messages_read(
+    booking_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(PortalMessage).where(
+            PortalMessage.booking_id == booking_id,
+            PortalMessage.sender_type == "client",
+            PortalMessage.is_read == False,
+        )
+    )
+    for msg in result.scalars().all():
+        msg.is_read = True
+    await db.flush()
+    return RedirectResponse(url=f"/passengers/{booking_id}#messaging", status_code=303)

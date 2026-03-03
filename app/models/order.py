@@ -69,6 +69,12 @@ class Order(Base):
     leg_id = Column(Integer, ForeignKey("legs.id"), nullable=True)
     leg = relationship("Leg", foreign_keys=[leg_id])
 
+    # Rate grid linkage
+    rate_grid_id = Column(Integer, ForeignKey("rate_grids.id"), nullable=True)
+    rate_grid_line_id = Column(Integer, ForeignKey("rate_grid_lines.id"), nullable=True)
+    rate_grid = relationship("RateGrid", foreign_keys=[rate_grid_id])
+    rate_grid_line = relationship("RateGridLine", foreign_keys=[rate_grid_line_id])
+
     assignments = relationship("OrderAssignment", back_populates="order", cascade="all, delete-orphan")
 
     @property
