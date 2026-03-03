@@ -17,8 +17,8 @@ MRV_EVENT_TYPES = [
 
 # ─── SOF → MRV event type mapping ───────────────────────────
 SOF_TO_MRV_MAP = {
-    "SOSP": "departure",     # Start of Sea Passage → Departure
-    "EOSP": "arrival",       # End of Sea Passage → Arrival
+    "EOSP": "departure",          # EOSP (fin de passage) → MRV Departure
+    "SOSP": "arrival",            # SOSP (début de passage) → MRV Arrival
     "ANCHORED": "begin_anchoring",
     "ANCHOR_AWEIGH": "end_anchoring",
 }

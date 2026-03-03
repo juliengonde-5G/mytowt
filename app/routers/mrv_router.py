@@ -20,6 +20,7 @@ from app.models.leg import Leg
 from app.models.port import Port
 from app.models.onboard import SofEvent, SOF_EVENT_TYPES
 from app.models.mrv import MrvEvent, MrvParameter, MRV_EVENT_TYPES, MRV_DEFAULTS, SOF_TO_MRV_MAP
+from app.models.vessel_position import VesselPosition
 from app.utils.activity import log_activity
 from app.permissions import can_edit
 
@@ -176,6 +177,38 @@ def coords_from_port(port) -> dict:
         result["longitude_min"] = int((abs(lon) - int(abs(lon))) * 60)
         result["longitude_ew"] = "E" if lon >= 0 else "W"
     return result
+
+
+def coords_from_decimal(lat: float, lon: float) -> dict:
+    """Convert decimal lat/lon to DMS dict."""
+    return {
+        "latitude_deg": int(abs(lat)),
+        "latitude_min": int((abs(lat) - int(abs(lat))) * 60),
+        "latitude_ns": "N" if lat >= 0 else "S",
+        "longitude_deg": int(abs(lon)),
+        "longitude_min": int((abs(lon) - int(abs(lon))) * 60),
+        "longitude_ew": "E" if lon >= 0 else "W",
+    }
+
+
+async def nearest_gps_position(db: AsyncSession, vessel_id: int, ts: datetime) -> Optional[dict]:
+    """Find the VesselPosition closest to ts and return DMS coords, or None."""
+    # Look for the closest position within +/- 6 hours of the event
+    window = timedelta(hours=6)
+    result = await db.execute(
+        select(VesselPosition)
+        .where(
+            VesselPosition.vessel_id == vessel_id,
+            VesselPosition.recorded_at >= ts - window,
+            VesselPosition.recorded_at <= ts + window,
+        )
+        .order_by(func.abs(func.extract("epoch", VesselPosition.recorded_at - ts)))
+        .limit(1)
+    )
+    pos = result.scalar_one_or_none()
+    if pos and pos.latitude is not None and pos.longitude is not None:
+        return coords_from_decimal(pos.latitude, pos.longitude)
+    return None
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -373,15 +406,20 @@ async def mrv_add_event(
     except ValueError:
         raise HTTPException(400, "Format date/heure invalide")
 
-    # Auto-fill coordinates from port if event is departure/arrival and no coords given
+    # Auto-fill coordinates: port coords for departure/arrival, GPS history for others
     lat_d, lat_m, lon_d, lon_m = pi(latitude_deg), pi(latitude_min), pi(longitude_deg), pi(longitude_min)
-    if lat_d is None and event_type in ("departure", "arrival"):
+    if lat_d is None:
         leg = await db.get(Leg, leg_id)
-        if leg:
+        coords = None
+        if leg and event_type in ("departure", "arrival"):
             port_locode = leg.departure_port_locode if event_type == "departure" else leg.arrival_port_locode
             port_result = await db.execute(select(Port).where(Port.locode == port_locode))
             port = port_result.scalar_one_or_none()
             coords = coords_from_port(port)
+        if not coords and leg:
+            # Fallback: nearest GPS position from vessel tracking history
+            coords = await nearest_gps_position(db, leg.vessel_id, ts)
+        if coords:
             lat_d = coords.get("latitude_deg", lat_d)
             lat_m = coords.get("latitude_min", lat_m)
             latitude_ns = coords.get("latitude_ns", latitude_ns)
@@ -453,16 +491,20 @@ async def mrv_from_sof(
     except ValueError:
         ts = datetime.now(timezone.utc)
 
-    # Auto-fill coordinates from port
+    # Auto-fill coordinates: port coords for departure/arrival, GPS history fallback
     leg = await db.get(Leg, leg_id)
     lat_d = lat_m = lon_d = lon_m = None
     lat_ns = "N"
     lon_ew = "E"
+    coords = None
     if leg and mrv_type in ("departure", "arrival"):
         port_locode = leg.departure_port_locode if mrv_type == "departure" else leg.arrival_port_locode
         port_result = await db.execute(select(Port).where(Port.locode == port_locode))
         port = port_result.scalar_one_or_none()
         coords = coords_from_port(port)
+    if not coords and leg:
+        coords = await nearest_gps_position(db, leg.vessel_id, ts)
+    if coords:
         lat_d = coords.get("latitude_deg")
         lat_m = coords.get("latitude_min")
         lat_ns = coords.get("latitude_ns", "N")

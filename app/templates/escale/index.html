@@ -98,8 +98,7 @@
         {% endfor %}
 
         {% set next_status = none %}
-        {% if port_status == 'pilote_arrivee' %}{% set next_status = 'a_quai' %}{% set next_label = 'Confirmer : À quai' %}{% set next_icon = '⚓' %}
-        {% elif port_status == 'a_quai' %}{% set next_status = 'pilote_depart' %}{% set next_label = 'Confirmer : Pilote départ' %}{% set next_icon = '⛵' %}
+        {% if port_status == 'a_quai' %}{% set next_status = 'pilote_depart' %}{% set next_label = 'Confirmer : Pilote départ' %}{% set next_icon = '⛵' %}
         {% endif %}
 
         {% if next_status %}

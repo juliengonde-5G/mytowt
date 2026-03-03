@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}MRV Fuel Reporting{% endblock %}
-{% block page_title %}MRV — Fuel Reporting{% endblock %}
+{% block title %}{{ t('mrv_title', lang) }}{% endblock %}
+{% block page_title %}{{ t('mrv_title', lang) }}{% endblock %}
 
 {% block topbar_actions %}
 <div style="display:flex;gap:8px;align-items:center;">
@@ -15,11 +15,11 @@
     {% if can_edit_mrv %}
     <a href="/mrv/export/dnv-csv?vessel={{ selected_vessel or '' }}&year={{ current_year }}"
        class="btn btn-secondary" style="font-size:0.8rem;">
-        <i data-lucide="download" style="width:14px;height:14px;"></i> Export DNV CSV
+        <i data-lucide="download" style="width:14px;height:14px;"></i> {{ t('mrv_export_dnv', lang) }}
     </a>
     <a href="/mrv/export/carbon-report?vessel={{ selected_vessel or '' }}&year={{ current_year }}"
        class="btn btn-primary" style="font-size:0.8rem;">
-        <i data-lucide="file-text" style="width:14px;height:14px;"></i> Carbon Report
+        <i data-lucide="file-text" style="width:14px;height:14px;"></i> {{ t('mrv_carbon_report', lang) }}
     </a>
     {% endif %}
 </div>
@@ -27,8 +27,6 @@
 
 {% block content %}
 <style>
-    /* Vessel tabs — same style as planning page */
-
     .mrv-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px;}
     .mrv-card{background:white;border-radius:10px;padding:16px;border:1px solid #e0e0e0;box-shadow:var(--shadow);}
     .mrv-card .label{font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;}
@@ -57,7 +55,7 @@
     .params-grid input{width:100%;padding:6px 8px;border:1px solid #e0e0e0;border-radius:6px;font-size:0.85rem;font-family:'Poppins',sans-serif;}
 </style>
 
-<!-- Vessel tabs (same as planning) -->
+<!-- Vessel tabs -->
 <div class="vessel-tabs">
     {% for v in vessels %}
     <a href="/mrv?vessel={{ v.code }}&year={{ current_year }}"
@@ -70,31 +68,31 @@
 <!-- Summary cards -->
 <div class="mrv-summary">
     <div class="mrv-card">
-        <div class="label">Total MDO Consumption</div>
+        <div class="label">{{ t('mrv_total_consumption', lang) }}</div>
         <div class="value">{{ summary.total_consumption }}<span class="unit">mt</span></div>
     </div>
     <div class="mrv-card">
-        <div class="label">Total CO&#8322; Emissions</div>
+        <div class="label">{{ t('mrv_total_co2', lang) }}</div>
         <div class="value">{{ summary.total_co2 }}<span class="unit">mt</span></div>
     </div>
     <div class="mrv-card">
-        <div class="label">MRV Events</div>
+        <div class="label">{{ t('mrv_events_count', lang) }}</div>
         <div class="value">{{ summary.events_count }}</div>
     </div>
     <div class="mrv-card">
-        <div class="label">Data Quality</div>
+        <div class="label">{{ t('mrv_data_quality', lang) }}</div>
         <div class="value" style="font-size:0.85rem;">
             {% if summary.quality_error > 0 %}
-            <span class="quality-badge quality-error">{{ summary.quality_error }} Errors</span>
+            <span class="quality-badge quality-error">{{ summary.quality_error }} {{ t('mrv_errors', lang) }}</span>
             {% endif %}
             {% if summary.quality_warning > 0 %}
-            <span class="quality-badge quality-warning">{{ summary.quality_warning }} Warnings</span>
+            <span class="quality-badge quality-warning">{{ summary.quality_warning }} {{ t('mrv_warnings', lang) }}</span>
             {% endif %}
             {% if summary.quality_ok > 0 %}
             <span class="quality-badge quality-ok">{{ summary.quality_ok }} OK</span>
             {% endif %}
             {% if summary.events_count == 0 %}
-            <span class="quality-badge quality-pending">No data</span>
+            <span class="quality-badge quality-pending">{{ t('mrv_no_data', lang) }}</span>
             {% endif %}
         </div>
     </div>
@@ -106,12 +104,12 @@
     <table class="legs-table">
         <thead>
             <tr>
-                <th>Leg</th>
-                <th>Route</th>
-                <th>Events</th>
-                <th>Consumption (mt)</th>
-                <th>CO&#8322; (mt)</th>
-                <th>Quality</th>
+                <th>{{ t('mrv_leg', lang) }}</th>
+                <th>{{ t('mrv_route', lang) }}</th>
+                <th>{{ t('mrv_events_count', lang) }}</th>
+                <th>{{ t('mrv_consumption_mt', lang) }}</th>
+                <th>{{ t('mrv_co2_mt', lang) }}</th>
+                <th>{{ t('mrv_quality', lang) }}</th>
                 <th></th>
             </tr>
         </thead>
@@ -132,7 +130,7 @@
                         {{ item.worst_quality|upper }}
                     </span>
                 </td>
-                <td><a href="/mrv/leg/{{ item.leg.id }}">Voir</a></td>
+                <td><a href="/mrv/leg/{{ item.leg.id }}">{{ t('mrv_view', lang) }}</a></td>
             </tr>
             {% endfor %}
         </tbody>
@@ -141,33 +139,33 @@
 {% else %}
 <div class="mrv-card" style="text-align:center;padding:40px;color:var(--text-secondary);">
     <i data-lucide="fuel" style="width:48px;height:48px;margin-bottom:12px;opacity:0.3;"></i>
-    <p>Aucun leg pour {{ vessel_obj.name if vessel_obj else 'ce navire' }} en {{ current_year }}</p>
+    <p>{{ t('mrv_no_legs', lang) }} {{ vessel_obj.name if vessel_obj else '' }} {{ t('mrv_in', lang) }} {{ current_year }}</p>
 </div>
 {% endif %}
 
 <!-- MRV Parameters panel (admin only) -->
 {% if can_edit_mrv %}
 <div class="params-panel">
-    <h3><i data-lucide="settings" style="width:16px;height:16px;vertical-align:middle;"></i> MRV Parameters</h3>
+    <h3><i data-lucide="settings" style="width:16px;height:16px;vertical-align:middle;"></i> {{ t('mrv_parameters', lang) }}</h3>
     <form method="POST" action="/mrv/params/save">
         <div class="params-grid">
             <div class="form-group">
-                <label>Avg MDO Density (t/m³)</label>
+                <label>{{ t('mrv_avg_density', lang) }}</label>
                 <input type="number" name="avg_mdo_density" step="0.001" min="0.82" max="0.87"
                        value="{{ params.avg_mdo_density }}">
             </div>
             <div class="form-group">
-                <label>MDO Admissible Deviation (mt)</label>
+                <label>{{ t('mrv_deviation', lang) }}</label>
                 <input type="number" name="mdo_admissible_deviation" step="0.1" min="0.1"
                        value="{{ params.mdo_admissible_deviation }}">
             </div>
             <div class="form-group">
-                <label>CO&#8322; Emission Factor (t CO&#8322;/t fuel)</label>
+                <label>{{ t('mrv_co2_factor', lang) }}</label>
                 <input type="number" name="co2_emission_factor" step="0.001"
                        value="{{ params.co2_emission_factor }}">
             </div>
             <div class="form-group" style="display:flex;align-items:flex-end;">
-                <button type="submit" class="btn btn-primary" style="font-size:0.8rem;">Save Parameters</button>
+                <button type="submit" class="btn btn-primary" style="font-size:0.8rem;">{{ t('mrv_save_params', lang) }}</button>
             </div>
         </div>
     </form>

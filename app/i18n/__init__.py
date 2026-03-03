@@ -468,6 +468,98 @@ TRANSLATIONS = {
                            "vi": "tấn CO₂ giảm"},
     "nav_mrv": {"fr": "MRV Fuel", "en": "MRV Fuel", "es": "MRV Combustible", "pt-br": "MRV Combustível", "vi": "MRV Nhiên liệu"},
 
+    # MRV page titles & buttons
+    "mrv_title": {"fr": "MRV — Rapport carburant", "en": "MRV — Fuel Reporting", "es": "MRV — Informe combustible", "pt-br": "MRV — Relatório combustível", "vi": "MRV — Báo cáo nhiên liệu"},
+    "mrv_export_dnv": {"fr": "Export DNV CSV", "en": "Export DNV CSV", "es": "Exportar DNV CSV", "pt-br": "Exportar DNV CSV", "vi": "Xuất DNV CSV"},
+    "mrv_carbon_report": {"fr": "Rapport carbone", "en": "Carbon Report", "es": "Informe carbono", "pt-br": "Relatório carbono", "vi": "Báo cáo carbon"},
+    "mrv_recalculate": {"fr": "Recalculer", "en": "Recalculate", "es": "Recalcular", "pt-br": "Recalcular", "vi": "Tính lại"},
+
+    # MRV summary cards
+    "mrv_total_consumption": {"fr": "Consommation MDO totale", "en": "Total MDO Consumption", "es": "Consumo MDO total", "pt-br": "Consumo MDO total", "vi": "Tổng tiêu thụ MDO"},
+    "mrv_total_co2": {"fr": "Émissions CO₂ totales", "en": "Total CO₂ Emissions", "es": "Emisiones CO₂ totales", "pt-br": "Emissões CO₂ totais", "vi": "Tổng phát thải CO₂"},
+    "mrv_events_count": {"fr": "Événements MRV", "en": "MRV Events", "es": "Eventos MRV", "pt-br": "Eventos MRV", "vi": "Sự kiện MRV"},
+    "mrv_data_quality": {"fr": "Qualité des données", "en": "Data Quality", "es": "Calidad de datos", "pt-br": "Qualidade dos dados", "vi": "Chất lượng dữ liệu"},
+    "mrv_errors": {"fr": "Erreurs", "en": "Errors", "es": "Errores", "pt-br": "Erros", "vi": "Lỗi"},
+    "mrv_warnings": {"fr": "Alertes", "en": "Warnings", "es": "Alertas", "pt-br": "Alertas", "vi": "Cảnh báo"},
+    "mrv_no_data": {"fr": "Aucune donnée", "en": "No data", "es": "Sin datos", "pt-br": "Sem dados", "vi": "Không có dữ liệu"},
+
+    # MRV table headers
+    "mrv_leg": {"fr": "Leg", "en": "Leg", "es": "Tramo", "pt-br": "Trecho", "vi": "Chặng"},
+    "mrv_route": {"fr": "Route", "en": "Route", "es": "Ruta", "pt-br": "Rota", "vi": "Tuyến"},
+    "mrv_consumption_mt": {"fr": "Consommation (mt)", "en": "Consumption (mt)", "es": "Consumo (mt)", "pt-br": "Consumo (mt)", "vi": "Tiêu thụ (mt)"},
+    "mrv_co2_mt": {"fr": "CO₂ (mt)", "en": "CO₂ (mt)", "es": "CO₂ (mt)", "pt-br": "CO₂ (mt)", "vi": "CO₂ (mt)"},
+    "mrv_quality": {"fr": "Qualité", "en": "Quality", "es": "Calidad", "pt-br": "Qualidade", "vi": "Chất lượng"},
+    "mrv_view": {"fr": "Voir", "en": "View", "es": "Ver", "pt-br": "Ver", "vi": "Xem"},
+    "mrv_no_legs": {"fr": "Aucun leg pour", "en": "No legs for", "es": "Sin tramos para", "pt-br": "Nenhum trecho para", "vi": "Không có chặng cho"},
+    "mrv_in": {"fr": "en", "en": "in", "es": "en", "pt-br": "em", "vi": "trong"},
+
+    # MRV parameters
+    "mrv_parameters": {"fr": "Paramètres MRV", "en": "MRV Parameters", "es": "Parámetros MRV", "pt-br": "Parâmetros MRV", "vi": "Tham số MRV"},
+    "mrv_avg_density": {"fr": "Densité moyenne MDO (t/m³)", "en": "Avg MDO Density (t/m³)", "es": "Densidad MDO promedio (t/m³)", "pt-br": "Densidade MDO média (t/m³)", "vi": "Mật độ MDO trung bình (t/m³)"},
+    "mrv_deviation": {"fr": "Déviation admissible MDO (mt)", "en": "MDO Admissible Deviation (mt)", "es": "Desviación admisible MDO (mt)", "pt-br": "Desvio admissível MDO (mt)", "vi": "Sai lệch cho phép MDO (mt)"},
+    "mrv_co2_factor": {"fr": "Facteur émission CO₂ (t CO₂/t fuel)", "en": "CO₂ Emission Factor (t CO₂/t fuel)", "es": "Factor emisión CO₂ (t CO₂/t fuel)", "pt-br": "Fator emissão CO₂ (t CO₂/t fuel)", "vi": "Hệ số phát thải CO₂ (t CO₂/t fuel)"},
+    "mrv_save_params": {"fr": "Enregistrer les paramètres", "en": "Save Parameters", "es": "Guardar parámetros", "pt-br": "Salvar parâmetros", "vi": "Lưu tham số"},
+
+    # MRV leg detail
+    "mrv_quality_summary": {"fr": "Résumé qualité", "en": "Quality Summary", "es": "Resumen calidad", "pt-br": "Resumo qualidade", "vi": "Tóm tắt chất lượng"},
+    "mrv_pending": {"fr": "En attente", "en": "Pending", "es": "Pendiente", "pt-br": "Pendente", "vi": "Đang chờ"},
+    "mrv_co2_factor_label": {"fr": "Facteur CO₂", "en": "CO₂ Factor", "es": "Factor CO₂", "pt-br": "Fator CO₂", "vi": "Hệ số CO₂"},
+    "mrv_density_label": {"fr": "Densité MDO", "en": "MDO Density", "es": "Densidad MDO", "pt-br": "Densidade MDO", "vi": "Mật độ MDO"},
+    "mrv_admissible_deviation": {"fr": "Déviation admissible", "en": "Admissible Deviation", "es": "Desviación admisible", "pt-br": "Desvio admissível", "vi": "Sai lệch cho phép"},
+    "mrv_total_consumption_label": {"fr": "Consommation totale", "en": "Total Consumption", "es": "Consumo total", "pt-br": "Consumo total", "vi": "Tổng tiêu thụ"},
+    "mrv_co2_emissions": {"fr": "Émissions CO₂", "en": "CO₂ Emissions", "es": "Emisiones CO₂", "pt-br": "Emissões CO₂", "vi": "Phát thải CO₂"},
+
+    # MRV SOF suggestions
+    "mrv_sof_suggestions": {"fr": "Événements SOF à lier comme événements MRV", "en": "SOF Events to link as MRV events", "es": "Eventos SOF para vincular como eventos MRV", "pt-br": "Eventos SOF para vincular como eventos MRV", "vi": "Sự kiện SOF để liên kết thành sự kiện MRV"},
+    "mrv_no_events": {"fr": "Aucun événement MRV enregistré pour ce leg.", "en": "No MRV events recorded for this leg yet.", "es": "No hay eventos MRV para este tramo.", "pt-br": "Nenhum evento MRV para este trecho.", "vi": "Chưa có sự kiện MRV cho chặng này."},
+    "mrv_use_sof": {"fr": "Utilisez les suggestions SOF ci-dessus pour commencer.", "en": "Use the SOF event suggestions above to get started.", "es": "Use las sugerencias SOF para comenzar.", "pt-br": "Use as sugestões SOF acima para começar.", "vi": "Sử dụng các gợi ý SOF ở trên để bắt đầu."},
+
+    # MRV event form
+    "mrv_add_event": {"fr": "Ajouter un événement MRV", "en": "Add MRV Event", "es": "Añadir evento MRV", "pt-br": "Adicionar evento MRV", "vi": "Thêm sự kiện MRV"},
+    "mrv_edit_event": {"fr": "Modifier l'événement MRV", "en": "Edit MRV Event", "es": "Editar evento MRV", "pt-br": "Editar evento MRV", "vi": "Sửa sự kiện MRV"},
+    "mrv_event_info": {"fr": "Informations événement", "en": "Event Information", "es": "Información del evento", "pt-br": "Informações do evento", "vi": "Thông tin sự kiện"},
+    "mrv_event_type": {"fr": "Type d'événement", "en": "Event Type", "es": "Tipo de evento", "pt-br": "Tipo de evento", "vi": "Loại sự kiện"},
+    "mrv_date_utc": {"fr": "Date UTC", "en": "Date UTC", "es": "Fecha UTC", "pt-br": "Data UTC", "vi": "Ngày UTC"},
+    "mrv_time_utc": {"fr": "Heure UTC", "en": "Time UTC", "es": "Hora UTC", "pt-br": "Hora UTC", "vi": "Giờ UTC"},
+    "mrv_distance_prev": {"fr": "Distance du précéd. (NM)", "en": "Distance from prev. (NM)", "es": "Distancia del anterior (NM)", "pt-br": "Distância do anterior (NM)", "vi": "Khoảng cách từ trước (NM)"},
+
+    # MRV DO counters
+    "mrv_do_counters": {"fr": "Compteurs DO (totaux cumulés)", "en": "DO Counters (running totals)", "es": "Contadores DO (totales acumulados)", "pt-br": "Contadores DO (totais acumulados)", "vi": "Bộ đếm DO (tổng cộng dồn)"},
+    "mrv_port_me": {"fr": "Moteur principal bâbord", "en": "Port Main Engine", "es": "Motor principal babor", "pt-br": "Motor principal bombordo", "vi": "Máy chính mạn trái"},
+    "mrv_stbd_me": {"fr": "Moteur principal tribord", "en": "Starboard Main Engine", "es": "Motor principal estribor", "pt-br": "Motor principal estibordo", "vi": "Máy chính mạn phải"},
+    "mrv_fwd_gen": {"fr": "Générateur avant", "en": "FWD Generator", "es": "Generador proa", "pt-br": "Gerador proa", "vi": "Máy phát phía trước"},
+    "mrv_aft_gen": {"fr": "Générateur arrière", "en": "AFT Generator", "es": "Generador popa", "pt-br": "Gerador popa", "vi": "Máy phát phía sau"},
+
+    # MRV fuel & cargo
+    "mrv_fuel_cargo": {"fr": "Carburant & cargaison", "en": "Fuel & Cargo", "es": "Combustible y carga", "pt-br": "Combustível e carga", "vi": "Nhiên liệu & hàng hóa"},
+    "mrv_rob": {"fr": "ROB déclaré (mt)", "en": "ROB Declared (mt)", "es": "ROB declarado (mt)", "pt-br": "ROB declarado (mt)", "vi": "ROB khai báo (mt)"},
+    "mrv_cargo": {"fr": "Cargo MRV (mt)", "en": "Cargo MRV (mt)", "es": "Carga MRV (mt)", "pt-br": "Carga MRV (mt)", "vi": "Hàng MRV (mt)"},
+    "mrv_bunkering_qty": {"fr": "Quantité soutage (mt)", "en": "Bunkering Qty (mt)", "es": "Cantidad búnker (mt)", "pt-br": "Qtd abastecimento (mt)", "vi": "Lượng tiếp nhiên liệu (mt)"},
+    "mrv_bunkering_date": {"fr": "Date de soutage", "en": "Bunkering Date", "es": "Fecha búnker", "pt-br": "Data abastecimento", "vi": "Ngày tiếp nhiên liệu"},
+
+    # MRV position
+    "mrv_position": {"fr": "Position (depuis AIS/GPS)", "en": "Position (from AIS/GPS)", "es": "Posición (desde AIS/GPS)", "pt-br": "Posição (de AIS/GPS)", "vi": "Vị trí (từ AIS/GPS)"},
+    "mrv_lat_deg": {"fr": "Lat degrés", "en": "Lat Degrees", "es": "Lat grados", "pt-br": "Lat graus", "vi": "Vĩ độ"},
+    "mrv_lat_min": {"fr": "Lat minutes", "en": "Lat Minutes", "es": "Lat minutos", "pt-br": "Lat minutos", "vi": "Phút vĩ độ"},
+    "mrv_lon_deg": {"fr": "Lon degrés", "en": "Lon Degrees", "es": "Lon grados", "pt-br": "Lon graus", "vi": "Kinh độ"},
+    "mrv_lon_min": {"fr": "Lon minutes", "en": "Lon Minutes", "es": "Lon minutos", "pt-br": "Lon minutos", "vi": "Phút kinh độ"},
+
+    # MRV table column headers (leg detail)
+    "mrv_me_cons": {"fr": "Cons. ME", "en": "ME Cons.", "es": "Cons. MP", "pt-br": "Cons. MP", "vi": "Tiêu thụ MC"},
+    "mrv_ae_cons": {"fr": "Cons. AE", "en": "AE Cons.", "es": "Cons. MA", "pt-br": "Cons. MA", "vi": "Tiêu thụ MP"},
+    "mrv_total": {"fr": "Total", "en": "Total", "es": "Total", "pt-br": "Total", "vi": "Tổng"},
+    "mrv_rob_calc": {"fr": "ROB calc.", "en": "ROB Calc.", "es": "ROB calc.", "pt-br": "ROB calc.", "vi": "ROB tính"},
+    "mrv_dist_nm": {"fr": "Dist (NM)", "en": "Dist (NM)", "es": "Dist (NM)", "pt-br": "Dist (NM)", "vi": "KC (NM)"},
+    "mrv_event": {"fr": "Événement", "en": "Event", "es": "Evento", "pt-br": "Evento", "vi": "Sự kiện"},
+    "mrv_confirm_delete": {"fr": "Supprimer cet événement MRV ?", "en": "Delete this MRV event?", "es": "¿Eliminar este evento MRV?", "pt-br": "Excluir este evento MRV?", "vi": "Xóa sự kiện MRV này?"},
+
+    # MRV event types (translated labels)
+    "mrv_type_departure": {"fr": "Départ", "en": "Departure", "es": "Salida", "pt-br": "Partida", "vi": "Khởi hành"},
+    "mrv_type_arrival": {"fr": "Arrivée", "en": "Arrival", "es": "Llegada", "pt-br": "Chegada", "vi": "Đến nơi"},
+    "mrv_type_at_sea": {"fr": "En mer", "en": "At Sea", "es": "En el mar", "pt-br": "No mar", "vi": "Trên biển"},
+    "mrv_type_begin_anchoring": {"fr": "Mouillage / À quai", "en": "Begin Anchoring/Drifting", "es": "Fondeo / En muelle", "pt-br": "Fundeio / Atracado", "vi": "Bắt đầu neo"},
+    "mrv_type_end_anchoring": {"fr": "Fin de mouillage", "en": "End Anchoring/Drifting", "es": "Fin fondeo", "pt-br": "Fim fundeio", "vi": "Kết thúc neo"},
+
     # ═══ CARGO FORM / EXCEL (NEW) ═══
     "error_no_file": {"fr": "Aucun fichier sélectionné.", "en": "No file selected.",
                       "es": "Ningún archivo seleccionado.", "pt-br": "Nenhum arquivo selecionado.",

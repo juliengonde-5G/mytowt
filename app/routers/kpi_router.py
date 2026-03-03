@@ -215,6 +215,25 @@ async def kpi_dashboard(
     totals["occupation_avg"] = round(totals["occupation_sum"] / totals["leg_count"], 1) if totals["leg_count"] > 0 else 0
     totals["co2_per_ton_avg"] = round(totals["co2_sail_kg"] / totals["cargo_tons"], 3) if totals["cargo_tons"] > 0 else 0
 
+    # ── Claims statistics for KPI dashboard ──
+    from app.models.claim import Claim
+    claims_query = select(Claim).join(Leg, Claim.leg_id == Leg.id).where(Leg.year == current_year)
+    if vessel_obj:
+        claims_query = claims_query.where(Claim.vessel_id == vessel_obj.id)
+    claims_result = await db.execute(claims_query)
+    all_claims = claims_result.scalars().all()
+    claims_stats = {
+        "total": len(all_claims),
+        "open": sum(1 for c in all_claims if c.status in ("open", "declared", "instruction")),
+        "closed": sum(1 for c in all_claims if c.status in ("accepted", "refused", "closed")),
+        "cargo": sum(1 for c in all_claims if c.claim_type == "cargo"),
+        "crew": sum(1 for c in all_claims if c.claim_type == "crew"),
+        "hull": sum(1 for c in all_claims if c.claim_type == "hull"),
+        "total_provision": sum(float(c.provision_amount or 0) for c in all_claims),
+        "total_indemnity": sum(float(c.indemnity_amount or 0) for c in all_claims),
+    }
+    claims_per_leg = round(claims_stats["total"] / totals["leg_count"], 2) if totals["leg_count"] > 0 else 0
+
     return templates.TemplateResponse("kpi/index.html", {
         "request": request,
         "user": user,
@@ -226,6 +245,8 @@ async def kpi_dashboard(
         "totals": totals,
         "params": params,
         "co2_vars": co2_vars,
+        "claims_stats": claims_stats,
+        "claims_per_leg": claims_per_leg,
         "active_module": "kpi",
     })
 
