@@ -5,6 +5,25 @@
 {% block extra_head %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Critical Leaflet CSS inline — fallback if CDN CSS fails -->
+<style>
+.leaflet-pane,.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow,
+.leaflet-tile-container,.leaflet-pane>svg,.leaflet-pane>canvas,
+.leaflet-zoom-box,.leaflet-image-layer,.leaflet-layer{position:absolute;left:0;top:0;}
+.leaflet-container{overflow:hidden;-webkit-tap-highlight-color:transparent;}
+.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow{-webkit-user-select:none;-moz-user-select:none;user-select:none;-webkit-user-drag:none;}
+.leaflet-tile{filter:inherit;visibility:hidden;}
+.leaflet-tile-loaded{visibility:inherit;}
+.leaflet-container img{max-width:none!important;max-height:none!important;}
+.leaflet-tile-pane{z-index:200;}.leaflet-overlay-pane{z-index:400;}
+.leaflet-shadow-pane{z-index:500;}.leaflet-marker-pane{z-index:600;}
+.leaflet-tooltip-pane{z-index:650;}.leaflet-popup-pane{z-index:700;}
+.leaflet-control{position:relative;z-index:800;pointer-events:auto;}
+.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none;}
+.leaflet-top{top:0;}.leaflet-right{right:0;}.leaflet-bottom{bottom:0;}.leaflet-left{left:0;}
+.leaflet-zoom-anim .leaflet-zoom-animated{transition:transform .25s cubic-bezier(0,0,.25,1);}
+.leaflet-interactive{cursor:pointer;}.leaflet-grab{cursor:grab;}
+</style>
 {% endblock %}
 
 {% block topbar_actions %}
@@ -137,6 +156,7 @@
     .gantt-months-pad{width:180px;flex-shrink:0}
     .gantt-month{flex:1;text-align:center;font-size:11px;font-weight:600;color:#888;padding:8px 0;border-left:1px solid #f0f0f0}
     .map-container{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:20px;position:relative}
+    .leaflet-container *,.leaflet-container *::before,.leaflet-container *::after{box-sizing:content-box;margin:0;padding:0;}
     tr.leg-completed{opacity:0.45}
     tr.leg-current{background:rgba(245,158,11,0.08);border-left:3px solid #F59E0B}
     .leaflet-legend{background:white;padding:10px 14px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15);font-family:'Poppins',sans-serif;font-size:12px;}
@@ -261,8 +281,10 @@
             return;
         }
 
+        var mapEl = document.getElementById('leaflet-map');
         if (leafletMap) {
             setTimeout(function(){ leafletMap.invalidateSize(); }, 200);
+            setTimeout(function(){ leafletMap.invalidateSize(); }, 600);
             return;
         }
 
@@ -272,7 +294,12 @@
         }).addTo(leafletMap);
 
         // Force recalculation after container becomes visible
-        setTimeout(function(){ leafletMap.invalidateSize(); }, 300);
+        setTimeout(function(){ leafletMap.invalidateSize(); }, 200);
+        setTimeout(function(){ leafletMap.invalidateSize(); }, 600);
+        setTimeout(function(){ leafletMap.invalidateSize(); }, 1500);
+        if (window.ResizeObserver) {
+            new ResizeObserver(function(){ leafletMap.invalidateSize(); }).observe(mapEl);
+        }
 
         var vesselColors = {1:'#095561', 2:'#87BD2B', 3:'#5BA4B5', 4:'#393939'};
         var vesselNames = {1:'Anemos', 2:'Artemis', 3:'Atlantis', 4:'Atlas'};
