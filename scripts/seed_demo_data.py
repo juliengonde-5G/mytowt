@@ -63,7 +63,8 @@ def gen_ref(prefix, idx):
 
 
 def gen_booking_ref(idx):
-    return f"PAX-20260301-{secrets.token_hex(3).upper()}{idx}"
+    """Generate ref <= 20 chars: PAX-YYYYMMDD-XXXX (18 chars)."""
+    return f"PAX-20260301-{secrets.token_hex(2).upper()}"
 
 
 # ─── MAIN ──────────────────────────────────────────────────────

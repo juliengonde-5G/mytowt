@@ -75,7 +75,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://51.178.59.174", "http://localhost", "http://127.0.0.1"],
+    allow_origins=["https://my.towt.eu", "http://51.178.59.174", "http://localhost", "http://127.0.0.1"],
     allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
