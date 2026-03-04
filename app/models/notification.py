@@ -12,6 +12,7 @@ NOTIFICATION_TYPES = [
     ("sosp", "SOSP (Start of Sea Passage)"),
     ("new_passenger_booking", "Nouvelle réservation passager"),
     ("new_claim", "Nouveau claim ouvert"),
+    ("eta_shift", "Décalage ETA signalé par le commandant"),
 ]
 
 NOTIFICATION_ICONS = {
@@ -22,6 +23,7 @@ NOTIFICATION_ICONS = {
     "sosp": "⛵",
     "new_passenger_booking": "🎫",
     "new_claim": "⚠️",
+    "eta_shift": "🕐",
 }
 
 

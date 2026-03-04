@@ -1,9 +1,52 @@
-"""Models for On Board module: SOF events, notifications, cargo documents."""
+"""Models for On Board module: SOF events, notifications, cargo documents, ETA shifts."""
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, Date, func
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
+
+
+# ─── ETA SHIFT REASONS ────────────────────────────────────────
+ETA_SHIFT_REASONS = [
+    ("weather", "Conditions météo / Weather conditions"),
+    ("mechanical", "Problème mécanique / Mechanical issue"),
+    ("port_congestion", "Congestion portuaire / Port congestion"),
+    ("cargo_ops", "Opérations cargo prolongées / Extended cargo ops"),
+    ("crew", "Raison liée à l'équipage / Crew-related"),
+    ("routing", "Changement de route / Routing change"),
+    ("speed_adjustment", "Ajustement de vitesse / Speed adjustment"),
+    ("port_stay_change", "Durée d'escale modifiée / Port stay change"),
+    ("other", "Autre / Other"),
+]
+
+
+class ETAShift(Base):
+    """Records every ETA/ETD modification with justification and full history."""
+    __tablename__ = "eta_shifts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    leg_id = Column(Integer, ForeignKey("legs.id", ondelete="CASCADE"), nullable=False)
+    vessel_id = Column(Integer, ForeignKey("vessels.id", ondelete="CASCADE"), nullable=False)
+
+    # What changed
+    field_changed = Column(String(10), nullable=False)  # "eta" or "etd"
+    old_value = Column(DateTime(timezone=True), nullable=True)
+    new_value = Column(DateTime(timezone=True), nullable=True)
+    shift_hours = Column(Float, nullable=False)  # positive = delay, negative = advance
+
+    # Justification (mandatory)
+    reason = Column(String(50), nullable=False)  # code from ETA_SHIFT_REASONS
+    justification = Column(Text, nullable=False)  # free text detail
+
+    # Who and when
+    created_by = Column(String(200), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Snapshot of cascading impact
+    legs_affected = Column(Integer, default=0)  # number of downstream legs recalculated
+
+    leg = relationship("Leg", backref="eta_shifts")
+    vessel = relationship("Vessel")
 
 
 # ─── SOF EVENT TYPES ────────────────────────────────────────

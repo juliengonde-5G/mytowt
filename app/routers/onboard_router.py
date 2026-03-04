@@ -19,8 +19,8 @@ from app.models.order import Order
 from app.models.crew import CrewMember, CrewAssignment
 from app.models.packing_list import PackingList, PackingListBatch
 from app.models.onboard import (
-    SofEvent, OnboardNotification, CargoDocument,
-    SOF_EVENT_TYPES, CARGO_DOC_TYPES,
+    SofEvent, OnboardNotification, CargoDocument, ETAShift,
+    SOF_EVENT_TYPES, CARGO_DOC_TYPES, ETA_SHIFT_REASONS,
 )
 
 router = APIRouter(prefix="/onboard", tags=["onboard"])
@@ -62,6 +62,7 @@ async def onboard_home(
     sof_events = []
     notifications = []
     last_sof = None
+    eta_shifts = []
 
     next_leg = None  # leg export (départ du port)
 
@@ -176,6 +177,15 @@ async def onboard_home(
             )
             pax_bookings = pax_result.scalars().all()
 
+            # ─── ETA SHIFTS history for this leg + all vessel legs this year ───
+            eta_shifts_result = await db.execute(
+                select(ETAShift).where(
+                    ETAShift.vessel_id == vessel_obj.id,
+                    ETAShift.leg_id.in_([l.id for l in legs]),
+                ).order_by(ETAShift.created_at.desc())
+            )
+            eta_shifts = eta_shifts_result.scalars().all()
+
     return templates.TemplateResponse("onboard/index.html", {
         "request": request, "user": user,
         "vessels": vessels, "selected_vessel": selected_vessel, "vessel_obj": vessel_obj,
@@ -185,6 +195,8 @@ async def onboard_home(
         "sof_events": sof_events, "last_sof": last_sof,
         "notifications": notifications,
         "pax_bookings": pax_bookings,
+        "eta_shifts": eta_shifts if current_leg else [],
+        "eta_shift_reasons": ETA_SHIFT_REASONS,
         "sof_event_types": SOF_EVENT_TYPES,
         "cargo_doc_types": CARGO_DOC_TYPES,
         "current_year": current_year,
@@ -321,6 +333,132 @@ async def dismiss_all_notifications(
     vessel_obj = await db.get(Vessel, leg.vessel_id) if leg else None
     vc = vessel_obj.code if vessel_obj else ""
     return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}", status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  ETA SHIFT — Captain declares ETA/ETD change during navigation
+# ═══════════════════════════════════════════════════════════════
+@router.post("/eta-shift", response_class=HTMLResponse)
+async def eta_shift_declare(
+    request: Request,
+    leg_id: int = Form(...),
+    new_eta: str = Form(""),
+    reason: str = Form(...),
+    justification: str = Form(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Captain declares ETA shift for current navigation leg.
+    Cascades to all subsequent legs and notifies the company."""
+    from app.models.notification import Notification
+    from app.routers.planning_router import resequence_and_recalc
+    from datetime import timedelta
+
+    leg_result = await db.execute(
+        select(Leg).options(
+            selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port),
+        ).where(Leg.id == leg_id)
+    )
+    leg = leg_result.scalar_one_or_none()
+    if not leg:
+        raise HTTPException(404, "Leg non trouvé")
+
+    # Parse new ETA
+    new_eta_dt = None
+    if new_eta and new_eta.strip():
+        try:
+            new_eta_dt = datetime.fromisoformat(new_eta)
+        except ValueError:
+            raise HTTPException(400, "Format de date invalide")
+
+    if not new_eta_dt:
+        raise HTTPException(400, "Nouvelle ETA requise")
+
+    # Validate justification
+    if not justification or not justification.strip():
+        raise HTTPException(400, "La justification est obligatoire")
+
+    old_eta = leg.eta
+    shift_hours = round((new_eta_dt - old_eta).total_seconds() / 3600, 1) if old_eta else 0
+
+    # Record the shift in history
+    shift_record = ETAShift(
+        leg_id=leg.id,
+        vessel_id=leg.vessel_id,
+        field_changed="eta",
+        old_value=old_eta,
+        new_value=new_eta_dt,
+        shift_hours=shift_hours,
+        reason=reason,
+        justification=justification.strip(),
+        created_by=user.full_name,
+    )
+    db.add(shift_record)
+
+    # Apply the new ETA
+    leg.eta = new_eta_dt
+    await db.flush()
+
+    # Cascade recalculation to all subsequent legs
+    await resequence_and_recalc(db, leg.vessel_id, leg.year)
+
+    # Count affected downstream legs
+    downstream_result = await db.execute(
+        select(func.count(Leg.id)).where(
+            Leg.vessel_id == leg.vessel_id,
+            Leg.year == leg.year,
+            Leg.sequence > leg.sequence,
+        )
+    )
+    legs_affected = downstream_result.scalar() or 0
+    shift_record.legs_affected = legs_affected
+    await db.flush()
+
+    # Create SOF event
+    direction = "retard" if shift_hours > 0 else "avance"
+    sof_evt = SofEvent(
+        leg_id=leg.id,
+        event_type="CUSTOM",
+        event_label=f"ETA modifiée : {direction} de {abs(shift_hours):.1f}h",
+        event_date=datetime.now().date(),
+        event_time=datetime.now().strftime("%H:%M"),
+        remarks=f"Raison: {reason} — {justification.strip()}",
+        created_by=user.full_name,
+    )
+    db.add(sof_evt)
+
+    # Create company-wide notification
+    vessel_name = leg.vessel.name if leg.vessel else ""
+    sign = "+" if shift_hours > 0 else ""
+    reason_label = next((l for c, l in ETA_SHIFT_REASONS if c == reason), reason)
+    detail_msg = (
+        f"{vessel_name} · {leg.leg_code} · "
+        f"ETA {old_eta.strftime('%d/%m %H:%M') if old_eta else '—'} → {new_eta_dt.strftime('%d/%m %H:%M')} "
+        f"({sign}{shift_hours:.1f}h) · {reason_label}"
+    )
+    if legs_affected > 0:
+        detail_msg += f" · {legs_affected} leg(s) suivant(s) recalculé(s)"
+
+    db.add(Notification(
+        type="eta_shift",
+        title=f"ETA modifiée — {leg.leg_code} ({sign}{shift_hours:.1f}h)",
+        detail=detail_msg,
+        link=f"/onboard?vessel={leg.vessel.code if leg.vessel else ''}&leg_id={leg.id}#eta-shifts",
+        leg_id=leg.id,
+    ))
+
+    # Onboard notification too
+    db.add(OnboardNotification(
+        leg_id=leg.id,
+        category="escale",
+        title=f"ETA modifiée : {sign}{shift_hours:.1f}h",
+        detail=f"{reason_label} — {justification.strip()}",
+    ))
+
+    await db.flush()
+
+    vc = leg.vessel.code if leg.vessel else ""
+    return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}#eta-shifts", status_code=303)
 
 
 # ═══════════════════════════════════════════════════════════════

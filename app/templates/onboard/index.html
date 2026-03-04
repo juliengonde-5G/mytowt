@@ -59,6 +59,127 @@
     </div>
 </div>
 
+<!-- ETA SHIFT SECTION -->
+<div class="ob-section" id="eta-shifts">
+    <div class="ob-section-header">
+        <h3>🕐 Décalage ETA</h3>
+    </div>
+
+    <!-- ETA Shift Form -->
+    <div class="eta-shift-form-wrap">
+        <p class="eta-shift-current">
+            ETA actuelle : <strong>{{ current_leg.eta.strftime('%d/%m/%Y %H:%M') if current_leg.eta else '— non définie —' }}</strong>
+            {% if current_leg.etd %}· ETD : <strong>{{ current_leg.etd.strftime('%d/%m/%Y %H:%M') }}</strong>{% endif %}
+        </p>
+        <form method="POST" action="/onboard/eta-shift" class="eta-shift-form">
+            <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
+            <div class="eta-shift-grid">
+                <div class="fg">
+                    <label class="field-label">Nouvelle ETA</label>
+                    <input type="datetime-local" name="new_eta" required class="fi"
+                           value="{{ current_leg.eta.strftime('%Y-%m-%dT%H:%M') if current_leg.eta else '' }}">
+                </div>
+                <div class="fg">
+                    <label class="field-label">Raison</label>
+                    <select name="reason" required class="fi">
+                        <option value="">— Sélectionner —</option>
+                        {% for code, label in eta_shift_reasons %}
+                        <option value="{{ code }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="fg fg-wide">
+                    <label class="field-label">Justification (obligatoire)</label>
+                    <textarea name="justification" required rows="2" class="fi" placeholder="Détaillez la raison du décalage..."></textarea>
+                </div>
+                <div class="fg" style="align-self:end;">
+                    <button type="submit" class="btn btn-primary btn-sm">Déclarer le décalage</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- ETA Shifts History -->
+    {% set leg_shifts = eta_shifts|selectattr('leg_id', 'equalto', current_leg.id)|list %}
+    {% if leg_shifts %}
+    <div class="eta-shift-history">
+        <h4>Historique des décalages — {{ current_leg.leg_code }}</h4>
+        <table class="ob-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Ancienne ETA</th>
+                    <th>Nouvelle ETA</th>
+                    <th>Décalage</th>
+                    <th>Raison</th>
+                    <th>Justification</th>
+                    <th>Par</th>
+                    <th>Impact</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for s in leg_shifts %}
+            <tr class="{% if s.shift_hours > 0 %}eta-delay{% else %}eta-advance{% endif %}">
+                <td>{{ s.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                <td style="font-family:monospace;font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
+                <td style="font-family:monospace;font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
+                <td>
+                    {% if s.shift_hours > 0 %}
+                    <span class="eta-badge eta-badge-delay">+{{ "%.1f"|format(s.shift_hours) }}h</span>
+                    {% else %}
+                    <span class="eta-badge eta-badge-advance">{{ "%.1f"|format(s.shift_hours) }}h</span>
+                    {% endif %}
+                </td>
+                <td style="font-size:11px;">{{ s.reason }}</td>
+                <td style="font-size:11px;max-width:200px;">{{ s.justification }}</td>
+                <td style="font-size:11px;color:#888;">{{ s.created_by }}</td>
+                <td style="font-size:11px;">
+                    {% if s.legs_affected > 0 %}
+                    <span class="eta-cascade-badge">{{ s.legs_affected }} leg(s)</span>
+                    {% else %}—{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Full vessel history (all legs) -->
+    {% set other_shifts = eta_shifts|rejectattr('leg_id', 'equalto', current_leg.id)|list %}
+    {% if other_shifts %}
+    <details class="eta-shift-all" style="margin-top:12px;">
+        <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#888;">Historique complet du navire ({{ eta_shifts|length }} évolution{{ 's' if eta_shifts|length > 1 }})</summary>
+        <table class="ob-table" style="margin-top:8px;">
+            <thead>
+                <tr><th>Leg</th><th>Date</th><th>Ancienne</th><th>Nouvelle</th><th>Décalage</th><th>Raison</th><th>Par</th></tr>
+            </thead>
+            <tbody>
+            {% for s in eta_shifts %}
+            <tr class="{% if s.shift_hours > 0 %}eta-delay{% else %}eta-advance{% endif %}">
+                <td style="font-family:monospace;font-size:11px;font-weight:600;color:var(--towt-blue);">
+                    {% for l in legs %}{% if l.id == s.leg_id %}{{ l.leg_code }}{% endif %}{% endfor %}
+                </td>
+                <td>{{ s.created_at.strftime('%d/%m %H:%M') }}</td>
+                <td style="font-family:monospace;font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
+                <td style="font-family:monospace;font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
+                <td>
+                    {% if s.shift_hours > 0 %}
+                    <span class="eta-badge eta-badge-delay">+{{ "%.1f"|format(s.shift_hours) }}h</span>
+                    {% else %}
+                    <span class="eta-badge eta-badge-advance">{{ "%.1f"|format(s.shift_hours) }}h</span>
+                    {% endif %}
+                </td>
+                <td style="font-size:11px;">{{ s.reason }}</td>
+                <td style="font-size:11px;color:#888;">{{ s.created_by }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </details>
+    {% endif %}
+</div>
+
 <!-- NOTIFICATIONS -->
 {% set unread = notifications|selectattr('is_read', 'false')|list %}
 {% if unread|length > 0 %}
@@ -377,6 +498,23 @@
     .ob-doc-icon{font-size:18px;flex-shrink:0}.ob-doc-name{flex:1}
     .ob-doc-actions{color:#aaa;flex-shrink:0}.ob-doc-btn:hover .ob-doc-actions{color:var(--towt-blue)}
     .btn-icon{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px}.btn-icon:hover{background:#fee2e2}
+    /* ETA Shift */
+    .eta-shift-form-wrap{padding-bottom:12px;border-bottom:1px solid #f0f0f0;margin-bottom:12px}
+    .eta-shift-current{font-size:13px;color:#555;margin:0 0 10px}
+    .eta-shift-current strong{color:var(--towt-blue);font-family:monospace}
+    .eta-shift-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .eta-shift-grid .fg-wide{grid-column:1/-1}
+    .eta-shift-grid .fg{display:flex;flex-direction:column;gap:3px}
+    .eta-shift-grid .fi{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:Poppins,system-ui,sans-serif}
+    .eta-shift-grid textarea.fi{resize:vertical;min-height:42px}
+    .eta-shift-history{margin-top:12px}
+    .eta-shift-history h4{font-size:12px;color:#555;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.5px}
+    .eta-delay{border-left:3px solid #DC2626}
+    .eta-advance{border-left:3px solid #16a34a}
+    .eta-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:700;font-family:monospace}
+    .eta-badge-delay{background:rgba(220,38,38,0.1);color:#DC2626}
+    .eta-badge-advance{background:rgba(22,163,106,0.1);color:#16a34a}
+    .eta-cascade-badge{font-size:10px;padding:2px 6px;border-radius:100px;background:rgba(245,158,11,0.1);color:#D97706;font-weight:600}
 </style>
 <script>
 // Pre-fill SOF date and time with current values
