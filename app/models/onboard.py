@@ -148,3 +148,32 @@ class CargoDocument(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     leg = relationship("Leg", backref="cargo_documents")
+
+
+# ─── ATTACHMENT CATEGORIES ─────────────────────────────────────
+ATTACHMENT_CATEGORIES = [
+    ("photo", "Photo"),
+    ("document", "Document"),
+    ("report", "Rapport / Report"),
+    ("certificate", "Certificat / Certificate"),
+    ("other", "Autre / Other"),
+]
+
+
+class OnboardAttachment(Base):
+    """File or photo attachment for a leg (onboard module)."""
+    __tablename__ = "onboard_attachments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    leg_id = Column(Integer, ForeignKey("legs.id", ondelete="CASCADE"), nullable=False)
+    category = Column(String(30), nullable=False, default="document")  # from ATTACHMENT_CATEGORIES
+    title = Column(String(300), nullable=False)
+    filename = Column(String(300), nullable=False)  # original filename
+    file_path = Column(String(500), nullable=False)  # server path
+    file_size = Column(Integer, nullable=True)  # bytes
+    mime_type = Column(String(100), nullable=True)
+    description = Column(Text, nullable=True)
+    uploaded_by = Column(String(200), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    leg = relationship("Leg", backref="attachments")

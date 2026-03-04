@@ -327,9 +327,12 @@
 </div>
 
 <!-- SOF -->
+{% set is_locked = current_leg.status == 'completed' %}
 <div class="ob-section" id="sof">
     <div class="ob-section-header">
-        <h3>📋 Statement of Facts (SOF)</h3>
+        <h3>📋 Statement of Facts (SOF)
+            {% if is_locked %}<span class="sof-lock-badge">🔒 Escale clôturée</span>{% endif %}
+        </h3>
         <div style="display:flex;gap:6px;">
             <a href="/onboard/sof/{{ current_leg.id }}/excel" class="btn btn-secondary btn-sm"><i data-lucide="file-spreadsheet"></i> Excel</a>
             <a href="/onboard/sof/{{ current_leg.id }}/pdf" class="btn btn-secondary btn-sm"><i data-lucide="file-text"></i> PDF</a>
@@ -338,18 +341,42 @@
 
     {% if sof_events %}
     <table class="ob-table sof-table">
-        <thead><tr><th style="width:40%;">Événement</th><th>Date</th><th>Heure (LT)</th><th>Remarques</th><th></th></tr></thead>
+        <thead><tr><th style="width:35%;">Événement</th><th>Date</th><th>Heure (LT)</th><th>Remarques</th><th></th></tr></thead>
         <tbody>
         {% for evt in sof_events %}
-        <tr>
+        <!-- Display row -->
+        <tr class="sof-row {% if not is_locked %}sof-row-editable{% endif %}" id="sof-display-{{ evt.id }}"
+            {% if not is_locked %}onclick="sofToggleEdit({{ evt.id }})"{% endif %}>
             <td><strong>{{ evt.event_label }}</strong></td>
             <td>{{ evt.event_date.strftime('%d/%m/%Y') if evt.event_date else '' }}</td>
             <td>{{ evt.event_time or '' }}</td>
             <td style="font-size:11px;color:#666;">{{ evt.remarks or '' }}</td>
-            <td style="white-space:nowrap;">
-                <button class="btn-icon" hx-delete="/onboard/sof/{{ evt.id }}" hx-confirm="Supprimer ?" hx-target="closest tr" hx-swap="outerHTML"><i data-lucide="trash-2" style="width:14px;height:14px;color:#dc2626;"></i></button>
+            <td style="white-space:nowrap;" onclick="event.stopPropagation();">
+                {% if not is_locked %}
+                <button class="btn-icon" title="Modifier" onclick="event.stopPropagation();sofToggleEdit({{ evt.id }})"><i data-lucide="pencil" style="width:13px;height:13px;color:var(--towt-blue);"></i></button>
+                <button class="btn-icon" hx-delete="/onboard/sof/{{ evt.id }}" hx-confirm="Supprimer ?" hx-target="#sof-display-{{ evt.id }}" hx-swap="outerHTML"><i data-lucide="trash-2" style="width:13px;height:13px;color:#dc2626;"></i></button>
+                {% endif %}
             </td>
         </tr>
+        <!-- Edit row (hidden by default) -->
+        {% if not is_locked %}
+        <tr class="sof-edit-row" id="sof-edit-{{ evt.id }}" style="display:none;">
+            <td colspan="5">
+                <form method="POST" action="/onboard/sof/{{ evt.id }}/edit" class="sof-inline-edit">
+                    <div class="sof-edit-grid">
+                        <input type="text" name="event_label" value="{{ evt.event_label }}" class="sof-edit-fi" placeholder="Libellé">
+                        <input type="date" name="event_date" value="{{ evt.event_date.strftime('%Y-%m-%d') if evt.event_date else '' }}" class="sof-edit-fi">
+                        <input type="time" name="event_time" value="{{ evt.event_time or '' }}" class="sof-edit-fi">
+                        <input type="text" name="remarks" value="{{ evt.remarks or '' }}" class="sof-edit-fi" placeholder="Remarques">
+                        <div class="sof-edit-actions">
+                            <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="sofToggleEdit({{ evt.id }})">Annuler</button>
+                        </div>
+                    </div>
+                </form>
+            </td>
+        </tr>
+        {% endif %}
         {% endfor %}
         </tbody>
     </table>
@@ -357,6 +384,7 @@
     <p class="ob-empty">Aucun événement SOF enregistré.</p>
     {% endif %}
 
+    {% if not is_locked %}
     <form method="POST" action="/onboard/sof/add" class="sof-add-form">
         <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
         <div class="sof-add-grid">
@@ -392,6 +420,7 @@
             <button type="submit" class="btn btn-primary btn-sm">＋</button>
         </div>
     </form>
+    {% endif %}
 </div>
 
 <!-- DOCUMENTS CARGO -->
@@ -410,6 +439,79 @@
         </a>
         {% endfor %}
     </div>
+</div>
+
+<!-- FICHIERS & PHOTOS -->
+<div class="ob-section" id="attachments">
+    <div class="ob-section-header">
+        <h3>📎 Fichiers & Photos <span class="ob-badge">{{ attachments|length }}</span></h3>
+    </div>
+
+    {% if attachments %}
+    <div class="att-grid">
+        {% for att in attachments %}
+        <div class="att-item" id="att-{{ att.id }}">
+            <div class="att-icon">
+                {% if att.mime_type and att.mime_type.startswith('image/') %}
+                <i data-lucide="image" style="width:20px;height:20px;color:#6366F1;"></i>
+                {% else %}
+                <i data-lucide="file" style="width:20px;height:20px;color:var(--towt-blue);"></i>
+                {% endif %}
+            </div>
+            <div class="att-info">
+                <strong>{{ att.title }}</strong>
+                <span class="att-meta">
+                    <span class="att-cat-badge att-cat-{{ att.category }}">{{ att.category }}</span>
+                    · {{ att.filename }}
+                    {% if att.file_size %}· {{ "%.1f"|format(att.file_size / 1024) }} Ko{% endif %}
+                    · {{ att.uploaded_by }}
+                    · {{ att.created_at.strftime('%d/%m %H:%M') }}
+                </span>
+                {% if att.description %}<span class="att-desc">{{ att.description }}</span>{% endif %}
+            </div>
+            <div class="att-actions">
+                <a href="/onboard/attachments/{{ att.id }}/download" class="btn-icon" title="Télécharger"><i data-lucide="download" style="width:14px;height:14px;color:var(--towt-blue);"></i></a>
+                {% if not is_locked %}
+                <button class="btn-icon" hx-delete="/onboard/attachments/{{ att.id }}" hx-confirm="Supprimer ce fichier ?" hx-target="#att-{{ att.id }}" hx-swap="outerHTML"><i data-lucide="trash-2" style="width:14px;height:14px;color:#dc2626;"></i></button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="ob-empty">Aucun fichier joint pour cette escale.</p>
+    {% endif %}
+
+    {% if not is_locked %}
+    <form method="POST" action="/onboard/attachments/upload" enctype="multipart/form-data" class="att-upload-form">
+        <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
+        <div class="att-upload-grid">
+            <div class="fg">
+                <label class="field-label">Fichier</label>
+                <input type="file" name="file" required class="fi" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt,.heic,.webp">
+            </div>
+            <div class="fg">
+                <label class="field-label">Titre</label>
+                <input type="text" name="title" class="fi" placeholder="Titre (optionnel)">
+            </div>
+            <div class="fg">
+                <label class="field-label">Catégorie</label>
+                <select name="category" class="fi">
+                    {% for code, label in attachment_categories %}
+                    <option value="{{ code }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="fg">
+                <label class="field-label">Description</label>
+                <input type="text" name="description" class="fi" placeholder="Description (optionnel)">
+            </div>
+            <div class="fg" style="align-self:end;">
+                <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="upload" style="width:14px;height:14px;"></i> Uploader</button>
+            </div>
+        </div>
+    </form>
+    {% endif %}
 </div>
 
 {% endif %}
@@ -498,6 +600,37 @@
     .ob-doc-icon{font-size:18px;flex-shrink:0}.ob-doc-name{flex:1}
     .ob-doc-actions{color:#aaa;flex-shrink:0}.ob-doc-btn:hover .ob-doc-actions{color:var(--towt-blue)}
     .btn-icon{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px}.btn-icon:hover{background:#fee2e2}
+    /* SOF editable */
+    .sof-row-editable{cursor:pointer;transition:background 0.1s}
+    .sof-row-editable:hover{background:rgba(9,85,97,0.04)}
+    .sof-lock-badge{font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(107,114,128,0.1);color:#6B7280;font-weight:500;margin-left:8px}
+    .sof-edit-row td{background:#f8fafb;padding:10px !important}
+    .sof-inline-edit{margin:0}
+    .sof-edit-grid{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .sof-edit-fi{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:Poppins,system-ui,sans-serif}
+    .sof-edit-fi:first-child{flex:2;min-width:180px}
+    .sof-edit-fi:nth-child(4){flex:1;min-width:100px}
+    .sof-edit-actions{display:flex;gap:4px}
+    /* Attachments */
+    .att-grid{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+    .att-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f8fafb;border:1px solid #eee;border-radius:8px}
+    .att-icon{flex-shrink:0}
+    .att-info{flex:1;min-width:0}
+    .att-info strong{font-size:12px;display:block;color:#333}
+    .att-meta{font-size:10px;color:#888;display:block;margin-top:2px}
+    .att-desc{font-size:11px;color:#666;display:block;margin-top:2px}
+    .att-actions{display:flex;gap:4px;flex-shrink:0}
+    .att-cat-badge{font-size:9px;padding:1px 6px;border-radius:100px;font-weight:600;text-transform:uppercase}
+    .att-cat-photo{background:rgba(168,85,247,0.1);color:#A855F7}
+    .att-cat-document{background:rgba(9,85,97,0.1);color:var(--towt-blue)}
+    .att-cat-report{background:rgba(245,158,11,0.1);color:#D97706}
+    .att-cat-certificate{background:rgba(34,197,94,0.1);color:#16a34a}
+    .att-cat-other{background:rgba(107,114,128,0.1);color:#6B7280}
+    .att-upload-form{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0}
+    .att-upload-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;align-items:start}
+    @media(max-width:900px){.att-upload-grid{grid-template-columns:1fr 1fr}}
+    .att-upload-grid .fg{display:flex;flex-direction:column;gap:3px}
+    .att-upload-grid .fi{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:Poppins,system-ui,sans-serif}
     /* ETA Shift */
     .eta-shift-form-wrap{padding-bottom:12px;border-bottom:1px solid #f0f0f0;margin-bottom:12px}
     .eta-shift-current{font-size:13px;color:#555;margin:0 0 10px}
@@ -525,5 +658,30 @@
     if(d) d.value = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
     if(t) t.value = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
 })();
+
+// SOF inline edit toggle
+function sofToggleEdit(evtId) {
+    var display = document.getElementById('sof-display-' + evtId);
+    var edit = document.getElementById('sof-edit-' + evtId);
+    if (!display || !edit) return;
+    // Close any other open edit rows
+    document.querySelectorAll('.sof-edit-row').forEach(function(r) {
+        if (r.id !== 'sof-edit-' + evtId) {
+            r.style.display = 'none';
+            var otherId = r.id.replace('sof-edit-', '');
+            var otherDisplay = document.getElementById('sof-display-' + otherId);
+            if (otherDisplay) otherDisplay.style.display = '';
+        }
+    });
+    // Toggle current
+    if (edit.style.display === 'none') {
+        display.style.display = 'none';
+        edit.style.display = '';
+        edit.querySelector('input[name="event_label"]').focus();
+    } else {
+        edit.style.display = 'none';
+        display.style.display = '';
+    }
+}
 </script>
 {% endblock %}

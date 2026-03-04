@@ -2,8 +2,8 @@
 import json
 from datetime import datetime, timezone, date
 from typing import Optional
-from fastapi import APIRouter, Request, Depends, Query, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi import APIRouter, Request, Depends, Query, Form, HTTPException, File, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.utils.activity import log_activity, get_client_ip
 from sqlalchemy import select, func, and_
@@ -19,8 +19,8 @@ from app.models.order import Order
 from app.models.crew import CrewMember, CrewAssignment
 from app.models.packing_list import PackingList, PackingListBatch
 from app.models.onboard import (
-    SofEvent, OnboardNotification, CargoDocument, ETAShift,
-    SOF_EVENT_TYPES, CARGO_DOC_TYPES, ETA_SHIFT_REASONS,
+    SofEvent, OnboardNotification, CargoDocument, ETAShift, OnboardAttachment,
+    SOF_EVENT_TYPES, CARGO_DOC_TYPES, ETA_SHIFT_REASONS, ATTACHMENT_CATEGORIES,
 )
 
 router = APIRouter(prefix="/onboard", tags=["onboard"])
@@ -63,6 +63,7 @@ async def onboard_home(
     notifications = []
     last_sof = None
     eta_shifts = []
+    attachments = []
 
     next_leg = None  # leg export (départ du port)
 
@@ -186,6 +187,13 @@ async def onboard_home(
             )
             eta_shifts = eta_shifts_result.scalars().all()
 
+            # ─── ATTACHMENTS for this leg ───
+            attach_result = await db.execute(
+                select(OnboardAttachment).where(OnboardAttachment.leg_id == current_leg.id)
+                .order_by(OnboardAttachment.created_at.desc())
+            )
+            attachments = attach_result.scalars().all()
+
     return templates.TemplateResponse("onboard/index.html", {
         "request": request, "user": user,
         "vessels": vessels, "selected_vessel": selected_vessel, "vessel_obj": vessel_obj,
@@ -197,6 +205,8 @@ async def onboard_home(
         "pax_bookings": pax_bookings,
         "eta_shifts": eta_shifts if current_leg else [],
         "eta_shift_reasons": ETA_SHIFT_REASONS,
+        "attachments": attachments if current_leg else [],
+        "attachment_categories": ATTACHMENT_CATEGORIES,
         "sof_event_types": SOF_EVENT_TYPES,
         "cargo_doc_types": CARGO_DOC_TYPES,
         "current_year": current_year,
@@ -459,6 +469,119 @@ async def eta_shift_declare(
 
     vc = leg.vessel.code if leg.vessel else ""
     return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}#eta-shifts", status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  ATTACHMENTS (file/photo upload)
+# ═══════════════════════════════════════════════════════════════
+UPLOAD_DIR = "/app/uploads/onboard"
+ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".gif", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt", ".heic", ".webp"}
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+
+
+@router.post("/attachments/upload", response_class=HTMLResponse)
+async def attachment_upload(
+    request: Request,
+    leg_id: int = Form(...),
+    category: str = Form("document"),
+    title: str = Form(""),
+    description: str = Form(""),
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a file or photo attachment to a leg."""
+    import os
+    import uuid
+
+    leg = await db.get(Leg, leg_id)
+    if not leg:
+        raise HTTPException(404)
+
+    # Check leg not locked
+    if leg.status == "completed":
+        raise HTTPException(400, "L'escale est clôturée, impossible d'ajouter des fichiers")
+
+    # Validate extension
+    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"Type de fichier non autorisé : {ext}")
+
+    # Read and check size
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(400, "Fichier trop volumineux (max 20 Mo)")
+
+    # Create upload dir
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+    # Safe filename
+    safe_name = f"{leg_id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, safe_name)
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    att = OnboardAttachment(
+        leg_id=leg_id,
+        category=category,
+        title=title.strip() or file.filename or "Sans titre",
+        filename=file.filename or safe_name,
+        file_path=file_path,
+        file_size=len(content),
+        mime_type=file.content_type,
+        description=description.strip() or None,
+        uploaded_by=user.full_name,
+    )
+    db.add(att)
+    await db.flush()
+
+    vessel_obj = await db.get(Vessel, leg.vessel_id)
+    vc = vessel_obj.code if vessel_obj else ""
+    return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}#attachments", status_code=303)
+
+
+@router.get("/attachments/{att_id}/download")
+async def attachment_download(
+    att_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download an attachment file."""
+    import os
+    att = await db.get(OnboardAttachment, att_id)
+    if not att or not os.path.isfile(att.file_path):
+        raise HTTPException(404)
+
+    with open(att.file_path, "rb") as f:
+        content = f.read()
+
+    return Response(
+        content=content,
+        media_type=att.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{att.filename}"'},
+    )
+
+
+@router.delete("/attachments/{att_id}", response_class=HTMLResponse)
+async def attachment_delete(
+    att_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an attachment."""
+    import os
+    att = await db.get(OnboardAttachment, att_id)
+    if att:
+        # Check leg not locked
+        leg = await db.get(Leg, att.leg_id)
+        if leg and leg.status == "completed":
+            raise HTTPException(400, "L'escale est clôturée")
+        if os.path.isfile(att.file_path):
+            os.remove(att.file_path)
+        await db.delete(att)
+        await db.flush()
+    return HTMLResponse(content="", status_code=200)
 
 
 # ═══════════════════════════════════════════════════════════════
