@@ -12,8 +12,40 @@ from typing import Optional
 PIPEDRIVE_BASE = "https://api.pipedrive.com/v1"
 
 
+async def _get_token_from_db(db=None) -> Optional[str]:
+    """Get Pipedrive API token from database (OpexParameter)."""
+    if db:
+        from sqlalchemy import select
+        from app.models.finance import OpexParameter
+        result = await db.execute(
+            select(OpexParameter).where(OpexParameter.parameter_name == "pipedrive_api_token")
+        )
+        param = result.scalar_one_or_none()
+        if param and param.description:
+            return param.description.strip() or None
+        return None
+
+    # Fallback: create a new DB session
+    from app.database import async_session
+    async with async_session() as session:
+        from sqlalchemy import select
+        from app.models.finance import OpexParameter
+        result = await session.execute(
+            select(OpexParameter).where(OpexParameter.parameter_name == "pipedrive_api_token")
+        )
+        param = result.scalar_one_or_none()
+        if param and param.description:
+            return param.description.strip() or None
+    return None
+
+
 async def _get_token() -> Optional[str]:
-    """Get Pipedrive API token from settings."""
+    """Get Pipedrive API token (DB first, then .env fallback)."""
+    # Try DB first
+    token = await _get_token_from_db()
+    if token:
+        return token
+    # Fallback to config (.env)
     from app.config import get_settings
     settings = get_settings()
     return getattr(settings, "PIPEDRIVE_API_TOKEN", None) or None

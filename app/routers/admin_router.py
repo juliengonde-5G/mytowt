@@ -158,6 +158,13 @@ async def settings_home(
     mrv_result = await db.execute(select(MrvParameter).order_by(MrvParameter.parameter_name))
     mrv_params = mrv_result.scalars().all()
 
+    # Pipedrive token
+    pd_result = await db.execute(
+        select(OpexParameter).where(OpexParameter.parameter_name == "pipedrive_api_token")
+    )
+    pd_param = pd_result.scalar_one_or_none()
+    pipedrive_token = pd_param.description if pd_param else ""  # stored in description (text field)
+
     return templates.TemplateResponse("admin/settings.html", {
         "request": request, "user": user,
         "users": users, "vessels": vessels,
@@ -173,6 +180,7 @@ async def settings_home(
         "co2_vars": co2_vars, "co2_dict": co2_dict, "co2_history": co2_history,
         "co2_defaults": CO2_DEFAULTS,
         "mrv_params": mrv_params, "mrv_defaults": MRV_DEFAULTS,
+        "pipedrive_token": pipedrive_token,
         "active_module": "settings",
     })
 
@@ -910,6 +918,73 @@ async def insurance_edit(
         entry.is_active = is_active == "on"
         await db.flush()
     return RedirectResponse(url="/admin/settings#insurance", status_code=303)
+
+
+# ─── PIPEDRIVE CRM SETTINGS ──────────────────────────────────
+@router.post("/settings/pipedrive/update", response_class=HTMLResponse)
+async def pipedrive_update(
+    request: Request,
+    pipedrive_api_token: str = Form(""),
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save Pipedrive API token in database."""
+    token_val = pipedrive_api_token.strip()
+    result = await db.execute(
+        select(OpexParameter).where(OpexParameter.parameter_name == "pipedrive_api_token")
+    )
+    param = result.scalar_one_or_none()
+    if param:
+        param.description = token_val
+        param.parameter_value = 1 if token_val else 0
+    else:
+        param = OpexParameter(
+            parameter_name="pipedrive_api_token",
+            parameter_value=1 if token_val else 0,
+            unit="",
+            category="integrations",
+            description=token_val,
+        )
+        db.add(param)
+    await db.flush()
+    await log_activity(db, user=user, action="update", module="admin",
+                       entity_type="settings", entity_id=None,
+                       entity_label="Pipedrive API token updated", ip_address=get_client_ip(request))
+    return RedirectResponse(url="/admin/settings#pipedrive", status_code=303)
+
+
+@router.get("/settings/pipedrive/test")
+async def pipedrive_test(
+    request: Request,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Test Pipedrive API connection."""
+    from fastapi.responses import JSONResponse
+    from app.utils.pipedrive import _get_token_from_db, _request
+
+    token = await _get_token_from_db(db)
+    if not token:
+        return JSONResponse(content={"success": False, "error": "Token API non configuré"})
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://api.pipedrive.com/v1/users/me",
+                params={"api_token": token},
+            )
+        if resp.status_code != 200:
+            return JSONResponse(content={"success": False, "error": f"HTTP {resp.status_code}"})
+        data = resp.json()
+        if not data.get("success"):
+            return JSONResponse(content={"success": False, "error": "Token invalide"})
+        user_data = data.get("data", {})
+        company = user_data.get("company_name", "") or ""
+        name = user_data.get("name", "") or ""
+        return JSONResponse(content={"success": True, "company": company, "user": name})
+    except Exception as e:
+        return JSONResponse(content={"success": False, "error": str(e)})
 
 
 # ─── MON COMPTE (accessible à tous les rôles) ─────────────────
