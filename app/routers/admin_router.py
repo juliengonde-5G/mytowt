@@ -969,22 +969,28 @@ async def pipedrive_test(
 
     try:
         import httpx
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
                 "https://api.pipedrive.com/v1/users/me",
                 params={"api_token": token},
             )
+        if resp.status_code == 401:
+            return JSONResponse(content={"success": False, "error": "Token invalide (401 Unauthorized)"})
         if resp.status_code != 200:
-            return JSONResponse(content={"success": False, "error": f"HTTP {resp.status_code}"})
+            return JSONResponse(content={"success": False, "error": f"Erreur HTTP {resp.status_code}"})
         data = resp.json()
         if not data.get("success"):
-            return JSONResponse(content={"success": False, "error": "Token invalide"})
+            return JSONResponse(content={"success": False, "error": "Token invalide — Pipedrive a rejeté la requête"})
         user_data = data.get("data", {})
         company = user_data.get("company_name", "") or ""
         name = user_data.get("name", "") or ""
         return JSONResponse(content={"success": True, "company": company, "user": name})
+    except httpx.ConnectError:
+        return JSONResponse(content={"success": False, "error": "Impossible de joindre api.pipedrive.com — vérifiez l'accès réseau du serveur (DNS, firewall, proxy)"})
+    except httpx.TimeoutException:
+        return JSONResponse(content={"success": False, "error": "Timeout — api.pipedrive.com ne répond pas (>15s)"})
     except Exception as e:
-        return JSONResponse(content={"success": False, "error": str(e)})
+        return JSONResponse(content={"success": False, "error": f"Erreur : {type(e).__name__} — {e}"})
 
 
 # ─── MON COMPTE (accessible à tous les rôles) ─────────────────
