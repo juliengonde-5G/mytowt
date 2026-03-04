@@ -26,6 +26,7 @@ class Client(Base):
     country = Column(String(100), nullable=True)
     notes = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
+    pipedrive_org_id = Column(Integer, nullable=True)  # Pipedrive Organization ID
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -300,6 +301,7 @@ class RateOffer(Base):
 
     notes = Column(Text, nullable=True)
     sent_at = Column(DateTime(timezone=True), nullable=True)
+    pipedrive_deal_id = Column(Integer, nullable=True)  # Pipedrive Deal ID
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     created_by = Column(String(100), nullable=True)
 

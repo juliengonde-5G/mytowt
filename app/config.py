@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # External URL (for portal links shared with clients/passengers)
     SITE_URL: str = "https://my.towt.eu"
 
+    # Pipedrive CRM integration
+    PIPEDRIVE_API_TOKEN: str = ""
+
     # TOWT Fleet
     FLEET: dict = {
         1: {"name": "Anemos", "code": 1},

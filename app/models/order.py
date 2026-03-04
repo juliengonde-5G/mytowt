@@ -62,6 +62,9 @@ class Order(Base):
     attachment_filename = Column(String(255), nullable=True)
     attachment_path = Column(String(500), nullable=True)
 
+    # Pipedrive
+    pipedrive_deal_id = Column(Integer, nullable=True)  # Pipedrive Deal ID
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

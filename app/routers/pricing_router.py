@@ -143,9 +143,11 @@ async def client_create_form(
     request: Request,
     user: User = Depends(get_current_user),
 ):
+    from app.utils.pipedrive import is_configured
     return templates.TemplateResponse("commercial/client_form.html", {
         "request": request, "user": user,
         "edit_client": None,
+        "pipedrive_enabled": await is_configured(),
         "active_module": "commercial",
     })
 
@@ -161,6 +163,7 @@ async def client_create_submit(
     address: Optional[str] = Form(None),
     country: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
+    pipedrive_org_id: Optional[int] = Form(None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -173,6 +176,7 @@ async def client_create_submit(
         address=address.strip() if address else None,
         country=country.strip() if country else None,
         notes=notes.strip() if notes else None,
+        pipedrive_org_id=pipedrive_org_id,
     )
     db.add(client)
     await db.flush()
@@ -195,9 +199,11 @@ async def client_edit_form(
     client = result.scalar_one_or_none()
     if not client:
         raise HTTPException(404)
+    from app.utils.pipedrive import is_configured
     return templates.TemplateResponse("commercial/client_form.html", {
         "request": request, "user": user,
         "edit_client": client,
+        "pipedrive_enabled": await is_configured(),
         "active_module": "commercial",
     })
 
@@ -232,6 +238,37 @@ async def client_edit_submit(
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
     return RedirectResponse(url=url, status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════
+# PIPEDRIVE INTEGRATION
+# ═══════════════════════════════════════════════════════════
+
+@router.get("/pipedrive/search")
+async def pipedrive_search(
+    request: Request,
+    q: str = Query("", min_length=2),
+    user: User = Depends(get_current_user),
+):
+    """Search Pipedrive Organizations (HTMX endpoint, returns JSON)."""
+    from app.utils.pipedrive import search_organizations
+    results = await search_organizations(q, limit=8)
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content=results)
+
+
+@router.get("/pipedrive/org/{org_id}")
+async def pipedrive_get_org(
+    org_id: int, request: Request,
+    user: User = Depends(get_current_user),
+):
+    """Get full Organization details from Pipedrive (returns JSON)."""
+    from app.utils.pipedrive import get_organization
+    org = await get_organization(org_id)
+    if not org:
+        raise HTTPException(404, "Organisation non trouvée dans Pipedrive")
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content=org)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -957,6 +994,30 @@ async def offer_create_submit(
     await log_activity(db, user=user, action="create", module="commercial",
                        entity_type="rate_offer", entity_id=offer.id,
                        entity_label=ref, ip_address=get_client_ip(request))
+
+    # ─── Push to Pipedrive as Deal ───
+    if grid.client and grid.client.pipedrive_org_id:
+        try:
+            from app.utils.pipedrive import create_deal
+            routes = ", ".join(f"{l.pol_locode}→{l.pod_locode}" for l in grid.lines)
+            deal_id = await create_deal(
+                title=f"Offre {ref} — {grid.client.name}",
+                org_id=grid.client.pipedrive_org_id,
+                notes=(
+                    f"<b>Offre tarifaire {ref}</b><br>"
+                    f"Client : {grid.client.name}<br>"
+                    f"Grille : {grid.reference}<br>"
+                    f"Validité : {grid.valid_from} → {grid.valid_to}<br>"
+                    f"Routes : {routes}<br>"
+                    f"BL fee : {grid.bl_fee}€ · Booking fee : {grid.booking_fee}€<br>"
+                    f"Créé par {user.full_name}"
+                ),
+            )
+            if deal_id:
+                offer.pipedrive_deal_id = deal_id
+                await db.flush()
+        except Exception as e:
+            print(f"Pipedrive push error (offer): {e}")
 
     url = f"/commercial/pricing/grids/{gid}"
     if request.headers.get("HX-Request"):

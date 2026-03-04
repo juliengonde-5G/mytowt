@@ -181,6 +181,40 @@ async def order_create_submit(
         order.leg_id = matching.id
         order.status = "reserve"
 
+    # ─── Push to Pipedrive as Deal ───
+    try:
+        from app.models.commercial import Client as CommClient
+        client_r = await db.execute(
+            select(CommClient).where(
+                CommClient.name == order.client_name,
+                CommClient.pipedrive_org_id.isnot(None),
+            ).limit(1)
+        )
+        matched_client = client_r.scalar_one_or_none()
+        if matched_client:
+            from app.utils.pipedrive import create_deal
+            dep = order.departure_locode or "?"
+            arr = order.arrival_locode or "?"
+            deal_id = await create_deal(
+                title=f"OT {order.reference} — {order.client_name}",
+                org_id=matched_client.pipedrive_org_id,
+                value=order.total_price or 0,
+                notes=(
+                    f"<b>Ordre de transport {order.reference}</b><br>"
+                    f"Client : {order.client_name}<br>"
+                    f"Route : {dep} → {arr}<br>"
+                    f"Palettes : {order.quantity_palettes} ({order.palette_format})<br>"
+                    f"Prix unitaire : {order.unit_price}€<br>"
+                    f"Total : {order.total_price or 0:.2f}€<br>"
+                    f"Créé par {user.full_name}"
+                ),
+            )
+            if deal_id:
+                order.pipedrive_deal_id = deal_id
+                await db.flush()
+    except Exception as e:
+        print(f"Pipedrive push error (order): {e}")
+
     url = "/commercial"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
