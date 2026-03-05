@@ -61,7 +61,7 @@ body{font-family:'Poppins',sans-serif;background:#f4f7f8;color:#333;min-height:1
 <div class="ph">
   <div class="plogo">
     <button class="mbt" onclick="tSB()">☰</button>
-    <img src="/static/img/logo_towt.png" alt="TOWT">
+    <img src="/static/img/logo_towt_white.png" alt="TOWT">
     <div><div class="plogo-t">TOWT</div><div class="plogo-s">Transoceanic Wind Transport</div></div>
   </div>
   <div class="ph-r">
@@ -77,7 +77,7 @@ body{font-family:'Poppins',sans-serif;background:#f4f7f8;color:#333;min-height:1
 <div class="play">
   <div class="psb" id="psb">
     <nav class="pnav">
-      <a href="/p/{{ pl.token }}?lang={{ lang }}" class="{% if active_page=='packing' %}active{% endif %}"><span class="ni">📦</span>{{ t('cp_packing_list', lang) }}</a>
+      <a href="/p/{{ pl.token }}/packing?lang={{ lang }}" class="{% if active_page=='packing' %}active{% endif %}"><span class="ni">📦</span>{{ t('cp_packing_list', lang) }}</a>
       <a href="/p/{{ pl.token }}/vessel?lang={{ lang }}" class="{% if active_page=='vessel' %}active{% endif %}"><span class="ni">🚢</span>{{ t('cp_vessel', lang) }}</a>
       <a href="/p/{{ pl.token }}/voyage?lang={{ lang }}" class="{% if active_page=='voyage' %}active{% endif %}"><span class="ni">🗺️</span>{{ t('cp_voyage', lang) }}</a>
       <div class="ndiv"></div>

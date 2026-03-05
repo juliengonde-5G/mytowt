@@ -969,14 +969,22 @@ async def _unread_count(pl_id, db):
     return r.scalar() or 0
 
 
-# ── Page 1: Packing List (default) ────────────────────────────
+# ── Default: redirect to Voyage ───────────────────────────────
 @ext_router.get("/{token}", response_class=HTMLResponse)
+async def client_portal_default(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db)
+    lang = _lang(request)
+    return RedirectResponse(url=f"/p/{token}/voyage?lang={lang}", status_code=303)
+
+
+# ── Page 1: Packing List ─────────────────────────────────────
+@ext_router.get("/{token}/packing", response_class=HTMLResponse)
 async def client_portal_packing(token: str, request: Request, db: AsyncSession = Depends(get_db)):
     pl = await _get_pl(token, db)
     lang = _lang(request)
     return templates.TemplateResponse("cargo/portal_packing.html", {
         "request": request, "pl": pl, "imo_classes": IMO_CLASSES,
-        "lang": lang, "active_page": "packing",
+        "lang": lang, "active_page": "packing", "page_suffix": "/packing",
         "unread_messages": await _unread_count(pl.id, db),
     })
 
@@ -1125,7 +1133,7 @@ async def client_add_batch(token: str, request: Request, db: AsyncSession = Depe
     )
     db.add(batch)
     await db.flush()
-    return RedirectResponse(url=f"/p/{token}", status_code=303)
+    return RedirectResponse(url=f"/p/{token}/packing", status_code=303)
 
 
 @ext_router.post("/{token}/save", response_class=HTMLResponse)
@@ -1147,7 +1155,7 @@ async def client_save_batches(token: str, request: Request, db: AsyncSession = D
     if pl.status == "draft":
         pl.status = "submitted"
     await db.flush()
-    return RedirectResponse(url=f"/p/{token}?saved=1", status_code=303)
+    return RedirectResponse(url=f"/p/{token}/packing?saved=1", status_code=303)
 
 
 @ext_router.delete("/{token}/batch/{batch_id}", response_class=HTMLResponse)
@@ -1171,4 +1179,4 @@ async def client_delete_batch(token: str, batch_id: int, request: Request, db: A
     if batch:
         await db.delete(batch)
         await db.flush()
-    return RedirectResponse(url=f"/p/{token}", status_code=303)
+    return RedirectResponse(url=f"/p/{token}/packing", status_code=303)

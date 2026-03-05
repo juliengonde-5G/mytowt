@@ -97,13 +97,11 @@
         </select>
       </div>
       <div class="fgi"><label class="fl">{{ t('f_type_of_goods', lang) }} *</label><input type="text" name="{{ p }}type_of_goods" class="fi" value="{{ batch.type_of_goods or '' }}"></div>
-      <div class="fgi"><label class="fl">{{ t('f_bio_products', lang) }}</label>
-        <select name="{{ p }}bio_products" class="fs">
-          <option value="">—</option>
-          <option value="Yes" {% if batch.bio_products=='Yes' %}selected{% endif %}>{{ t('yes', lang) }}</option>
-          <option value="No" {% if batch.bio_products=='No' %}selected{% endif %}>{{ t('no', lang) }}</option>
-        </select>
-      </div>
+      <div class="fgi"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="hidden" name="{{ p }}bio_products" value="No">
+        <input type="checkbox" name="{{ p }}bio_products" value="Yes" {% if batch.bio_products=='Yes' %}checked{% endif %} style="width:18px;height:18px;accent-color:#095561;cursor:pointer">
+        {{ t('f_bio_products', lang) }}
+      </label></div>
       <div class="fgi"><label class="fl">{{ t('f_pallet_quantity', lang) }} *</label><input type="number" name="{{ p }}pallet_quantity" class="fi" min="1" value="{{ batch.pallet_quantity or '' }}"></div>
       <div class="fgi"><label class="fl">{{ t('f_cases_quantity', lang) }}</label><input type="number" name="{{ p }}cases_quantity" class="fi" value="{{ batch.cases_quantity or '' }}"></div>
       <div class="fgi"><label class="fl">{{ t('f_units_per_case', lang) }}</label><input type="number" name="{{ p }}units_per_case" class="fi" value="{{ batch.units_per_case or '' }}"></div>
@@ -135,4 +133,25 @@
 </div>
 {% endif %}
 </form>
+
+<script>
+// Auto-fill pallet dimensions based on pallet type
+var PALLET_DIMS = {
+  'EPAL':    {length: 120, width: 80},
+  'USPAL':   {length: 120, width: 100},
+  'PORTPAL': {length: 120, width: 100}
+};
+document.querySelectorAll('select[name$="_pallet_type"]').forEach(function(sel){
+  sel.addEventListener('change', function(){
+    var prefix = this.name.replace('pallet_type','');
+    var dims = PALLET_DIMS[this.value];
+    if(dims){
+      var lf = document.querySelector('input[name="'+prefix+'length_cm"]');
+      var wf = document.querySelector('input[name="'+prefix+'width_cm"]');
+      if(lf) lf.value = dims.length;
+      if(wf) wf.value = dims.width;
+    }
+  });
+});
+</script>
 {% endblock %}

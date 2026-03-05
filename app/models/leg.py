@@ -29,7 +29,11 @@ class Leg(Base):
     departure_port_locode = Column(String(5), ForeignKey("ports.locode"), nullable=False)
     arrival_port_locode = Column(String(5), ForeignKey("ports.locode"), nullable=False)
 
-    # Planning - Previsionnel
+    # Planning - Reference (original schedule)
+    etd_ref = Column(DateTime(timezone=True), nullable=True)  # Original ETD at booking time
+    eta_ref = Column(DateTime(timezone=True), nullable=True)  # Original ETA at booking time
+
+    # Planning - Previsionnel (updated estimates)
     eta = Column(DateTime(timezone=True), nullable=True)  # Estimated Time of Arrival
     etd = Column(DateTime(timezone=True), nullable=True)  # Estimated Time of Departure
 
