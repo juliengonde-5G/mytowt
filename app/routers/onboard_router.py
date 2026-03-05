@@ -23,6 +23,7 @@ from app.models.onboard import (
     CargoDocumentAttachment,
     SOF_EVENT_TYPES, CARGO_DOC_TYPES, ETA_SHIFT_REASONS, ATTACHMENT_CATEGORIES,
 )
+from app.utils.timezones import get_port_timezone, utc_offset_label, TIMEZONE_CHOICES
 
 router = APIRouter(prefix="/onboard", tags=["onboard"])
 
@@ -195,6 +196,16 @@ async def onboard_home(
             )
             attachments = attach_result.scalars().all()
 
+    # ─── Port timezone for sidebar clock + time inputs ───
+    _port_tz = "UTC"
+    _port_tz_label = "Port"
+    if current_leg:
+        # Use arrival port if vessel has arrived, else departure port
+        _ref_port = current_leg.arrival_port if current_leg.ata else current_leg.departure_port
+        if _ref_port:
+            _port_tz = get_port_timezone(_ref_port.country_code, _ref_port.zone_code)
+            _port_tz_label = _ref_port.name
+
     return templates.TemplateResponse("onboard/index.html", {
         "request": request, "user": user,
         "vessels": vessels, "selected_vessel": selected_vessel, "vessel_obj": vessel_obj,
@@ -210,6 +221,10 @@ async def onboard_home(
         "attachment_categories": ATTACHMENT_CATEGORIES,
         "sof_event_types": SOF_EVENT_TYPES,
         "cargo_doc_types": CARGO_DOC_TYPES,
+        "tz_choices": TIMEZONE_CHOICES,
+        "port_timezone": _port_tz,
+        "port_tz_label": _port_tz_label,
+        "port_tz_offset": utc_offset_label(_port_tz),
         "current_year": current_year,
         "active_module": "captain",
         "lang": user.language or "fr",
@@ -227,10 +242,23 @@ async def sof_add_event(
     event_label: str = Form(""),
     event_date: str = Form(""),
     event_time: str = Form(""),
+    event_time_tz: str = Form("UTC"),
     remarks: str = Form(""),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Resolve 'port_local' timezone to actual IANA name
+    resolved_tz = event_time_tz
+    if event_time_tz == "port_local":
+        leg = await db.get(Leg, leg_id)
+        if leg:
+            from app.models.port import Port
+            dep = await db.get(Port, leg.departure_port_id) if leg.departure_port_id else None
+            arr = await db.get(Port, leg.arrival_port_id) if leg.arrival_port_id else None
+            ref_port = arr if leg.ata else dep
+            if ref_port:
+                resolved_tz = get_port_timezone(ref_port.country_code, ref_port.zone_code)
+
     # Find label from type if not custom
     label = event_label.strip()
     if not label:
@@ -242,6 +270,7 @@ async def sof_add_event(
         event_label=label,
         event_date=datetime.strptime(event_date, "%Y-%m-%d").date() if event_date else date.today(),
         event_time=event_time or None,
+        event_time_tz=resolved_tz,
         remarks=remarks or None,
         created_by=user.full_name,
     )
@@ -276,6 +305,7 @@ async def sof_edit_event(
     event_label: str = Form(""),
     event_date: str = Form(""),
     event_time: str = Form(""),
+    event_time_tz: str = Form("UTC"),
     remarks: str = Form(""),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -288,6 +318,18 @@ async def sof_edit_event(
     if event_date:
         evt.event_date = datetime.strptime(event_date, "%Y-%m-%d").date()
     evt.event_time = event_time or evt.event_time
+    # Resolve port_local timezone
+    resolved_tz = event_time_tz
+    if event_time_tz == "port_local":
+        leg = await db.get(Leg, evt.leg_id)
+        if leg:
+            from app.models.port import Port
+            dep = await db.get(Port, leg.departure_port_id) if leg.departure_port_id else None
+            arr = await db.get(Port, leg.arrival_port_id) if leg.arrival_port_id else None
+            ref_port = arr if leg.ata else dep
+            if ref_port:
+                resolved_tz = get_port_timezone(ref_port.country_code, ref_port.zone_code)
+    evt.event_time_tz = resolved_tz
     evt.remarks = remarks if remarks is not None else evt.remarks
     await db.flush()
 
@@ -1192,6 +1234,11 @@ async def cargo_doc_form(
         )
         doc_attachments = att_result.scalars().all()
 
+    # Port timezone
+    _ref_port = leg.arrival_port if leg.ata else leg.departure_port
+    _port_tz = get_port_timezone(_ref_port.country_code, _ref_port.zone_code) if _ref_port else "UTC"
+    _port_tz_label = _ref_port.name if _ref_port else "Port"
+
     return templates.TemplateResponse("onboard/doc_form.html", {
         "request": request, "user": user,
         "leg": leg, "doc_type": doc_type, "doc_label": doc_label,
@@ -1199,6 +1246,10 @@ async def cargo_doc_form(
         "sof_events": sof_events,
         "crew_onboard": crew_onboard,
         "doc_attachments": doc_attachments,
+        "tz_choices": TIMEZONE_CHOICES,
+        "port_timezone": _port_tz,
+        "port_tz_label": _port_tz_label,
+        "port_tz_offset": utc_offset_label(_port_tz),
         "active_module": "captain",
         "lang": user.language or "fr",
     })

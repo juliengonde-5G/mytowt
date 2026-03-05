@@ -110,7 +110,8 @@ class SofEvent(Base):
     event_type = Column(String(50), nullable=False)  # code from SOF_EVENT_TYPES
     event_label = Column(String(300), nullable=False)  # display text (can be customized)
     event_date = Column(Date, nullable=True)
-    event_time = Column(String(10), nullable=True)  # HH:MM format (LT)
+    event_time = Column(String(10), nullable=True)  # HH:MM format
+    event_time_tz = Column(String(50), nullable=True, default="UTC")  # IANA timezone of event_time
     remarks = Column(Text, nullable=True)
     created_by = Column(String(200), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

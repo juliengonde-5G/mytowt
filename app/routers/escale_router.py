@@ -13,6 +13,7 @@ from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
+from app.utils.timezones import get_port_timezone, utc_offset_label, TIMEZONE_CHOICES
 from app.models.operation import EscaleOperation, DockerShift
 from app.models.crew import CrewMember, CrewAssignment
 from app.models.finance import LegFinance, OpexParameter
@@ -353,6 +354,10 @@ async def escale_home(
         "leg_terminated": leg_terminated, "leg_locked": leg_locked,
         "operation_types": OPERATION_TYPES, "actions_by_type": ACTIONS_BY_TYPE,
         "perf": perf,
+        "tz_choices": TIMEZONE_CHOICES,
+        "port_timezone": get_port_timezone(selected_leg.departure_port.country_code, selected_leg.departure_port.zone_code) if selected_leg and selected_leg.departure_port else "UTC",
+        "port_tz_label": selected_leg.departure_port.name if selected_leg and selected_leg.departure_port else "Port",
+        "port_tz_offset": utc_offset_label(get_port_timezone(selected_leg.departure_port.country_code, selected_leg.departure_port.zone_code)) if selected_leg and selected_leg.departure_port else "UTC",
         "active_module": "escale",
     })
 
@@ -494,6 +499,7 @@ async def operation_create_form(
         "quay_start": quay_start_str, "quay_end": quay_end_str, "error": None,
         "preselect_cat": cat,
         "crew_members": crew_members, "selected_crew_ids": set(),
+        "tz_choices": TIMEZONE_CHOICES,
     })
 
 
@@ -560,6 +566,7 @@ async def operation_edit_form(
         "quay_start": quay_start_str, "quay_end": quay_end_str, "error": None,
         "preselect_cat": None,
         "crew_members": crew_members, "selected_crew_ids": set(),
+        "tz_choices": TIMEZONE_CHOICES,
     })
 
 
@@ -634,6 +641,7 @@ async def docker_create_form(request: Request, leg_id: int = Query(...), user: U
     return templates.TemplateResponse("escale/docker_form.html", {
         "request": request, "user": user, "edit_ds": None, "leg_id": leg_id,
         "quay_start": quay_start_str, "quay_end": quay_end_str, "error": None,
+        "tz_choices": TIMEZONE_CHOICES,
     })
 
 
@@ -682,6 +690,7 @@ async def docker_edit_form(ds_id: int, request: Request, user: User = Depends(re
     return templates.TemplateResponse("escale/docker_form.html", {
         "request": request, "user": user, "edit_ds": ds, "leg_id": ds.leg_id,
         "quay_start": quay_start_str, "quay_end": quay_end_str, "error": None,
+        "tz_choices": TIMEZONE_CHOICES,
     })
 
 

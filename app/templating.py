@@ -25,6 +25,11 @@ class _TranslatedTemplates(Jinja2Templates):
             else:
                 context["lang"] = DEFAULT_LANG
 
+        # Default timezone context for sidebar clock
+        context.setdefault("port_timezone", "UTC")
+        context.setdefault("port_tz_label", "Port")
+        context.setdefault("port_tz_offset", "UTC")
+
         return super().TemplateResponse(*args, **kwargs)
 
 

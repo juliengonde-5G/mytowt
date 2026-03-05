@@ -37,16 +37,32 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Date/heure prévue</label>
-                        <input type="datetime-local" name="planned_start" class="form-input"
-                               value="{{ edit_op.planned_start.strftime('%Y-%m-%dT%H:%M') if edit_op and edit_op.planned_start else '' }}"
-                               {% if quay_start %}min="{{ quay_start }}"{% endif %}
-                               {% if quay_end %}max="{{ quay_end }}"{% endif %}>
+                        <div class="tz-input-wrap">
+                            <input type="datetime-local" name="planned_start" class="form-input"
+                                   value="{{ edit_op.planned_start.strftime('%Y-%m-%dT%H:%M') if edit_op and edit_op.planned_start else '' }}"
+                                   {% if quay_start %}min="{{ quay_start }}"{% endif %}
+                                   {% if quay_end %}max="{{ quay_end }}"{% endif %}>
+                            <select name="planned_start_tz" class="tz-select">
+                                {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                                <option value="{{ code }}" {% if code == 'UTC' %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <span class="tz-utc-hint"></span>
                     </div>
                     {% if edit_op %}
                     <div class="form-group">
                         <label class="form-label">Date/heure réelle</label>
-                        <input type="datetime-local" name="actual_start" class="form-input"
-                               value="{{ edit_op.actual_start.strftime('%Y-%m-%dT%H:%M') if edit_op and edit_op.actual_start else '' }}">
+                        <div class="tz-input-wrap">
+                            <input type="datetime-local" name="actual_start" class="form-input"
+                                   value="{{ edit_op.actual_start.strftime('%Y-%m-%dT%H:%M') if edit_op and edit_op.actual_start else '' }}">
+                            <select name="actual_start_tz" class="tz-select">
+                                {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                                <option value="{{ code }}" {% if code == 'UTC' %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <span class="tz-utc-hint"></span>
                     </div>
                     {% endif %}
                 </div>

@@ -76,8 +76,16 @@
             <div class="eta-shift-grid">
                 <div class="fg">
                     <label class="field-label">Nouvelle ETA</label>
-                    <input type="datetime-local" name="new_eta" required class="fi"
-                           value="{{ current_leg.eta.strftime('%Y-%m-%dT%H:%M') if current_leg.eta else '' }}">
+                    <div class="tz-input-wrap">
+                        <input type="datetime-local" name="new_eta" required class="fi"
+                               value="{{ current_leg.eta.strftime('%Y-%m-%dT%H:%M') if current_leg.eta else '' }}">
+                        <select name="new_eta_tz" class="tz-select">
+                            {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                            <option value="{{ code }}" {% if code == 'UTC' %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <span class="tz-utc-hint"></span>
                 </div>
                 <div class="fg">
                     <label class="field-label">Raison</label>
@@ -341,7 +349,7 @@
 
     {% if sof_events %}
     <table class="ob-table sof-table">
-        <thead><tr><th style="width:35%;">Événement</th><th>Date</th><th>Heure (LT)</th><th>Remarques</th><th></th></tr></thead>
+        <thead><tr><th style="width:35%;">Événement</th><th>Date</th><th>Heure</th><th>Fuseau</th><th>Remarques</th><th></th></tr></thead>
         <tbody>
         {% for evt in sof_events %}
         <!-- Display row -->
@@ -350,6 +358,7 @@
             <td><strong>{{ evt.event_label }}</strong></td>
             <td>{{ evt.event_date.strftime('%d/%m/%Y') if evt.event_date else '' }}</td>
             <td>{{ evt.event_time or '' }}</td>
+            <td style="font-size:10px;color:#888;">{{ evt.event_time_tz or 'UTC' }}</td>
             <td style="font-size:11px;color:#666;">{{ evt.remarks or '' }}</td>
             <td style="white-space:nowrap;" onclick="event.stopPropagation();">
                 {% if not is_locked %}
@@ -361,12 +370,19 @@
         <!-- Edit row (hidden by default) -->
         {% if not is_locked %}
         <tr class="sof-edit-row" id="sof-edit-{{ evt.id }}" style="display:none;">
-            <td colspan="5">
+            <td colspan="6">
                 <form method="POST" action="/onboard/sof/{{ evt.id }}/edit" class="sof-inline-edit">
                     <div class="sof-edit-grid">
                         <input type="text" name="event_label" value="{{ evt.event_label }}" class="sof-edit-fi" placeholder="Libellé">
                         <input type="date" name="event_date" value="{{ evt.event_date.strftime('%Y-%m-%d') if evt.event_date else '' }}" class="sof-edit-fi">
-                        <input type="time" name="event_time" value="{{ evt.event_time or '' }}" class="sof-edit-fi">
+                        <div class="tz-input-wrap">
+                            <input type="time" name="event_time" value="{{ evt.event_time or '' }}" class="sof-edit-fi">
+                            <select name="event_time_tz" class="tz-select">
+                                {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                                <option value="{{ code }}" {% if code == (evt.event_time_tz or 'UTC') %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                         <input type="text" name="remarks" value="{{ evt.remarks or '' }}" class="sof-edit-fi" placeholder="Remarques">
                         <div class="sof-edit-actions">
                             <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>
@@ -415,7 +431,14 @@
             </select>
             <input type="text" name="event_label" id="sof-label" placeholder="Libellé (auto ou libre)">
             <input type="date" name="event_date" id="sof-date">
-            <input type="time" name="event_time" id="sof-time">
+            <div class="tz-input-wrap">
+                <input type="time" name="event_time" id="sof-time">
+                <select name="event_time_tz" class="tz-select">
+                    {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                    <option value="{{ code }}">{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <input type="text" name="remarks" placeholder="Remarques">
             <button type="submit" class="btn btn-primary btn-sm">＋</button>
         </div>

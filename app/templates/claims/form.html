@@ -69,7 +69,15 @@
             </div>
             <div class="fg">
                 <label>Date de l'incident</label>
-                <input type="datetime-local" name="incident_date" class="fi">
+                <div class="tz-input-wrap">
+                    <input type="datetime-local" name="incident_date" class="fi">
+                    <select name="incident_date_tz" class="tz-select">
+                        {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                        <option value="{{ code }}" {% if code == 'UTC' %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <span class="tz-utc-hint"></span>
             </div>
             <div class="fg full">
                 <label>Lieu</label>

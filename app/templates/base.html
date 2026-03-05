@@ -11,6 +11,18 @@
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
     <link rel="stylesheet" href="/static/css/app.css">
+    <style>
+        .sidebar-clock{padding:6px 16px 10px;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;gap:2px}
+        .clock-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:rgba(255,255,255,0.7)}
+        .clock-label{font-weight:500;text-transform:uppercase;font-size:9px;letter-spacing:0.5px;color:rgba(255,255,255,0.5);min-width:40px}
+        .clock-time{font-family:'Poppins',monospace;font-size:12px;font-weight:600;color:rgba(255,255,255,0.9);letter-spacing:0.5px}
+        .sidebar.collapsed .sidebar-clock{display:none}
+        .tz-input-wrap{display:flex;gap:6px;align-items:center}
+        .tz-input-wrap input[type="time"],.tz-input-wrap input[type="datetime-local"]{flex:1}
+        .tz-select{padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:11px;font-family:inherit;background:white;min-width:90px}
+        .tz-select:focus{border-color:var(--towt-blue);outline:none}
+        .tz-utc-hint{font-size:10px;color:#888;margin-top:2px}
+    </style>
     {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -21,6 +33,13 @@
                 <a href="/" class="sidebar-logo">
                     <img src="/static/img/logo_mytowt_white.svg" alt="my_TOWT" class="logo-img">
                 </a>
+                <div class="sidebar-clock" id="sidebar-clock"
+                     data-port-tz="{{ port_timezone|default('UTC') }}"
+                     data-port-label="{{ port_tz_label|default('Port') }}">
+                    <div class="clock-row"><span class="clock-label">UTC</span><span class="clock-time" id="clock-utc">--:--:--</span></div>
+                    <div class="clock-row"><span class="clock-label">Paris</span><span class="clock-time" id="clock-paris">--:--:--</span></div>
+                    <div class="clock-row"><span class="clock-label" id="clock-port-label">Port</span><span class="clock-time" id="clock-port">--:--:--</span></div>
+                </div>
             </div>
             <nav class="sidebar-nav">
                 <div class="nav-section">
@@ -145,6 +164,143 @@
                 setTimeout(function() { btn.disabled = false; btn.style.opacity = '1'; }, 5000);
             }
         });
+    </script>
+    <script>
+    /* ═══ SIDEBAR CLOCK — UTC / Paris / Port local ═══ */
+    (function(){
+        var el = document.getElementById('sidebar-clock');
+        if(!el) return;
+        var portTz = el.dataset.portTz || 'UTC';
+        var portLabel = el.dataset.portLabel || 'Port';
+        document.getElementById('clock-port-label').textContent = portLabel;
+
+        function fmt(tz){
+            try {
+                return new Date().toLocaleTimeString('fr-FR',{timeZone:tz,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+            } catch(e){ return '--:--:--'; }
+        }
+        function tick(){
+            document.getElementById('clock-utc').textContent = fmt('UTC');
+            document.getElementById('clock-paris').textContent = fmt('Europe/Paris');
+            document.getElementById('clock-port').textContent = fmt(portTz);
+        }
+        tick();
+        setInterval(tick, 1000);
+    })();
+
+    /* ═══ TIMEZONE CONVERSION for time/datetime inputs ═══ */
+    window.TOWT_TZ = {
+        portTz: (document.getElementById('sidebar-clock')||{}).dataset ? document.getElementById('sidebar-clock').dataset.portTz || 'UTC' : 'UTC',
+
+        /* Convert a HH:MM string from one tz to another using a reference date */
+        convertTime: function(timeStr, fromTz, toTz, refDate) {
+            if(!timeStr || timeStr.indexOf(':')<0) return timeStr;
+            try {
+                var parts = timeStr.split(':');
+                var d = refDate ? new Date(refDate) : new Date();
+                // Build an ISO string in the fromTz and convert to toTz
+                var isoStr = d.toISOString().substring(0,10) + 'T' + timeStr + ':00';
+                // Use Intl to get offset
+                var fromOffset = this._getOffset(fromTz, d);
+                var toOffset = this._getOffset(toTz, d);
+                var diffMin = toOffset - fromOffset;
+                var h = parseInt(parts[0]), m = parseInt(parts[1]);
+                var totalMin = h * 60 + m + diffMin;
+                totalMin = ((totalMin % 1440) + 1440) % 1440;
+                var nh = Math.floor(totalMin / 60);
+                var nm = totalMin % 60;
+                return (nh<10?'0':'') + nh + ':' + (nm<10?'0':'') + nm;
+            } catch(e){ return timeStr; }
+        },
+
+        /* Convert a datetime-local string from one tz to another */
+        convertDatetime: function(dtStr, fromTz, toTz) {
+            if(!dtStr) return dtStr;
+            try {
+                var fromOffset = this._getOffset(fromTz, new Date(dtStr));
+                var toOffset = this._getOffset(toTz, new Date(dtStr));
+                var diffMs = (toOffset - fromOffset) * 60000;
+                var d = new Date(new Date(dtStr).getTime() + diffMs);
+                var y = d.getFullYear();
+                var mo = ('0'+(d.getMonth()+1)).slice(-2);
+                var da = ('0'+d.getDate()).slice(-2);
+                var h = ('0'+d.getHours()).slice(-2);
+                var mi = ('0'+d.getMinutes()).slice(-2);
+                return y+'-'+mo+'-'+da+'T'+h+':'+mi;
+            } catch(e){ return dtStr; }
+        },
+
+        /* Get timezone offset in minutes for a given IANA tz at a specific date */
+        _getOffset: function(tz, date) {
+            try {
+                var d = date || new Date();
+                var utcStr = d.toLocaleString('en-US', {timeZone:'UTC'});
+                var tzStr = d.toLocaleString('en-US', {timeZone:tz});
+                var utcDate = new Date(utcStr);
+                var tzDate = new Date(tzStr);
+                return Math.round((tzDate - utcDate) / 60000);
+            } catch(e){ return 0; }
+        },
+
+        /* Resolve 'port_local' to actual IANA timezone */
+        resolve: function(tzValue) {
+            if(tzValue === 'port_local') return this.portTz;
+            return tzValue;
+        },
+
+        /* Get UTC display for a time in a given tz */
+        utcLabel: function(timeStr, tzName, refDate) {
+            if(!timeStr || tzName === 'UTC') return '';
+            var utcTime = this.convertTime(timeStr, this.resolve(tzName), 'UTC', refDate);
+            return utcTime + ' UTC';
+        },
+
+        /* Initialize all .tz-select elements on the page */
+        initAll: function() {
+            document.querySelectorAll('.tz-select').forEach(function(sel){
+                sel.removeEventListener('change', TOWT_TZ._onTzChange);
+                sel.addEventListener('change', TOWT_TZ._onTzChange);
+            });
+            document.querySelectorAll('.tz-input-wrap input[type="time"], .tz-input-wrap input[type="datetime-local"]').forEach(function(inp){
+                inp.removeEventListener('change', TOWT_TZ._onTimeChange);
+                inp.addEventListener('change', TOWT_TZ._onTimeChange);
+            });
+        },
+
+        _onTzChange: function(e) {
+            var wrap = e.target.closest('.tz-input-wrap');
+            if(!wrap) return;
+            var hint = wrap.querySelector('.tz-utc-hint') || wrap.parentElement.querySelector('.tz-utc-hint');
+            var inp = wrap.querySelector('input[type="time"], input[type="datetime-local"]');
+            if(hint && inp && inp.value) {
+                var tzVal = e.target.value;
+                if(inp.type === 'time') {
+                    hint.textContent = TOWT_TZ.utcLabel(inp.value, tzVal);
+                } else {
+                    var utcDt = TOWT_TZ.convertDatetime(inp.value, TOWT_TZ.resolve(tzVal), 'UTC');
+                    hint.textContent = utcDt ? utcDt.replace('T',' ') + ' UTC' : '';
+                }
+            }
+        },
+
+        _onTimeChange: function(e) {
+            var wrap = e.target.closest('.tz-input-wrap');
+            if(!wrap) return;
+            var sel = wrap.querySelector('.tz-select');
+            var hint = wrap.querySelector('.tz-utc-hint') || wrap.parentElement.querySelector('.tz-utc-hint');
+            if(hint && sel && e.target.value) {
+                var tzVal = sel.value;
+                if(e.target.type === 'time') {
+                    hint.textContent = TOWT_TZ.utcLabel(e.target.value, tzVal);
+                } else {
+                    var utcDt = TOWT_TZ.convertDatetime(e.target.value, TOWT_TZ.resolve(tzVal), 'UTC');
+                    hint.textContent = utcDt ? utcDt.replace('T',' ') + ' UTC' : '';
+                }
+            }
+        }
+    };
+    document.addEventListener('DOMContentLoaded', function(){ TOWT_TZ.initAll(); });
+    document.addEventListener('htmx:afterSwap', function(){ TOWT_TZ.initAll(); });
     </script>
     {% block extra_scripts %}{% endblock %}
 </body>

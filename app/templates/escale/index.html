@@ -104,8 +104,15 @@
         {% if next_status %}
         <form method="POST" action="/escale/legs/{{ selected_leg.id }}/port-status" style="margin-left:auto;display:flex;align-items:center;gap:8px;">
             <input type="hidden" name="new_status" value="{{ next_status }}">
-            <input type="datetime-local" name="status_time" class="form-input" style="font-size:11px;padding:4px 8px;width:180px;" 
-                   title="Horodatage (optionnel)">
+            <div class="tz-input-wrap">
+                <input type="datetime-local" name="status_time" class="form-input" style="font-size:11px;padding:4px 8px;width:180px;"
+                       title="Horodatage (optionnel)">
+                <select name="status_time_tz" class="tz-select" style="font-size:10px;padding:3px 5px;min-width:70px;">
+                    {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                    <option value="{{ code }}" {% if code == 'UTC' %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <button type="submit" class="btn btn-primary btn-sm">{{ next_icon }} {{ next_label }}</button>
         </form>
         {% endif %}

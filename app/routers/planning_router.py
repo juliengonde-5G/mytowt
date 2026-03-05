@@ -18,6 +18,7 @@ from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg, LegStatus
 from app.models.port import Port
+from app.utils.timezones import get_port_timezone, utc_offset_label, TIMEZONE_CHOICES
 
 router = APIRouter(prefix="/planning", tags=["planning"])
 
@@ -324,6 +325,7 @@ async def leg_create_form(
         "default_speed": DEFAULT_SPEED,
         "default_elongation": DEFAULT_ELONGATION,
         "default_port_stay": DEFAULT_PORT_STAY_DAYS,
+        "tz_choices": TIMEZONE_CHOICES,
         "error": None,
     })
 
@@ -368,6 +370,7 @@ async def leg_create_submit(
             "is_first_leg": True, "prev_eta_str": "",
             "default_speed": DEFAULT_SPEED, "default_elongation": DEFAULT_ELONGATION,
             "default_port_stay": DEFAULT_PORT_STAY_DAYS,
+            "tz_choices": TIMEZONE_CHOICES,
             "error": f"Port invalide: {departure_port if not dep_port else arrival_port}",
         })
 
@@ -466,6 +469,10 @@ async def leg_edit_form(
         "prev_eta_str": "",
         "default_speed": DEFAULT_SPEED, "default_elongation": DEFAULT_ELONGATION,
         "default_port_stay": DEFAULT_PORT_STAY_DAYS,
+        "tz_choices": TIMEZONE_CHOICES,
+        "port_timezone": get_port_timezone(leg.departure_port.country_code, leg.departure_port.zone_code) if leg.departure_port else "UTC",
+        "port_tz_label": leg.departure_port.name if leg.departure_port else "Port",
+        "port_tz_offset": utc_offset_label(get_port_timezone(leg.departure_port.country_code, leg.departure_port.zone_code)) if leg.departure_port else "UTC",
         "error": None,
     })
 
@@ -515,6 +522,7 @@ async def leg_edit_submit(
             "is_first_leg": leg.sequence == 1, "prev_eta_str": "",
             "default_speed": DEFAULT_SPEED, "default_elongation": DEFAULT_ELONGATION,
             "default_port_stay": DEFAULT_PORT_STAY_DAYS,
+            "tz_choices": TIMEZONE_CHOICES,
             "error": "Port invalide.",
         })
 

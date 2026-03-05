@@ -34,7 +34,17 @@
                 <div class="fg"><label>Voyage No</label><input type="text" name="voyage_no" value="{{ doc_data.get('voyage_no', prefill.voyage_no) }}" class="fi" readonly></div>
                 <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.current_port) }}" class="fi"></div>
                 <div class="fg"><label>Date of Notice</label><input type="date" name="notice_date" value="{{ doc_data.get('notice_date', prefill.date_today) }}" class="fi"></div>
-                <div class="fg"><label>Time of Notice (LT)</label><input type="time" name="notice_time" value="{{ doc_data.get('notice_time', '') }}" class="fi"></div>
+                <div class="fg"><label>Time of Notice</label>
+                    <div class="tz-input-wrap">
+                        <input type="time" name="notice_time" value="{{ doc_data.get('notice_time', '') }}" class="fi">
+                        <select name="notice_time_tz" class="tz-select">
+                            {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                            <option value="{{ code }}" {% if code == doc_data.get('notice_time_tz', 'UTC') %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <span class="tz-utc-hint"></span>
+                </div>
             </div>
             <div class="fg full"><label>Cargo description</label><textarea name="cargo_desc" class="fi ta">{{ doc_data.get('cargo_desc', '') }}</textarea></div>
             <div class="fg full"><label>Position (roads/at berth/anchorage)</label><input type="text" name="position" value="{{ doc_data.get('position', '') }}" class="fi" placeholder="roads / at berth / anchorage"></div>
@@ -66,7 +76,17 @@
             <div class="fg full"><label>Reason for re-tendering</label><textarea name="reason" class="fi ta">{{ doc_data.get('reason', '') }}</textarea></div>
             <div class="doc-grid-2">
                 <div class="fg"><label>Date</label><input type="date" name="notice_date" value="{{ doc_data.get('notice_date', prefill.date_today) }}" class="fi"></div>
-                <div class="fg"><label>Time (LT)</label><input type="time" name="notice_time" value="{{ doc_data.get('notice_time', '') }}" class="fi"></div>
+                <div class="fg"><label>Time</label>
+                    <div class="tz-input-wrap">
+                        <input type="time" name="notice_time" value="{{ doc_data.get('notice_time', '') }}" class="fi">
+                        <select name="notice_time_tz" class="tz-select">
+                            {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                            <option value="{{ code }}" {% if code == doc_data.get('notice_time_tz', 'UTC') %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <span class="tz-utc-hint"></span>
+                </div>
             </div>
             <div class="fg"><label>Master name</label>
                 <select name="master_name" class="fi">
@@ -146,7 +166,17 @@
                 <div class="fg"><label>Voyage No</label><input type="text" name="voyage_no" value="{{ doc_data.get('voyage_no', prefill.voyage_no) }}" class="fi" readonly></div>
                 <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.current_port) }}" class="fi"></div>
                 <div class="fg"><label>Date</label><input type="date" name="lop_date" value="{{ doc_data.get('lop_date', prefill.date_today) }}" class="fi"></div>
-                <div class="fg"><label>Time</label><input type="time" name="lop_time" value="{{ doc_data.get('lop_time', '') }}" class="fi"></div>
+                <div class="fg"><label>Time</label>
+                    <div class="tz-input-wrap">
+                        <input type="time" name="lop_time" value="{{ doc_data.get('lop_time', '') }}" class="fi">
+                        <select name="lop_time_tz" class="tz-select">
+                            {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                            <option value="{{ code }}" {% if code == doc_data.get('lop_time_tz', 'UTC') %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <span class="tz-utc-hint"></span>
+                </div>
             </div>
             <div class="fg full"><label>Subject / Description of protest</label><textarea name="subject" class="fi ta" rows="6">{{ doc_data.get('subject', '') }}</textarea></div>
             <div class="fg full"><label>Details and facts</label><textarea name="details" class="fi ta" rows="8">{{ doc_data.get('details', '') }}</textarea></div>
