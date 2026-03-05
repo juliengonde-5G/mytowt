@@ -50,7 +50,7 @@
     <!-- ═══ LEG SUMMARY ═══ -->
     <div class="leg-summary {% if leg_locked %}locked-banner{% endif %}">
         <div class="leg-summary-left">
-            <h3 style="font-family:monospace;color:var(--towt-blue);margin:0;">{{ selected_leg.leg_code }}</h3>
+            <h3 style="font-weight:700;color:var(--towt-blue);margin:0;">{{ selected_leg.leg_code }}</h3>
             <span style="color:#888;">{{ selected_leg.vessel.name }} — {{ selected_leg.departure_port.country_code|flag }} {{ selected_leg.departure_port.name }} → {{ selected_leg.arrival_port.country_code|flag }} {{ selected_leg.arrival_port.name }}</span>
         </div>
         <div class="vessel-status-badge {{ vessel_status }}">
@@ -375,6 +375,109 @@
         {% endif %}
     </div>
 
+    <!-- ═══ BILLETTERIE ÉQUIPAGE ═══ -->
+    <div class="section-block" style="margin-top:20px;">
+        <h3 class="section-title"><i data-lucide="ticket" style="width:16px;height:16px;"></i> Billetterie équipage ({{ crew_tickets|length }})</h3>
+
+        {% if ticket_alerts %}
+        <div class="ticket-alerts">
+            {% for alert in ticket_alerts %}
+            <div class="ticket-alert-item">
+                <i data-lucide="alert-triangle" style="width:14px;height:14px;color:#D97706;flex-shrink:0;"></i>
+                <span><strong>{{ alert.member_name }}</strong> — {{ alert.reason }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if crew_tickets %}
+        <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Membre</th><th>Type</th><th>Transport</th><th>Date billet</th><th>Réf.</th><th>PJ</th>
+                {% if not leg_locked %}<th style="text-align:right;">Actions</th>{% endif %}</tr></thead>
+                <tbody>
+                    {% for t in crew_tickets %}
+                    {% set is_incompatible = ticket_alerts|selectattr('ticket', 'equalto', t)|list|length > 0 %}
+                    <tr class="{% if is_incompatible %}ticket-row-alert{% endif %}">
+                        <td>
+                            <strong>{{ t.member.full_name if t.member else '—' }}</strong>
+                            {% if t.member and t.member.is_foreign %}<span class="foreign-badge">Étranger</span>{% endif %}
+                        </td>
+                        <td><span class="ticket-type-badge {{ t.ticket_type }}">{{ 'Embarq.' if t.ticket_type == 'embarquement' else 'Débarq.' }}</span></td>
+                        <td>{{ t.transport_mode|capitalize }}</td>
+                        <td>{{ t.ticket_date.strftime('%d/%m/%Y') if t.ticket_date else '—' }}</td>
+                        <td style="font-size:11px;color:#666;">{{ t.ticket_reference or '—' }}</td>
+                        <td>
+                            {% if t.filename %}
+                            <a href="/escale/tickets/{{ t.id }}/download" class="btn btn-sm btn-secondary" title="{{ t.filename }}"><i data-lucide="download" style="width:12px;height:12px;"></i></a>
+                            {% else %}—{% endif %}
+                        </td>
+                        {% if not leg_locked %}
+                        <td style="text-align:right;">
+                            <button class="btn btn-sm btn-danger" hx-delete="/escale/tickets/{{ t.id }}" hx-confirm="Supprimer ce billet ?"><i data-lucide="trash-2"></i></button>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color:#aaa;font-size:13px;">Aucun billet enregistré.</p>
+        {% endif %}
+
+        {% if not leg_locked %}
+        <form method="POST" action="/escale/tickets/create" enctype="multipart/form-data" class="ticket-add-form" id="ticket-form">
+            <input type="hidden" name="leg_id" value="{{ selected_leg.id }}">
+            <div class="ticket-add-grid">
+                <div class="fg">
+                    <label class="field-label">Membre *</label>
+                    <select name="member_id" required class="fi">
+                        <option value="">— Sélectionner —</option>
+                        {% for m in crew_for_tickets %}
+                        <option value="{{ m.id }}">{{ m.full_name }} ({{ m.role_label }}){% if m.is_foreign %} — Étranger{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="fg">
+                    <label class="field-label">Type *</label>
+                    <select name="ticket_type" required class="fi">
+                        <option value="embarquement">Embarquement</option>
+                        <option value="debarquement">Débarquement</option>
+                    </select>
+                </div>
+                <div class="fg">
+                    <label class="field-label">Transport *</label>
+                    <select name="transport_mode" required class="fi">
+                        {% for tm in transport_modes %}
+                        <option value="{{ tm.value }}">{{ tm.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="fg">
+                    <label class="field-label">Date billet *</label>
+                    <input type="date" name="ticket_date" required class="fi">
+                </div>
+                <div class="fg">
+                    <label class="field-label">Réf. billet</label>
+                    <input type="text" name="ticket_reference" class="fi" placeholder="N° billet">
+                </div>
+                <div class="fg">
+                    <label class="field-label">Pièce jointe</label>
+                    <input type="file" name="file" class="fi" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                </div>
+                <div class="fg">
+                    <label class="field-label">Notes</label>
+                    <input type="text" name="notes" class="fi" placeholder="Notes (optionnel)">
+                </div>
+                <div class="fg" style="align-self:end;">
+                    <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="plus" style="width:14px;height:14px;"></i> Ajouter</button>
+                </div>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+
     {% elif legs|length > 0 %}
     <div class="empty-state">
         <i data-lucide="mouse-pointer-click" style="width:48px;height:48px;color:var(--towt-sky);"></i>
@@ -394,7 +497,7 @@
     .leg-chip{display:flex;flex-direction:column;gap:2px;padding:8px 14px;background:white;border-radius:var(--radius);box-shadow:var(--shadow);font-size:12px;border:2px solid transparent}
     .leg-chip:hover{border-color:var(--towt-sky)}.leg-chip.active{border-color:var(--towt-blue);background:rgba(9,85,97,0.05)}
     .leg-chip.terminated{opacity:0.5}.leg-chip.locked{opacity:0.5;background:#f8f8f8}
-    .leg-chip strong{font-family:monospace;color:var(--towt-blue)}.leg-chip span{color:#888}
+    .leg-chip strong{font-weight:700;color:var(--towt-blue)}.leg-chip span{color:#888}
     .leg-summary{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;flex-wrap:wrap;gap:16px}
     .leg-summary.locked-banner{border-left:4px solid #F59E0B;background:rgba(245,158,11,0.03)}
     .leg-summary-left{display:flex;align-items:center;gap:12px}
@@ -491,6 +594,19 @@
     .perf-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px;}
     .perf-value{font-size:18px;font-weight:700;color:#333;}
     .perf-sub{font-size:12px;font-weight:400;color:#888;}
+    /* Tickets */
+    .ticket-alerts{background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;}
+    .ticket-alert-item{display:flex;align-items:center;gap:8px;font-size:12px;color:#92400E;padding:3px 0;}
+    .ticket-type-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:600;}
+    .ticket-type-badge.embarquement{background:rgba(34,197,94,0.1);color:#16a34a;}
+    .ticket-type-badge.debarquement{background:rgba(239,68,68,0.1);color:#DC2626;}
+    .ticket-row-alert{background:rgba(245,158,11,0.05);border-left:3px solid #F59E0B;}
+    .foreign-badge{font-size:9px;padding:1px 6px;border-radius:100px;font-weight:600;background:rgba(239,68,68,0.1);color:#DC2626;margin-left:4px;}
+    .ticket-add-form{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;}
+    .ticket-add-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;align-items:start;}
+    @media(max-width:900px){.ticket-add-grid{grid-template-columns:1fr 1fr;}}
+    .ticket-add-grid .fg{display:flex;flex-direction:column;gap:3px;}
+    .ticket-add-grid .fi{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:Poppins,system-ui,sans-serif;}
 </style>
 
 <script>
@@ -529,5 +645,16 @@
                 .catch(function(){ window.location.reload(); });
         });
     };
+
+    // Ticket form (inline, not modal — standard form submit with enctype)
+    var ticketForm = document.getElementById('ticket-form');
+    if (ticketForm) {
+        ticketForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            fetch(ticketForm.action, { method: 'POST', body: new FormData(ticketForm) })
+                .then(function(r){ if(r.redirected) window.location.href=r.url; else window.location.href=BASE_URL; })
+                .catch(function(){ window.location.reload(); });
+        });
+    }
 </script>
 {% endblock %}

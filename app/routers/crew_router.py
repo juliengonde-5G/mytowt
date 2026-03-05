@@ -13,7 +13,7 @@ from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
-from app.models.crew import CrewMember, CrewAssignment, CREW_ROLES, REQUIRED_ROLES
+from app.models.crew import CrewMember, CrewAssignment, CrewTicket, CREW_ROLES, REQUIRED_ROLES
 from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/crew", tags=["crew"])
@@ -346,11 +346,20 @@ async def member_calendar(
     days_in_year = 366 if current_year % 4 == 0 else 365
     rest_days = days_in_year - total_days
 
+    # Load crew tickets for this member
+    tickets_result = await db.execute(
+        select(CrewTicket).options(selectinload(CrewTicket.leg))
+        .where(CrewTicket.member_id == mid)
+        .order_by(CrewTicket.ticket_date.desc())
+    )
+    crew_tickets = tickets_result.scalars().all()
+
     return templates.TemplateResponse("crew/calendar.html", {
         "request": request, "user": user,
         "member": member, "assignments": year_assignments,
+        "crew_tickets": crew_tickets,
         "current_year": current_year,
         "total_days": total_days, "rest_days": rest_days,
-        "days_in_year": days_in_year,
+        "days_in_year": days_in_year, "today": today,
         "active_module": "crew",
     })

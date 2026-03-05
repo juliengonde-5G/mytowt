@@ -51,6 +51,34 @@
         <h3>Aucun embarquement en {{ current_year }}</h3>
     </div>
     {% endif %}
+
+    <!-- Ticket History -->
+    {% if crew_tickets %}
+    <div class="section-block" style="margin-top:20px;">
+        <h3 style="font-size:15px;margin-bottom:12px;">Historique billetterie</h3>
+        <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Date</th><th>Type</th><th>Transport</th><th>Escale</th><th>Réf.</th><th>PJ</th></tr></thead>
+                <tbody>
+                    {% for t in crew_tickets %}
+                    <tr>
+                        <td>{{ t.ticket_date.strftime('%d/%m/%Y') if t.ticket_date else '—' }}</td>
+                        <td><span class="ticket-type-badge {{ t.ticket_type }}">{{ 'Embarq.' if t.ticket_type == 'embarquement' else 'Débarq.' }}</span></td>
+                        <td>{{ t.transport_mode|capitalize }}</td>
+                        <td style="font-size:11px;">{{ t.leg.leg_code if t.leg else '—' }}</td>
+                        <td style="font-size:11px;color:#666;">{{ t.ticket_reference or '—' }}</td>
+                        <td>
+                            {% if t.filename %}
+                            <a href="/escale/tickets/{{ t.id }}/download" class="btn btn-sm btn-secondary" title="{{ t.filename }}"><i data-lucide="download" style="width:12px;height:12px;"></i></a>
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <style>
@@ -67,5 +95,9 @@
     .crew-role-badge.lieutenant{background:rgba(96,165,250,0.1);color:#2563EB;}
     .crew-role-badge.bosco{background:rgba(16,185,129,0.1);color:#059669;}
     .crew-role-badge.marin{background:rgba(107,114,128,0.1);color:#6B7280;}
+    .crew-role-badge.eleve_officier{background:rgba(251,191,36,0.15);color:#B45309;}
+    .ticket-type-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:600;}
+    .ticket-type-badge.embarquement{background:rgba(34,197,94,0.1);color:#16a34a;}
+    .ticket-type-badge.debarquement{background:rgba(239,68,68,0.1);color:#DC2626;}
 </style>
 {% endblock %}

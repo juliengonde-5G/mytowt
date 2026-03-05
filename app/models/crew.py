@@ -65,6 +65,38 @@ class CrewAssignment(Base):
     disembark_leg = relationship("Leg", foreign_keys=[disembark_leg_id])
 
 
+class CrewTicket(Base):
+    """Billet de transport pour un membre d'équipage embarquant/débarquant."""
+    __tablename__ = "crew_tickets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    member_id = Column(Integer, ForeignKey("crew_members.id"), nullable=False)
+    leg_id = Column(Integer, ForeignKey("legs.id"), nullable=False)
+    ticket_type = Column(String(20), nullable=False)  # embarquement, debarquement
+    transport_mode = Column(String(50), nullable=False)  # train, avion, bus, voiture, autre
+    ticket_date = Column(Date, nullable=False)
+    ticket_reference = Column(String(200), nullable=True)  # Numéro de billet
+    filename = Column(String(255), nullable=True)
+    file_path = Column(String(500), nullable=True)
+    file_size = Column(Integer, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    member = relationship("CrewMember")
+    leg = relationship("Leg")
+
+
+TRANSPORT_MODES = [
+    {"value": "train", "label": "Train"},
+    {"value": "avion", "label": "Avion"},
+    {"value": "bus", "label": "Bus"},
+    {"value": "voiture", "label": "Voiture"},
+    {"value": "covoiturage", "label": "Covoiturage"},
+    {"value": "autre", "label": "Autre"},
+]
+
+
 CREW_ROLES = [
     {"value": "capitaine", "label": "Capitaine"},
     {"value": "second", "label": "Second"},
