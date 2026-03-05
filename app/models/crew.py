@@ -11,10 +11,11 @@ class CrewMember(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
-    role = Column(String(50), nullable=False)  # capitaine, second, chef_mecanicien, cook, lieutenant, bosco, marin
+    role = Column(String(50), nullable=False)  # capitaine, second, chef_mecanicien, cook, lieutenant, bosco, marin, eleve_officier
     phone = Column(String(50), nullable=True)
     email = Column(String(200), nullable=True)
     is_active = Column(Boolean, default=True)
+    is_foreign = Column(Boolean, default=False)  # Personnel étranger
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -35,6 +36,7 @@ class CrewMember(Base):
             "lieutenant": "Lieutenant",
             "bosco": "Bosco",
             "marin": "Marin",
+            "eleve_officier": "Élève Officier",
         }
         return labels.get(self.role, self.role)
 
@@ -71,6 +73,7 @@ CREW_ROLES = [
     {"value": "lieutenant", "label": "Lieutenant"},
     {"value": "bosco", "label": "Bosco"},
     {"value": "marin", "label": "Marin"},
+    {"value": "eleve_officier", "label": "Élève Officier"},
 ]
 
 REQUIRED_ROLES = ["capitaine", "second", "chef_mecanicien", "cook", "lieutenant", "bosco"]

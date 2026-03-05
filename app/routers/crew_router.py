@@ -125,6 +125,7 @@ async def member_create_submit(
     first_name: str = Form(...), last_name: str = Form(...),
     role: str = Form(...),
     phone: Optional[str] = Form(None), email: Optional[str] = Form(None),
+    is_foreign: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
@@ -132,6 +133,7 @@ async def member_create_submit(
     member = CrewMember(
         first_name=first_name.strip(), last_name=last_name.strip(),
         role=role, phone=phone, email=email,
+        is_foreign=bool(is_foreign),
         notes=notes.strip() if notes else None,
     )
     db.add(member)
@@ -165,6 +167,7 @@ async def member_edit_submit(
     first_name: str = Form(...), last_name: str = Form(...),
     role: str = Form(...),
     phone: Optional[str] = Form(None), email: Optional[str] = Form(None),
+    is_foreign: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
@@ -178,6 +181,7 @@ async def member_edit_submit(
     member.role = role
     member.phone = phone
     member.email = email
+    member.is_foreign = bool(is_foreign)
     member.notes = notes.strip() if notes else None
     await db.flush()
     await log_activity(db, user, "crew", "update", "CrewMember", mid, f"Modification marin {member.first_name} {member.last_name}")

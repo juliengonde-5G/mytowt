@@ -221,7 +221,7 @@
             <tbody>
             {% for ca in crew_onboard %}
             <tr>
-                <td><strong>{{ ca.member.full_name }}</strong></td>
+                <td><strong>{{ ca.member.full_name }}</strong>{% if ca.member.is_foreign %} <span class="ob-foreign-badge">Étranger</span>{% endif %}</td>
                 <td><span class="role-badge role-{{ ca.member.role }}">{{ ca.member.role_label }}</span></td>
                 <td style="font-size:11px;color:#888;">{{ ca.embark_date.strftime('%d/%m/%Y') if ca.embark_date else '—' }}</td>
             </tr>
@@ -604,6 +604,8 @@
     .role-chef_mecanicien{background:rgba(245,158,11,0.1);color:#D97706}.role-cook{background:rgba(34,197,94,0.1);color:#16a34a}
     .role-lieutenant{background:rgba(96,165,250,0.1);color:#2563EB}.role-bosco{background:rgba(168,85,247,0.1);color:#A855F7}
     .role-marin{background:rgba(107,114,128,0.1);color:#6B7280}
+    .role-eleve_officier{background:rgba(251,191,36,0.15);color:#B45309}
+    .ob-foreign-badge{font-size:9px;padding:1px 6px;border-radius:100px;font-weight:600;background:rgba(239,68,68,0.1);color:#DC2626}
     .ob-stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
     .ob-stat{background:#f8fafb;padding:10px;border-radius:8px;text-align:center}
     .ob-stat-val{font-size:18px;font-weight:700;color:var(--towt-blue);display:block}
