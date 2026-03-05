@@ -15,8 +15,9 @@
         .sidebar-clock{padding:6px 16px 10px;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;gap:2px}
         .clock-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:rgba(255,255,255,0.7)}
         .clock-label{font-weight:500;text-transform:uppercase;font-size:9px;letter-spacing:0.5px;color:rgba(255,255,255,0.5);min-width:40px}
-        .clock-time{font-family:'Poppins',monospace;font-size:12px;font-weight:600;color:rgba(255,255,255,0.9);letter-spacing:0.5px}
+        .clock-time{font-family:'Poppins',system-ui,sans-serif;font-size:12px;font-weight:600;color:rgba(255,255,255,0.9);letter-spacing:0.5px}
         .sidebar.collapsed .sidebar-clock{display:none}
+        .clock-port-separator{border:none;border-top:1px solid rgba(255,255,255,0.08);margin:2px 0}
         .tz-input-wrap{display:flex;gap:6px;align-items:center}
         .tz-input-wrap input[type="time"],.tz-input-wrap input[type="datetime-local"]{flex:1}
         .tz-select{padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:11px;font-family:inherit;background:white;min-width:90px}
@@ -36,9 +37,9 @@
                 <div class="sidebar-clock" id="sidebar-clock"
                      data-port-tz="{{ port_timezone|default('UTC') }}"
                      data-port-label="{{ port_tz_label|default('Port') }}">
-                    <div class="clock-row"><span class="clock-label">UTC</span><span class="clock-time" id="clock-utc">--:--:--</span></div>
-                    <div class="clock-row"><span class="clock-label">Paris</span><span class="clock-time" id="clock-paris">--:--:--</span></div>
-                    <div class="clock-row"><span class="clock-label" id="clock-port-label">Port</span><span class="clock-time" id="clock-port">--:--:--</span></div>
+                    <div class="clock-row"><span class="clock-label">UTC</span><span class="clock-time" id="clock-utc">--:--</span></div>
+                    <div class="clock-row"><span class="clock-label">Paris</span><span class="clock-time" id="clock-paris">--:--</span></div>
+                    <div id="clock-port-rows"></div>
                 </div>
             </div>
             <nav class="sidebar-nav">
@@ -166,26 +167,46 @@
         });
     </script>
     <script>
-    /* ═══ SIDEBAR CLOCK — UTC / Paris / Port local ═══ */
+    /* ═══ SIDEBAR CLOCK — UTC / Paris / Next port(s) ═══ */
     (function(){
         var el = document.getElementById('sidebar-clock');
         if(!el) return;
-        var portTz = el.dataset.portTz || 'UTC';
-        var portLabel = el.dataset.portLabel || 'Port';
-        document.getElementById('clock-port-label').textContent = portLabel;
+        var portClocks = []; // [{tz, label, elId}]
 
         function fmt(tz){
             try {
-                return new Date().toLocaleTimeString('fr-FR',{timeZone:tz,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
-            } catch(e){ return '--:--:--'; }
+                return new Date().toLocaleTimeString('fr-FR',{timeZone:tz,hour:'2-digit',minute:'2-digit',hour12:false});
+            } catch(e){ return '--:--'; }
         }
         function tick(){
             document.getElementById('clock-utc').textContent = fmt('UTC');
             document.getElementById('clock-paris').textContent = fmt('Europe/Paris');
-            document.getElementById('clock-port').textContent = fmt(portTz);
+            portClocks.forEach(function(pc){
+                var e = document.getElementById(pc.elId);
+                if(e) e.textContent = fmt(pc.tz);
+            });
         }
         tick();
-        setInterval(tick, 1000);
+        setInterval(tick, 30000); // update every 30s (no seconds displayed)
+
+        // Fetch next destination port clocks for vessels at sea
+        fetch('/api/ports/next-clocks')
+            .then(function(r){ return r.json(); })
+            .then(function(clocks){
+                var container = document.getElementById('clock-port-rows');
+                if(!container || !clocks.length) return;
+                container.innerHTML = '<hr class="clock-port-separator">';
+                clocks.forEach(function(c, i){
+                    var elId = 'clock-port-' + i;
+                    var row = document.createElement('div');
+                    row.className = 'clock-row';
+                    row.innerHTML = '<span class="clock-label">' + c.port_name + '</span><span class="clock-time" id="' + elId + '">--:--</span>';
+                    container.appendChild(row);
+                    portClocks.push({tz: c.timezone, label: c.port_name, elId: elId});
+                });
+                tick(); // immediate update
+            })
+            .catch(function(){});
     })();
 
     /* ═══ TIMEZONE CONVERSION for time/datetime inputs ═══ */

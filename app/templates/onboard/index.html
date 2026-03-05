@@ -129,8 +129,8 @@
             {% for s in leg_shifts %}
             <tr class="{% if s.shift_hours > 0 %}eta-delay{% else %}eta-advance{% endif %}">
                 <td>{{ s.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
-                <td style="font-family:monospace;font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
-                <td style="font-family:monospace;font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
+                <td style="font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
+                <td style="font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
                 <td>
                     {% if s.shift_hours > 0 %}
                     <span class="eta-badge eta-badge-delay">+{{ "%.1f"|format(s.shift_hours) }}h</span>
@@ -165,12 +165,12 @@
             <tbody>
             {% for s in eta_shifts %}
             <tr class="{% if s.shift_hours > 0 %}eta-delay{% else %}eta-advance{% endif %}">
-                <td style="font-family:monospace;font-size:11px;font-weight:600;color:var(--towt-blue);">
+                <td style="font-size:11px;font-weight:600;color:var(--towt-blue);">
                     {% for l in legs %}{% if l.id == s.leg_id %}{{ l.leg_code }}{% endif %}{% endfor %}
                 </td>
                 <td>{{ s.created_at.strftime('%d/%m %H:%M') }}</td>
-                <td style="font-family:monospace;font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
-                <td style="font-family:monospace;font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
+                <td style="font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
+                <td style="font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
                 <td>
                     {% if s.shift_hours > 0 %}
                     <span class="eta-badge eta-badge-delay">+{{ "%.1f"|format(s.shift_hours) }}h</span>
@@ -295,7 +295,7 @@
                     <br><span style="font-size:10px;color:#888;">{{ p.nationality or '' }} {% if p.date_of_birth %}· {{ p.date_of_birth.strftime('%d/%m/%Y') }}{% endif %}</span>
                 </td>
                 <td><span class="cabin-badge cabin-{{ b.cabin_number }}">{{ b.cabin_number }}</span></td>
-                <td style="font-family:monospace;font-size:11px;">{{ p.passport_number or '—' }}</td>
+                <td style="font-size:11px;">{{ p.passport_number or '—' }}</td>
                 <td>
                     {% if docs_total > 0 %}
                     <div class="ob-doc-bar">
@@ -546,7 +546,7 @@
     .ob-vessel-pill.active{background:var(--towt-blue);color:white;border-color:var(--towt-blue)}
     .ob-leg-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;padding:6px;background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow-x:auto}
     .ob-leg-chip{display:flex;flex-direction:column;padding:8px 14px;border-radius:var(--radius);font-size:11px;color:#555;text-decoration:none;border:1px solid #eee;transition:all 0.15s;min-width:100px}
-    .ob-leg-chip strong{font-size:12px;font-family:monospace;color:var(--towt-blue)}
+    .ob-leg-chip strong{font-size:12px;font-weight:700;color:var(--towt-blue)}
     .ob-leg-chip span{color:#888}
     .ob-leg-chip:hover{border-color:var(--towt-blue);background:#f0f7f8}
     .ob-leg-chip.active{background:var(--towt-blue);border-color:var(--towt-blue);color:white}
@@ -556,7 +556,7 @@
     .ob-leg-live{font-size:9px;font-weight:700;color:#87BD2B}
     .ob-leg-chip.active .ob-leg-live{color:#d4ff88}
     .ob-header{display:flex;justify-content:space-between;align-items:center;background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px}
-    .ob-leg-info h2{margin:0;font-size:18px;color:var(--towt-blue);font-family:monospace}
+    .ob-leg-info h2{margin:0;font-size:18px;color:var(--towt-blue);font-weight:700}
     .ob-leg-info span{font-size:13px;color:#555;display:block;margin-top:2px}.ob-dates{font-size:11px !important;color:#888 !important}
     .ob-last-sof{text-align:right;font-size:12px;background:rgba(9,85,97,0.06);padding:10px 14px;border-radius:8px}
     .ob-last-sof .ob-sof-label{font-size:10px;color:#888;text-transform:uppercase;display:block}
@@ -657,7 +657,7 @@
     /* ETA Shift */
     .eta-shift-form-wrap{padding-bottom:12px;border-bottom:1px solid #f0f0f0;margin-bottom:12px}
     .eta-shift-current{font-size:13px;color:#555;margin:0 0 10px}
-    .eta-shift-current strong{color:var(--towt-blue);font-family:monospace}
+    .eta-shift-current strong{color:var(--towt-blue);font-weight:700}
     .eta-shift-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .eta-shift-grid .fg-wide{grid-column:1/-1}
     .eta-shift-grid .fg{display:flex;flex-direction:column;gap:3px}
@@ -667,7 +667,7 @@
     .eta-shift-history h4{font-size:12px;color:#555;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.5px}
     .eta-delay{border-left:3px solid #DC2626}
     .eta-advance{border-left:3px solid #16a34a}
-    .eta-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:700;font-family:monospace}
+    .eta-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:700}
     .eta-badge-delay{background:rgba(220,38,38,0.1);color:#DC2626}
     .eta-badge-advance{background:rgba(22,163,106,0.1);color:#16a34a}
     .eta-cascade-badge{font-size:10px;padding:2px 6px;border-radius:100px;background:rgba(245,158,11,0.1);color:#D97706;font-weight:600}
