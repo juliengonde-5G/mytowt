@@ -20,6 +20,7 @@ from app.models.crew import CrewMember, CrewAssignment
 from app.models.packing_list import PackingList, PackingListBatch
 from app.models.onboard import (
     SofEvent, OnboardNotification, CargoDocument, ETAShift, OnboardAttachment,
+    CargoDocumentAttachment,
     SOF_EVENT_TYPES, CARGO_DOC_TYPES, ETA_SHIFT_REASONS, ATTACHMENT_CATEGORIES,
 )
 
@@ -585,6 +586,108 @@ async def attachment_delete(
 
 
 # ═══════════════════════════════════════════════════════════════
+#  DOCUMENT ATTACHMENTS (photos/files linked to cargo documents)
+# ═══════════════════════════════════════════════════════════════
+DOC_UPLOAD_DIR = "/app/uploads/onboard/documents"
+
+
+@router.post("/doc/{doc_id}/attachments/upload", response_class=HTMLResponse)
+async def doc_attachment_upload(
+    doc_id: int, request: Request,
+    file: UploadFile = File(...),
+    title: str = Form(""),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a file or photo to a cargo document."""
+    import os
+    import uuid
+
+    doc = await db.get(CargoDocument, doc_id)
+    if not doc:
+        raise HTTPException(404)
+
+    leg = await db.get(Leg, doc.leg_id)
+    if leg and leg.status == "completed":
+        raise HTTPException(400, "L'escale est clôturée, impossible d'ajouter des fichiers")
+
+    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"Type de fichier non autorisé : {ext}")
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(400, "Fichier trop volumineux (max 20 Mo)")
+
+    os.makedirs(DOC_UPLOAD_DIR, exist_ok=True)
+    safe_name = f"doc{doc_id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = os.path.join(DOC_UPLOAD_DIR, safe_name)
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    att = CargoDocumentAttachment(
+        document_id=doc_id,
+        leg_id=doc.leg_id,
+        title=title.strip() or file.filename or "Sans titre",
+        filename=file.filename or safe_name,
+        file_path=file_path,
+        file_size=len(content),
+        mime_type=file.content_type,
+        uploaded_by=user.full_name,
+    )
+    db.add(att)
+    await db.flush()
+
+    return RedirectResponse(
+        url=f"/onboard/doc/{doc.leg_id}/{doc.doc_type}?doc_id={doc_id}#doc-attachments",
+        status_code=303,
+    )
+
+
+@router.get("/doc/attachments/{att_id}/download")
+async def doc_attachment_download(
+    att_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download a document attachment."""
+    import os
+    att = await db.get(CargoDocumentAttachment, att_id)
+    if not att or not os.path.isfile(att.file_path):
+        raise HTTPException(404)
+
+    with open(att.file_path, "rb") as f:
+        content = f.read()
+
+    return Response(
+        content=content,
+        media_type=att.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{att.filename}"'},
+    )
+
+
+@router.delete("/doc/attachments/{att_id}", response_class=HTMLResponse)
+async def doc_attachment_delete(
+    att_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a document attachment."""
+    import os
+    att = await db.get(CargoDocumentAttachment, att_id)
+    if att:
+        leg = await db.get(Leg, att.leg_id)
+        if leg and leg.status == "completed":
+            raise HTTPException(400, "L'escale est clôturée")
+        if os.path.isfile(att.file_path):
+            os.remove(att.file_path)
+        await db.delete(att)
+        await db.flush()
+    return HTMLResponse(content="", status_code=200)
+
+
+# ═══════════════════════════════════════════════════════════════
 #  SOF EXPORT (Excel + PDF)
 # ═══════════════════════════════════════════════════════════════
 @router.get("/sof/{leg_id}/excel", response_class=StreamingResponse)
@@ -1079,12 +1182,23 @@ async def cargo_doc_form(
 
     doc_label = next((l for c, l in CARGO_DOC_TYPES if c == doc_type), doc_type)
 
+    # Load attachments for this document
+    doc_attachments = []
+    if doc:
+        att_result = await db.execute(
+            select(CargoDocumentAttachment)
+            .where(CargoDocumentAttachment.document_id == doc.id)
+            .order_by(CargoDocumentAttachment.created_at.asc())
+        )
+        doc_attachments = att_result.scalars().all()
+
     return templates.TemplateResponse("onboard/doc_form.html", {
         "request": request, "user": user,
         "leg": leg, "doc_type": doc_type, "doc_label": doc_label,
         "doc": doc, "doc_data": doc_data, "prefill": prefill,
         "sof_events": sof_events,
         "crew_onboard": crew_onboard,
+        "doc_attachments": doc_attachments,
         "active_module": "captain",
         "lang": user.language or "fr",
     })

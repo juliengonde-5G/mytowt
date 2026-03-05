@@ -160,6 +160,25 @@ ATTACHMENT_CATEGORIES = [
 ]
 
 
+class CargoDocumentAttachment(Base):
+    """File or photo attachment linked to a specific cargo document."""
+    __tablename__ = "cargo_document_attachments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    document_id = Column(Integer, ForeignKey("cargo_documents.id", ondelete="CASCADE"), nullable=False)
+    leg_id = Column(Integer, ForeignKey("legs.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(300), nullable=False)
+    filename = Column(String(300), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+    uploaded_by = Column(String(200), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    document = relationship("CargoDocument", backref="attachments")
+    leg = relationship("Leg")
+
+
 class OnboardAttachment(Base):
     """File or photo attachment for a leg (onboard module)."""
     __tablename__ = "onboard_attachments"

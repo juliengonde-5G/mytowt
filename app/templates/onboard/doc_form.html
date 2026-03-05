@@ -231,6 +231,62 @@
         {% endif %}
     </form>
 
+    <!-- ═══ PIÈCES JOINTES DU DOCUMENT ═══ -->
+    {% if doc %}
+    <div class="doc-section" id="doc-attachments">
+        <h3>📎 Photos & Documents joints <span style="font-size:12px;font-weight:400;color:#888;">({{ doc_attachments|length }})</span></h3>
+
+        {% if doc_attachments %}
+        <div class="doc-att-grid">
+            {% for att in doc_attachments %}
+            <div class="doc-att-item" id="doc-att-{{ att.id }}">
+                <div class="doc-att-icon">
+                    {% if att.mime_type and att.mime_type.startswith('image/') %}
+                    <i data-lucide="image" style="width:20px;height:20px;color:#6366F1;"></i>
+                    {% elif att.mime_type == 'application/pdf' %}
+                    <i data-lucide="file-text" style="width:20px;height:20px;color:#dc2626;"></i>
+                    {% else %}
+                    <i data-lucide="file" style="width:20px;height:20px;color:var(--towt-blue);"></i>
+                    {% endif %}
+                </div>
+                <div class="doc-att-info">
+                    <strong>{{ att.title }}</strong>
+                    <span class="doc-att-meta">
+                        {{ att.filename }} · {{ (att.file_size / 1024)|round(0)|int }} Ko
+                        · {{ att.uploaded_by }} · {{ att.created_at.strftime('%d/%m/%Y %H:%M') }}
+                    </span>
+                </div>
+                <div class="doc-att-actions">
+                    <a href="/onboard/doc/attachments/{{ att.id }}/download" class="btn-icon" title="Télécharger"><i data-lucide="download" style="width:14px;height:14px;color:var(--towt-blue);"></i></a>
+                    <button class="btn-icon" hx-delete="/onboard/doc/attachments/{{ att.id }}" hx-confirm="Supprimer ce fichier ?" hx-target="#doc-att-{{ att.id }}" hx-swap="outerHTML"><i data-lucide="trash-2" style="width:14px;height:14px;color:#dc2626;"></i></button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="font-size:12px;color:#aaa;margin:8px 0;">Aucune pièce jointe pour ce document.</p>
+        {% endif %}
+
+        <form method="POST" action="/onboard/doc/{{ doc.id }}/attachments/upload" enctype="multipart/form-data" class="doc-att-upload">
+            <div class="doc-grid-2">
+                <div class="fg">
+                    <label>Fichier (photo, PDF, document...)</label>
+                    <input type="file" name="file" required class="fi" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt,.heic,.webp">
+                </div>
+                <div class="fg">
+                    <label>Titre (optionnel)</label>
+                    <input type="text" name="title" class="fi" placeholder="ex: Photo cale avant">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-secondary btn-sm" style="margin-top:8px;"><i data-lucide="upload"></i> Ajouter une pièce jointe</button>
+        </form>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:12px;font-size:12px;color:#888;">
+        💡 Enregistrez le document d'abord pour pouvoir y joindre des photos ou fichiers.
+    </div>
+    {% endif %}
+
     {% if doc %}
     <div class="doc-export-bar">
         <span style="font-size:12px;color:#888;">Exporter ce document :</span>
@@ -264,5 +320,13 @@
     .ob-table{width:100%;border-collapse:collapse;font-size:12px}
     .ob-table th{text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:#888;border-bottom:2px solid #f0f0f0}
     .ob-table td{padding:6px 8px;border-bottom:1px solid #f8f8f8}
+    .doc-att-grid{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+    .doc-att-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#f8fafb;border-radius:8px;border:1px solid #eee}
+    .doc-att-icon{flex-shrink:0}
+    .doc-att-info{flex:1;min-width:0}
+    .doc-att-info strong{font-size:13px;display:block}
+    .doc-att-meta{font-size:11px;color:#888}
+    .doc-att-actions{display:flex;gap:6px;flex-shrink:0}
+    .doc-att-upload{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0}
 </style>
 {% endblock %}
