@@ -83,12 +83,13 @@
         {% if port_configs %}
         <div class="table-container">
             <table class="data-table">
-                <thead><tr><th>LOCODE</th><th>Port</th><th>Accessible</th><th style="text-align:right;">Coût port (€)</th><th style="text-align:right;">Quai/jour (€)</th><th style="text-align:right;">Coût/pal. (€)</th></tr></thead>
+                <thead><tr><th>LOCODE</th><th>Port</th><th>Pays</th><th>Accessible</th><th style="text-align:right;">Coût port (€)</th><th style="text-align:right;">Quai/jour (€)</th><th style="text-align:right;">Coût/pal. (€)</th></tr></thead>
                 <tbody>
                     {% for c in port_configs %}
                     <tr {% if not c.accessible %}style="opacity:0.5;"{% endif %}>
                         <td><strong>{{ c.port_locode }}</strong></td>
                         <td>{{ c.port.name if c.port else '—' }}</td>
+                        <td>{{ c.port.country_code|flag }} {{ c.port.country_code if c.port else '—' }}</td>
                         <td>{% if c.accessible %}✓{% else %}✗{% endif %}</td>
                         <td style="text-align:right;">{{ c.port_cost_total|eur }}</td>
                         <td style="text-align:right;">{{ c.daily_quay_cost|eur }}</td>
