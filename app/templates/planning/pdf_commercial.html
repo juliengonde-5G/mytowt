@@ -173,10 +173,20 @@
             </div>
         </details>
 
-        <!-- PRINT BUTTON -->
-        <div style="margin-top:14px;display:flex;gap:10px;align-items:center;">
+        <!-- PRINT + SHARE BUTTONS -->
+        <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
             <button class="print-btn" onclick="window.print()">🖨 {% if lang == 'en' %}Print / Save as PDF{% else %}Imprimer / Enregistrer en PDF{% endif %}</button>
+            <button class="print-btn" style="background:#87BD2B;" onclick="createShareLink()">🔗 {% if lang == 'en' %}Generate shareable link{% else %}Générer un lien partageable{% endif %}</button>
             <span style="font-size:11px;color:#999;">{{ legs|length }} {% if lang == 'en' %}legs displayed{% else %}legs affichés{% endif %}</span>
+        </div>
+        <!-- Share link result -->
+        <div id="share-result" style="display:none;margin-top:10px;padding:12px;background:#e8f5e9;border-radius:6px;border:1px solid #c8e6c9;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span style="font-size:12px;font-weight:600;color:#2e7d32;">🔗 {% if lang == 'en' %}Shareable link:{% else %}Lien partageable :{% endif %}</span>
+                <input id="share-url" type="text" readonly style="flex:1;min-width:200px;padding:6px 10px;border:1px solid #c8e6c9;border-radius:4px;font-size:12px;font-family:monospace;background:white;">
+                <button onclick="copyShareUrl()" style="padding:6px 14px;background:#095561;color:white;border:none;border-radius:4px;font-size:12px;cursor:pointer;font-family:'Poppins',system-ui;">📋 {% if lang == 'en' %}Copy{% else %}Copier{% endif %}</button>
+            </div>
+            <p style="margin-top:6px;font-size:11px;color:#555;">{% if lang == 'en' %}This link can be shared with clients and freight forwarders. The content updates automatically when the planning changes.{% else %}Ce lien peut être partagé avec les clients et transitaires. Le contenu se met à jour automatiquement lorsque le planning change.{% endif %}</p>
         </div>
     </div>
 
@@ -211,12 +221,12 @@
         </div>
     </div>
 
-    <!-- By vessel -->
-    {% for vname, vlegs in legs_by_vessel.items() %}
+    <!-- Chronological schedule -->
     <div class="section">
-        <h3><span class="vessel-icon" style="background:#095561;">{{ loop.index }}</span> {{ vname }}</h3>
+        <h3>📅 {% if lang == 'en' %}Chronological schedule{% else %}Planning chronologique{% endif %}</h3>
         <table>
             <thead><tr>
+                <th>{% if lang == 'en' %}Vessel{% else %}Navire{% endif %}</th>
                 <th>Leg</th>
                 <th>{% if lang == 'en' %}Departure{% else %}Départ{% endif %}</th>
                 <th></th>
@@ -226,8 +236,9 @@
                 <th>{% if lang == 'en' %}Port stay{% else %}Escale{% endif %}</th>
             </tr></thead>
             <tbody>
-                {% for leg in vlegs %}
+                {% for leg in legs %}
                 <tr>
+                    <td><strong>{{ leg.vessel.name }}</strong></td>
                     <td><strong style="font-family:monospace;color:#095561;">{{ leg.leg_code }}</strong></td>
                     <td><span class="port-code">{{ leg.departure_port.country_code|flag }} {{ leg.departure_port.locode }}</span> {{ leg.departure_port.name }}</td>
                     <td class="route-arrow">→</td>
@@ -241,7 +252,6 @@
             </tbody>
         </table>
     </div>
-    {% endfor %}
 
     <!-- By route -->
     {% if template_type == 'all' %}
@@ -375,6 +385,36 @@ function applyCustomSelection() {
 }
 // Auto-submit on filter change (optional — can use the button instead)
 // document.querySelectorAll('.filter-group select').forEach(function(s){s.addEventListener('change', applyFilters);});
+
+function createShareLink() {
+    var formData = new FormData();
+    formData.append('year', '{{ current_year }}');
+    formData.append('vessel', document.getElementById('filter-vessel').value);
+    formData.append('origin', document.getElementById('filter-origin').value);
+    formData.append('destination', document.getElementById('filter-destination').value);
+    formData.append('lang', '{{ lang }}');
+    {% if selected_leg_ids %}
+    formData.append('legs_ids', '{{ selected_leg_ids|join(",") }}');
+    {% endif %}
+    fetch('/planning/pdf/commercial/share', {method:'POST', body: formData})
+        .then(function(r){return r.json();})
+        .then(function(data){
+            var fullUrl = window.location.origin + data.url;
+            document.getElementById('share-url').value = fullUrl;
+            document.getElementById('share-result').style.display = 'block';
+        })
+        .catch(function(err){
+            alert('{% if lang == "en" %}Error creating link{% else %}Erreur lors de la création du lien{% endif %}');
+        });
+}
+function copyShareUrl() {
+    var input = document.getElementById('share-url');
+    input.select();
+    document.execCommand('copy');
+    var btn = event.target;
+    btn.textContent = '{% if lang == "en" %}Copied!{% else %}Copié !{% endif %}';
+    setTimeout(function(){btn.textContent = '📋 {% if lang == "en" %}Copy{% else %}Copier{% endif %}';}, 2000);
+}
 </script>
 </body>
 </html>

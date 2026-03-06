@@ -18,6 +18,7 @@ from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg, LegStatus
 from app.models.port import Port
+from app.models.planning_share import PlanningShare
 from app.utils.timezones import get_port_timezone, utc_offset_label, TIMEZONE_CHOICES
 
 router = APIRouter(prefix="/planning", tags=["planning"])
@@ -781,7 +782,7 @@ async def pdf_commercial(
     if origin:
         query = query.where(Leg.departure_port_locode == origin.upper())
 
-    result = await db.execute(query.order_by(Leg.vessel_id, Leg.sequence))
+    result = await db.execute(query.order_by(Leg.etd.asc().nullslast(), Leg.vessel_id, Leg.sequence))
     legs = result.scalars().all()
 
     # If custom leg selection, filter down further
@@ -795,7 +796,7 @@ async def pdf_commercial(
         select(Leg)
         .options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
         .where(Leg.year == current_year, Leg.status != "cancelled")
-        .order_by(Leg.vessel_id, Leg.sequence)
+        .order_by(Leg.etd.asc().nullslast(), Leg.vessel_id, Leg.sequence)
     )
     all_legs_for_selector = all_q.scalars().all()
 
@@ -881,3 +882,39 @@ async def pdf_commercial(
         "lang": lang or "fr",
         "now": datetime.now(tz.utc),
     })
+
+
+# ─── SHAREABLE LINK ─────────────────────────────────────────
+@router.post("/pdf/commercial/share")
+async def create_commercial_share(
+    request: Request,
+    year: int = Form(...),
+    vessel: Optional[str] = Form(None),
+    origin: Optional[str] = Form(None),
+    destination: Optional[str] = Form(None),
+    legs_ids: Optional[str] = Form(None),
+    lang: Optional[str] = Form("fr"),
+    label: Optional[str] = Form(None),
+    user: User = Depends(require_permission("planning", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a shareable public link for the current commercial planning view."""
+    import uuid
+    share = PlanningShare(
+        token=uuid.uuid4().hex[:24],
+        year=year,
+        vessel_code=int(vessel) if vessel and vessel.strip() else None,
+        origin_locode=origin.upper() if origin and origin.strip() else None,
+        destination_locode=destination.upper() if destination and destination.strip() else None,
+        legs_ids=legs_ids if legs_ids and legs_ids.strip() else None,
+        lang=lang or "fr",
+        label=label,
+        created_by=user.id,
+    )
+    db.add(share)
+    await db.flush()
+
+    share_url = f"/planning/share/{share.token}"
+    # Return JSON for HTMX consumption
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"url": share_url, "token": share.token})
