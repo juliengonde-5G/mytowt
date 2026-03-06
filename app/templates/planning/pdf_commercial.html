@@ -461,5 +461,12 @@ function copyShareUrl() {
     setTimeout(function(){btn.textContent = '📋 {% if lang == "en" %}Copy{% else %}Copier{% endif %}';}, 2000);
 }
 </script>
+
+<!-- Footer with link history (not printed) -->
+<div class="no-print" style="margin-top:40px;padding:16px 20px;border-top:1px solid #e0e0e0;text-align:center;">
+    <a href="/planning/pdf/commercial/shares" style="font-size:12px;color:#095561;text-decoration:none;font-family:'Poppins',system-ui;">
+        📋 {% if lang == 'en' %}View shared links history{% else %}Voir l'historique des liens partagés{% endif %}
+    </a>
+</div>
 </body>
 </html>
