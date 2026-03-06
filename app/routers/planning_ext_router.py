@@ -29,6 +29,8 @@ async def view_shared_planning(
     share = result.scalar_one_or_none()
     if not share:
         raise HTTPException(status_code=404, detail="Planning link not found")
+    if not share.is_active:
+        raise HTTPException(status_code=410, detail="This planning link has been deactivated")
 
     lang = share.lang or "fr"
     current_year = share.year

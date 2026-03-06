@@ -895,6 +895,10 @@ async def create_commercial_share(
     legs_ids: Optional[str] = Form(None),
     lang: Optional[str] = Form("fr"),
     label: Optional[str] = Form(None),
+    recipient_name: Optional[str] = Form(None),
+    recipient_company: Optional[str] = Form(None),
+    recipient_email: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
     user: User = Depends(require_permission("planning", "M")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -909,12 +913,71 @@ async def create_commercial_share(
         legs_ids=legs_ids if legs_ids and legs_ids.strip() else None,
         lang=lang or "fr",
         label=label,
+        recipient_name=recipient_name if recipient_name and recipient_name.strip() else None,
+        recipient_company=recipient_company if recipient_company and recipient_company.strip() else None,
+        recipient_email=recipient_email if recipient_email and recipient_email.strip() else None,
+        notes=notes if notes and notes.strip() else None,
         created_by=user.id,
     )
     db.add(share)
     await db.flush()
 
     share_url = f"/planning/share/{share.token}"
-    # Return JSON for HTMX consumption
     from fastapi.responses import JSONResponse
     return JSONResponse({"url": share_url, "token": share.token})
+
+
+# ─── SHARE HISTORY ─────────────────────────────────────────
+@router.get("/pdf/commercial/shares", response_class=HTMLResponse)
+async def list_commercial_shares(
+    request: Request,
+    user: User = Depends(require_permission("planning", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all generated shareable planning links with recipient info."""
+    result = await db.execute(
+        select(PlanningShare)
+        .order_by(PlanningShare.created_at.desc())
+    )
+    shares = result.scalars().all()
+
+    # Load creator names
+    user_ids = set(s.created_by for s in shares if s.created_by)
+    users_map = {}
+    if user_ids:
+        users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
+        for u in users_result.scalars().all():
+            users_map[u.id] = u.full_name or u.username
+
+    # Load vessel names for display
+    vessels_result = await db.execute(select(Vessel).order_by(Vessel.code))
+    vessels_map = {v.code: v.name for v in vessels_result.scalars().all()}
+
+    return templates.TemplateResponse("planning/share_history.html", {
+        "request": request,
+        "user": user,
+        "shares": shares,
+        "users_map": users_map,
+        "vessels_map": vessels_map,
+        "active_module": "planning",
+    })
+
+
+@router.post("/pdf/commercial/shares/{share_id}/toggle")
+async def toggle_share(
+    request: Request,
+    share_id: int,
+    user: User = Depends(require_permission("planning", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Activate/deactivate a shared link."""
+    result = await db.execute(select(PlanningShare).where(PlanningShare.id == share_id))
+    share = result.scalar_one_or_none()
+    if not share:
+        raise HTTPException(status_code=404)
+    share.is_active = not share.is_active
+    await db.flush()
+    if request.headers.get("HX-Request"):
+        from fastapi.responses import Response
+        return Response(headers={"HX-Redirect": "/planning/pdf/commercial/shares"})
+    return RedirectResponse("/planning/pdf/commercial/shares", status_code=303)

@@ -176,9 +176,42 @@
         <!-- PRINT + SHARE BUTTONS -->
         <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
             <button class="print-btn" onclick="window.print()">🖨 {% if lang == 'en' %}Print / Save as PDF{% else %}Imprimer / Enregistrer en PDF{% endif %}</button>
-            <button class="print-btn" style="background:#87BD2B;" onclick="createShareLink()">🔗 {% if lang == 'en' %}Generate shareable link{% else %}Générer un lien partageable{% endif %}</button>
+            <button class="print-btn" style="background:#87BD2B;" onclick="document.getElementById('share-form').style.display='block'">🔗 {% if lang == 'en' %}Generate shareable link{% else %}Générer un lien partageable{% endif %}</button>
+            <a href="/planning/pdf/commercial/shares" class="filter-reset-btn" style="text-decoration:none;">📋 {% if lang == 'en' %}Link history{% else %}Historique des liens{% endif %}</a>
             <span style="font-size:11px;color:#999;">{{ legs|length }} {% if lang == 'en' %}legs displayed{% else %}legs affichés{% endif %}</span>
         </div>
+
+        <!-- Share form -->
+        <div id="share-form" style="display:none;margin-top:10px;padding:16px;background:white;border-radius:8px;border:1px solid #ddd;">
+            <h4 style="font-size:13px;color:#095561;margin-bottom:12px;">🔗 {% if lang == 'en' %}Share this planning{% else %}Partager ce planning{% endif %}</h4>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="filter-group">
+                    <label>{% if lang == 'en' %}Recipient name{% else %}Nom du destinataire{% endif %} *</label>
+                    <input type="text" id="share-recipient-name" placeholder="{% if lang == 'en' %}e.g. Jean Dupont{% else %}ex. Jean Dupont{% endif %}" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                </div>
+                <div class="filter-group">
+                    <label>{% if lang == 'en' %}Company{% else %}Société{% endif %}</label>
+                    <input type="text" id="share-recipient-company" placeholder="{% if lang == 'en' %}e.g. Logistics Co.{% else %}ex. Transit Maritime SA{% endif %}" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                </div>
+                <div class="filter-group">
+                    <label>{% if lang == 'en' %}Email{% else %}Email{% endif %}</label>
+                    <input type="email" id="share-recipient-email" placeholder="contact@example.com" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                </div>
+                <div class="filter-group">
+                    <label>{% if lang == 'en' %}Label{% else %}Libellé{% endif %}</label>
+                    <input type="text" id="share-label" placeholder="{% if lang == 'en' %}e.g. Q2 planning Brazil{% else %}ex. Planning Q2 Brésil{% endif %}" style="padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                </div>
+            </div>
+            <div class="filter-group" style="margin-top:10px;">
+                <label>{% if lang == 'en' %}Notes{% else %}Notes{% endif %}</label>
+                <textarea id="share-notes" rows="2" placeholder="{% if lang == 'en' %}Internal notes about this share...{% else %}Notes internes sur ce partage...{% endif %}" style="width:100%;padding:7px 12px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:'Poppins',system-ui;resize:vertical;"></textarea>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+                <button class="filter-apply-btn" onclick="createShareLink()">🔗 {% if lang == 'en' %}Generate link{% else %}Générer le lien{% endif %}</button>
+                <button class="filter-reset-btn" onclick="document.getElementById('share-form').style.display='none'">{% if lang == 'en' %}Cancel{% else %}Annuler{% endif %}</button>
+            </div>
+        </div>
+
         <!-- Share link result -->
         <div id="share-result" style="display:none;margin-top:10px;padding:12px;background:#e8f5e9;border-radius:6px;border:1px solid #c8e6c9;">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -387,12 +420,23 @@ function applyCustomSelection() {
 // document.querySelectorAll('.filter-group select').forEach(function(s){s.addEventListener('change', applyFilters);});
 
 function createShareLink() {
+    var name = document.getElementById('share-recipient-name').value.trim();
+    if (!name) {
+        alert('{% if lang == "en" %}Please enter the recipient name.{% else %}Veuillez saisir le nom du destinataire.{% endif %}');
+        document.getElementById('share-recipient-name').focus();
+        return;
+    }
     var formData = new FormData();
     formData.append('year', '{{ current_year }}');
     formData.append('vessel', document.getElementById('filter-vessel').value);
     formData.append('origin', document.getElementById('filter-origin').value);
     formData.append('destination', document.getElementById('filter-destination').value);
     formData.append('lang', '{{ lang }}');
+    formData.append('recipient_name', name);
+    formData.append('recipient_company', document.getElementById('share-recipient-company').value.trim());
+    formData.append('recipient_email', document.getElementById('share-recipient-email').value.trim());
+    formData.append('label', document.getElementById('share-label').value.trim());
+    formData.append('notes', document.getElementById('share-notes').value.trim());
     {% if selected_leg_ids %}
     formData.append('legs_ids', '{{ selected_leg_ids|join(",") }}');
     {% endif %}
@@ -402,6 +446,7 @@ function createShareLink() {
             var fullUrl = window.location.origin + data.url;
             document.getElementById('share-url').value = fullUrl;
             document.getElementById('share-result').style.display = 'block';
+            document.getElementById('share-form').style.display = 'none';
         })
         .catch(function(err){
             alert('{% if lang == "en" %}Error creating link{% else %}Erreur lors de la création du lien{% endif %}');
