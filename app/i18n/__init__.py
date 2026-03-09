@@ -467,6 +467,7 @@ TRANSLATIONS = {
     "cp_notif_arrived": {"fr": "Le navire est arrivé à destination", "en": "The vessel has arrived at destination", "es": "El buque ha llegado a destino", "pt-br": "O navio chegou ao destino", "vi": "Tàu đã đến đích"},
     "cp_notif_new_message": {"fr": "Nouveau message de la compagnie", "en": "New message from the company", "es": "Nuevo mensaje de la compañía", "pt-br": "Nova mensagem da empresa", "vi": "Tin nhắn mới từ công ty"},
     "cp_full_itinerary": {"fr": "Itinéraire complet", "en": "Full itinerary", "es": "Itinerario completo", "pt-br": "Itinerário completo", "vi": "Lịch trình đầy đủ"},
+    "cp_position_soon": {"fr": "Position bientôt disponible", "en": "Position available soon", "es": "Posición disponible pronto", "pt-br": "Posição disponível em breve", "vi": "Vị trí sẽ sớm có"},
     "cp_your_cargo": {"fr": "Votre cargo à bord", "en": "Your cargo on board", "es": "Su carga a bordo", "pt-br": "Sua carga a bordo", "vi": "Hàng hóa của bạn trên tàu"},
     # ═══ BACKOFFICE — QUICK ACCESS CARDS ═══
     "qa_planning_title": {"fr": "Planification", "en": "Planning", "es": "Planificación", "pt-br": "Planejamento", "vi": "Kế hoạch"},

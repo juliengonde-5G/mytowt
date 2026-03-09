@@ -36,6 +36,9 @@ table.sched tr.cur{background:rgba(9,85,97,.06);font-weight:600}
 .transit-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(9,85,97,.1);color:#095561;padding:4px 12px;border-radius:100px;font-size:12px;font-weight:600;margin-bottom:10px}
 .transit-badge .dot{width:8px;height:8px;border-radius:50%;background:#16a34a;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.map-placeholder{height:300px;border-radius:8px;margin-top:10px;background:linear-gradient(135deg,#f0f0f0 0%,#e8e8e8 50%,#f0f0f0 100%);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.map-placeholder::before{content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 5l25 50H5z' fill='none' stroke='%23ddd' stroke-width='.5'/%3E%3C/svg%3E") repeat;opacity:.3}
+.map-placeholder-inner{display:flex;flex-direction:column;align-items:center;gap:10px;color:#aaa;font-size:14px;font-weight:600;z-index:1}
 {% endblock %}
 
 {% block portal_content %}
@@ -129,13 +132,22 @@ table.sched tr.cur{background:rgba(9,85,97,.06);font-weight:600}
   </div>
 </div>
 
-{# ── GPS Map when vessel in transit ── #}
-{% if leg.atd and not leg.ata %}
+{# ── Vessel Position ── #}
 <div class="card">
   <h2>{{ t('cp_vessel_position', lang) }}</h2>
+  {% if leg.atd and not leg.ata %}
   <div class="transit-badge"><span class="dot"></span>{{ t('cp_vessel_in_transit', lang) }}</div>
   <div id="vessel-map"></div>
+  {% else %}
+  <div class="map-placeholder">
+    <div class="map-placeholder-inner">
+      <i data-lucide="map-pin" style="width:48px;height:48px;opacity:0.3;"></i>
+      <span>{{ t('cp_position_soon', lang) }}</span>
+    </div>
+  </div>
+  {% endif %}
 </div>
+{% if leg.atd and not leg.ata %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -145,7 +157,6 @@ table.sched tr.cur{background:rgba(9,85,97,.06);font-weight:600}
   var arrLat = {{ leg.arrival_port.latitude or 0 }};
   var arrLng = {{ leg.arrival_port.longitude or 0 }};
 
-  // Estimate position based on time progress
   var atdMs = new Date("{{ leg.atd.isoformat() }}").getTime();
   var etaMs = new Date("{{ (leg.eta or leg.atd).isoformat() }}").getTime();
   var nowMs = Date.now();
@@ -159,15 +170,12 @@ table.sched tr.cur{background:rgba(9,85,97,.06);font-weight:600}
     attribution: '&copy; OpenStreetMap'
   }).addTo(map);
 
-  // Departure marker
   L.marker([depLat, depLng]).addTo(map)
     .bindPopup("<b>{{ leg.departure_port.name }}</b><br>{{ leg.departure_port.locode }}");
-  // Arrival marker
   L.marker([arrLat, arrLng]).addTo(map)
     .bindPopup("<b>{{ leg.arrival_port.name }}</b><br>{{ leg.arrival_port.locode }}");
-  // Route line
   L.polyline([[depLat,depLng],[arrLat,arrLng]], {color:'#095561', weight:2, dashArray:'8,6', opacity:0.6}).addTo(map);
-  // Vessel position
+
   var vesselIcon = L.divIcon({
     html:'<div style="font-size:24px;text-shadow:0 1px 3px rgba(0,0,0,.3)">⛵</div>',
     iconSize:[30,30], iconAnchor:[15,15], className:''
@@ -178,36 +186,6 @@ table.sched tr.cur{background:rgba(9,85,97,.06);font-weight:600}
   map.fitBounds([[depLat,depLng],[arrLat,arrLng]], {padding:[40,40]});
 })();
 </script>
-{% endif %}
-
-{% if itinerary %}
-<div class="card">
-  <h2>{{ t('cp_full_itinerary', lang) }}</h2>
-  <div style="overflow-x:auto">
-  <table class="sched">
-    <thead><tr>
-      <th>{{ t('cp_leg_code', lang) }}</th>
-      <th>{{ t('cp_etd', lang) }}</th>
-      <th>{{ t('cp_eta', lang) }}</th>
-      <th>{{ t('cp_atd', lang) }}</th>
-      <th>{{ t('cp_ata', lang) }}</th>
-      <th>{{ t('cp_distance', lang) }}</th>
-    </tr></thead>
-    <tbody>
-    {% for l in itinerary %}
-    <tr {% if l.id == leg.id %}class="cur"{% endif %}>
-      <td>{{ l.leg_code }}</td>
-      <td>{{ l.etd.strftime('%d/%m/%Y') if l.etd else '—' }}</td>
-      <td>{{ l.eta.strftime('%d/%m/%Y') if l.eta else '—' }}</td>
-      <td>{% if l.atd %}<span class="actual">{{ l.atd.strftime('%d/%m/%Y') }}</span>{% else %}—{% endif %}</td>
-      <td>{% if l.ata %}<span class="actual">{{ l.ata.strftime('%d/%m/%Y') }}</span>{% else %}—{% endif %}</td>
-      <td>{{ l.distance_nm or '—' }}</td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  </div>
-</div>
 {% endif %}
 
 {% if crew %}
