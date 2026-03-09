@@ -427,9 +427,12 @@
         {% endif %}
     </div>
 
-    <!-- ═══ BILLETTERIE ÉQUIPAGE ═══ -->
+    <!-- ═══ BILLETTERIE ÉQUIPAGE (lecture seule — géré depuis /crew) ═══ -->
     <div class="section-block" style="margin-top:20px;">
-        <h3 class="section-title"><i data-lucide="ticket" style="width:16px;height:16px;"></i> Billetterie équipage ({{ crew_tickets|length }})</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <h3 class="section-title" style="margin-bottom:0;"><i data-lucide="ticket" style="width:16px;height:16px;"></i> Billetterie équipage ({{ crew_tickets|length }})</h3>
+            <a href="/crew" class="btn btn-secondary btn-sm"><i data-lucide="external-link" style="width:12px;height:12px;"></i> Gérer dans Équipage</a>
+        </div>
 
         {% if ticket_alerts %}
         <div class="ticket-alerts">
@@ -445,8 +448,7 @@
         {% if crew_tickets %}
         <div class="table-container">
             <table class="data-table">
-                <thead><tr><th>Membre</th><th>Type</th><th>Transport</th><th>Date billet</th><th>Réf.</th><th>PJ</th>
-                {% if not leg_locked %}<th style="text-align:right;">Actions</th>{% endif %}</tr></thead>
+                <thead><tr><th>Membre</th><th>Type</th><th>Transport</th><th>Date billet</th><th>Réf.</th><th>PJ</th></tr></thead>
                 <tbody>
                     {% for t in crew_tickets %}
                     {% set is_incompatible = ticket_alerts|selectattr('ticket', 'equalto', t)|list|length > 0 %}
@@ -464,11 +466,6 @@
                             <a href="/escale/tickets/{{ t.id }}/download" class="btn btn-sm btn-secondary" title="{{ t.filename }}"><i data-lucide="download" style="width:12px;height:12px;"></i></a>
                             {% else %}—{% endif %}
                         </td>
-                        {% if not leg_locked %}
-                        <td style="text-align:right;">
-                            <button class="btn btn-sm btn-danger" hx-delete="/escale/tickets/{{ t.id }}" hx-confirm="Supprimer ce billet ?"><i data-lucide="trash-2"></i></button>
-                        </td>
-                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -476,57 +473,6 @@
         </div>
         {% else %}
         <p style="color:#aaa;font-size:13px;">Aucun billet enregistré.</p>
-        {% endif %}
-
-        {% if not leg_locked %}
-        <form method="POST" action="/escale/tickets/create" enctype="multipart/form-data" class="ticket-add-form" id="ticket-form">
-            <input type="hidden" name="leg_id" value="{{ selected_leg.id }}">
-            <div class="ticket-add-grid">
-                <div class="fg">
-                    <label class="field-label">Membre *</label>
-                    <select name="member_id" required class="fi">
-                        <option value="">— Sélectionner —</option>
-                        {% for m in crew_for_tickets %}
-                        <option value="{{ m.id }}">{{ m.full_name }} ({{ m.role_label }}){% if m.is_foreign %} — Étranger{% endif %}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="fg">
-                    <label class="field-label">Type *</label>
-                    <select name="ticket_type" required class="fi">
-                        <option value="embarquement">Embarquement</option>
-                        <option value="debarquement">Débarquement</option>
-                    </select>
-                </div>
-                <div class="fg">
-                    <label class="field-label">Transport *</label>
-                    <select name="transport_mode" required class="fi">
-                        {% for tm in transport_modes %}
-                        <option value="{{ tm.value }}">{{ tm.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="fg">
-                    <label class="field-label">Date billet *</label>
-                    <input type="date" name="ticket_date" required class="fi">
-                </div>
-                <div class="fg">
-                    <label class="field-label">Réf. billet</label>
-                    <input type="text" name="ticket_reference" class="fi" placeholder="N° billet">
-                </div>
-                <div class="fg">
-                    <label class="field-label">Pièce jointe</label>
-                    <input type="file" name="file" class="fi" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
-                </div>
-                <div class="fg">
-                    <label class="field-label">Notes</label>
-                    <input type="text" name="notes" class="fi" placeholder="Notes (optionnel)">
-                </div>
-                <div class="fg" style="align-self:end;">
-                    <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="plus" style="width:14px;height:14px;"></i> Ajouter</button>
-                </div>
-            </div>
-        </form>
         {% endif %}
     </div>
 
@@ -698,15 +644,6 @@
         });
     };
 
-    // Ticket form (inline, not modal — standard form submit with enctype)
-    var ticketForm = document.getElementById('ticket-form');
-    if (ticketForm) {
-        ticketForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            fetch(ticketForm.action, { method: 'POST', body: new FormData(ticketForm) })
-                .then(function(r){ if(r.redirected) window.location.href=r.url; else window.location.href=BASE_URL; })
-                .catch(function(){ window.location.reload(); });
-        });
-    }
+    // Billetterie is now managed from /crew page
 </script>
 {% endblock %}

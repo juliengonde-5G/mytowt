@@ -4,6 +4,9 @@
 
 {% block topbar_actions %}
 {% if current_leg %}
+<a href="/cargo/voyage/{{ current_leg.id }}/excel" class="btn btn-secondary btn-sm"><i data-lucide="package"></i> Packing List</a>
+<a href="/crew/border-police/{{ current_leg.vessel_id }}" class="btn btn-secondary btn-sm" target="_blank"><i data-lucide="users"></i> Crew List</a>
+<a href="/passengers?vessel={{ selected_vessel }}" class="btn btn-secondary btn-sm"><i data-lucide="user-check"></i> Passenger List</a>
 <a href="/escale?vessel={{ selected_vessel }}&leg_id={{ current_leg.id }}" class="btn btn-secondary btn-sm"><i data-lucide="anchor"></i> Escale</a>
 {% endif %}
 {% endblock %}

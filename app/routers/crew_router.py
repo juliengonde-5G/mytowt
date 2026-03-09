@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query, File, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
@@ -7,6 +7,8 @@ from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, date, timedelta
 import io
+import os
+import uuid
 
 from app.database import get_db
 from app.auth import get_current_user
@@ -14,8 +16,12 @@ from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
-from app.models.crew import CrewMember, CrewAssignment, CrewTicket, CREW_ROLES, REQUIRED_ROLES
+from app.models.crew import CrewMember, CrewAssignment, CrewTicket, CREW_ROLES, REQUIRED_ROLES, TRANSPORT_MODES
+from app.models.operation import EscaleOperation
 from app.utils.activity import log_activity
+
+TICKET_UPLOAD_DIR = "/app/uploads/crew_tickets"
+FECAMP_LOCODES = {"FRFEC"}
 
 router = APIRouter(prefix="/crew", tags=["crew"])
 
@@ -107,6 +113,23 @@ async def crew_list(
         elif m.visa_expiry and (m.visa_expiry - today).days < 30:
             compliance_alerts.append(m)
 
+    # Load legs for ticket form (current year, all vessels)
+    current_year = today.year
+    legs_result = await db.execute(
+        select(Leg).options(
+            selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port)
+        ).where(Leg.year == current_year).order_by(Leg.vessel_id, Leg.sequence)
+    )
+    legs = legs_result.scalars().all()
+
+    # Load recent crew tickets (last 50)
+    tickets_result = await db.execute(
+        select(CrewTicket).options(
+            selectinload(CrewTicket.member), selectinload(CrewTicket.leg)
+        ).order_by(CrewTicket.created_at.desc()).limit(50)
+    )
+    crew_tickets = tickets_result.scalars().all()
+
     return templates.TemplateResponse("crew/index.html", {
         "request": request, "user": user,
         "member_data": member_data,
@@ -115,7 +138,11 @@ async def crew_list(
         "stats": stats,
         "crew_roles": CREW_ROLES,
         "current_role": role,
+        "current_year": current_year,
         "compliance_alerts": compliance_alerts,
+        "legs": legs,
+        "crew_tickets": crew_tickets,
+        "transport_modes": TRANSPORT_MODES,
         "active_module": "crew",
     })
 
@@ -549,3 +576,147 @@ async def border_police_export(
 
     return Response(content=buf.read(), media_type="application/pdf",
                     headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+
+# ─── BILLETTERIE ÉQUIPAGE ───────────────────────────────────
+
+@router.post("/tickets/create", response_class=HTMLResponse)
+async def ticket_create(
+    request: Request,
+    leg_id: str = Form(...),
+    member_id: str = Form(...),
+    ticket_type: str = Form(...),
+    transport_mode: str = Form(...),
+    ticket_date: str = Form(...),
+    ticket_reference: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    user: User = Depends(require_permission("crew", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    _leg_id = int(leg_id)
+    _member_id = int(member_id)
+    _ticket_date = date.fromisoformat(ticket_date) if ticket_date else None
+
+    # Save file if provided
+    saved_filename = None
+    saved_path = None
+    saved_size = None
+    if file and file.filename:
+        os.makedirs(TICKET_UPLOAD_DIR, exist_ok=True)
+        ext = os.path.splitext(file.filename)[1].lower()
+        safe_name = f"{uuid.uuid4().hex}{ext}"
+        full_path = os.path.join(TICKET_UPLOAD_DIR, safe_name)
+        content = await file.read()
+        with open(full_path, "wb") as f:
+            f.write(content)
+        saved_filename = file.filename
+        saved_path = full_path
+        saved_size = len(content)
+
+    ticket = CrewTicket(
+        member_id=_member_id, leg_id=_leg_id,
+        ticket_type=ticket_type, transport_mode=transport_mode,
+        ticket_date=_ticket_date,
+        ticket_reference=ticket_reference.strip() if ticket_reference else None,
+        filename=saved_filename, file_path=saved_path, file_size=saved_size,
+        notes=notes.strip() if notes else None,
+        created_by=user.full_name,
+    )
+    db.add(ticket)
+    await db.flush()
+    await log_activity(db, user, "crew", "create", "CrewTicket", ticket.id,
+                        f"Billet {ticket_type} {transport_mode} pour membre #{_member_id}")
+
+    # ── Auto-create PAF operation if foreign crew at Fécamp ──
+    member_result = await db.execute(select(CrewMember).where(CrewMember.id == _member_id))
+    member = member_result.scalar_one_or_none()
+    leg_result = await db.execute(
+        select(Leg).options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
+        .where(Leg.id == _leg_id)
+    )
+    leg = leg_result.scalar_one_or_none()
+
+    if member and member.is_foreign and leg:
+        arr_locode = leg.arrival_port.locode if leg.arrival_port else ""
+        if arr_locode in FECAMP_LOCODES:
+            paf_result = await db.execute(
+                select(func.count(EscaleOperation.id)).where(
+                    EscaleOperation.leg_id == _leg_id,
+                    EscaleOperation.action == "passage_paf",
+                )
+            )
+            paf_count = paf_result.scalar() or 0
+            if paf_count == 0:
+                paf_op = EscaleOperation(
+                    leg_id=_leg_id,
+                    operation_type="armement",
+                    action="passage_paf",
+                    planned_start=leg.ata or leg.eta,
+                    description=f"Passage Police Aux Frontières — Personnel étranger ({member.full_name})",
+                    intervenant="PAF Fécamp",
+                )
+                db.add(paf_op)
+                await db.flush()
+                await log_activity(db, user, "crew", "create", "Operation", paf_op.id,
+                                    "Auto: Passage PAF (personnel étranger à Fécamp)")
+
+                from app.models.onboard import OnboardNotification
+                db.add(OnboardNotification(
+                    leg_id=_leg_id, category="crew",
+                    title="Passage PAF requis",
+                    detail=f"Personnel étranger {member.full_name} — Fécamp — opération PAF créée automatiquement",
+                ))
+                await db.flush()
+
+    # ── Check ticket date compatibility ──
+    if _ticket_date and leg:
+        escale_start = (leg.ata or leg.eta)
+        escale_end = leg.atd
+        if not escale_end and escale_start:
+            escale_end = escale_start + timedelta(days=leg.port_stay_days or 3)
+        esc_start_date = escale_start.date() if escale_start else None
+        esc_end_date = escale_end.date() if escale_end else None
+        incompatible = False
+        if esc_start_date and _ticket_date < esc_start_date - timedelta(days=1):
+            incompatible = True
+        elif esc_end_date and _ticket_date > esc_end_date + timedelta(days=1):
+            incompatible = True
+        if incompatible:
+            from app.models.onboard import OnboardNotification
+            member_name = member.full_name if member else f"Membre #{_member_id}"
+            db.add(OnboardNotification(
+                leg_id=_leg_id, category="crew",
+                title="Billet incompatible avec les dates d'escale",
+                detail=f"{member_name} — billet {transport_mode} le {_ticket_date.strftime('%d/%m/%Y')} hors fenêtre d'escale",
+            ))
+            await db.flush()
+
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
+    return RedirectResponse(url="/crew", status_code=303)
+
+
+@router.get("/tickets/{tid}/download")
+async def ticket_download(tid: int, user: User = Depends(require_permission("crew", "C")), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(CrewTicket).where(CrewTicket.id == tid))
+    ticket = result.scalar_one_or_none()
+    if not ticket or not ticket.file_path or not os.path.isfile(ticket.file_path):
+        raise HTTPException(404, detail="Fichier non trouvé")
+    return FileResponse(ticket.file_path, filename=ticket.filename or "ticket")
+
+
+@router.delete("/tickets/{tid}", response_class=HTMLResponse)
+async def ticket_delete(tid: int, request: Request, user: User = Depends(require_permission("crew", "S")), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(CrewTicket).where(CrewTicket.id == tid))
+    ticket = result.scalar_one_or_none()
+    if not ticket:
+        raise HTTPException(404)
+    if ticket.file_path and os.path.isfile(ticket.file_path):
+        os.remove(ticket.file_path)
+    await db.delete(ticket)
+    await db.flush()
+    await log_activity(db, user, "crew", "delete", "CrewTicket", tid, "Suppression billet")
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
+    return RedirectResponse(url="/crew", status_code=303)
