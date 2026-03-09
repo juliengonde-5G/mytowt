@@ -1,3 +1,9 @@
+import csv
+import io
+import logging
+from datetime import datetime
+from typing import Optional
+
 from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from app.templating import templates
@@ -5,10 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.utils.activity import log_activity, get_client_ip
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
-from typing import Optional
-from datetime import datetime
-import csv
-import io
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.auth import get_current_user
@@ -216,6 +220,21 @@ async def user_create_submit(
     db: AsyncSession = Depends(get_db),
 ):
     from app.auth import hash_password
+    # Input length validation
+    username = username[:50]
+    password = password[:128]
+    full_name = full_name[:100]
+    email = email[:200]
+    if len(username) < 3:
+        return templates.TemplateResponse("admin/user_form.html", {
+            "request": request, "user": user, "edit_user": None,
+            "error": "Le nom d'utilisateur doit contenir au moins 3 caractères.", "roles": USER_ROLES,
+        })
+    if len(password) < 8:
+        return templates.TemplateResponse("admin/user_form.html", {
+            "request": request, "user": user, "edit_user": None,
+            "error": "Le mot de passe doit contenir au moins 8 caractères.", "roles": USER_ROLES,
+        })
     if not email:
         email = f"{username}@towt.eu"
     existing = await db.execute(select(User).where(User.username == username))
@@ -263,11 +282,15 @@ async def user_edit_submit(
     edit_user = result.scalar_one_or_none()
     if not edit_user:
         raise HTTPException(status_code=404)
-    edit_user.full_name = full_name
+    edit_user.full_name = full_name[:100]
     edit_user.role = role
     if password and password.strip():
-        edit_user.hashed_password = _hp(password)
+        edit_user.hashed_password = _hp(password[:128])
     await db.flush()
+    await log_activity(db, user=user, action="update", module="admin",
+                       entity_type="user", entity_id=edit_user.id,
+                       entity_label=edit_user.full_name, detail=f"role: {role}",
+                       ip_address=get_client_ip(request))
     return RedirectResponse(url="/admin/users", status_code=303)
 
 
@@ -320,7 +343,7 @@ async def vessel_create_submit(
     if existing.scalar_one_or_none():
         return templates.TemplateResponse("admin/vessel_form.html", {
             "request": request, "user": user, "vessel": None,
-            "error": f"Le code navire {code} existe déjà.",
+            "error": "Ce code navire existe déjà.",
         })
     vessel = Vessel(
         code=code, name=name.strip(),
@@ -375,6 +398,9 @@ async def vessel_edit_submit(
     vessel.default_speed = pf(default_speed, 8)
     vessel.default_elongation = pf(default_elongation, 1.25)
     await db.flush()
+    await log_activity(db, user=user, action="update", module="admin",
+                       entity_type="vessel", entity_id=vessel.id,
+                       entity_label=vessel.name, ip_address=get_client_ip(request))
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
     return RedirectResponse(url="/admin/settings", status_code=303)
@@ -401,6 +427,9 @@ async def opex_update(
         )
         db.add(param)
     await db.flush()
+    await log_activity(db, user=user, action="update", module="admin",
+                       entity_type="opex", detail=f"opex_daily_rate={opex_daily_rate}",
+                       ip_address=get_client_ip(request))
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
     return RedirectResponse(url="/admin/settings", status_code=303)
@@ -515,7 +544,8 @@ async def export_global(
                     writer.writerow([_date_fmt(v) if hasattr(v, 'strftime') else ('' if v is None else str(v)) for v in row])
 
                 zf.writestr(f"{table_name}.csv", output.getvalue())
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Export failed for table {table_name}: {e}")
                 continue
 
     zip_buffer.seek(0)
@@ -566,7 +596,8 @@ async def export_selective(
                     writer.writerow([_date_fmt(v) if hasattr(v, 'strftime') else ('' if v is None else str(v)) for v in row])
 
                 zf.writestr(f"{table_name}.csv", output.getvalue())
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Selective export failed for table {table_name}: {e}")
                 continue
 
     zip_buffer.seek(0)
@@ -600,7 +631,8 @@ async def export_files(
                         arc_name = os.path.join(prefix, os.path.relpath(full_path, dir_path))
                         try:
                             zf.write(full_path, arc_name)
-                        except Exception:
+                        except Exception as e:
+                            logger.warning(f"File export failed for {full_path}: {e}")
                             continue
 
     zip_buffer.seek(0)
@@ -660,8 +692,11 @@ async def purge_selective(
             for sql in table_sql[key]:
                 try:
                     await db.execute(text(sql))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Purge SQL failed ({sql[:50]}): {e}")
+    await log_activity(db, user=user, action="purge", module="admin",
+                       detail=f"Purge sélective: {', '.join(tables_param)}",
+                       ip_address=get_client_ip(request))
     await db.commit()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
@@ -710,8 +745,11 @@ async def reset_database(
     for sql in purge_sql:
         try:
             await db.execute(text(sql))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Full purge SQL failed ({sql[:50]}): {e}")
+    await log_activity(db, user=user, action="reset", module="admin",
+                       detail="Full database reset",
+                       ip_address=get_client_ip(request))
     await db.commit()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
@@ -735,7 +773,8 @@ async def database_stats(
             cnt = await db.execute(text(f'SELECT COUNT(*) FROM "{t}"'))
             count = cnt.scalar() or 0
             stats.append((t, count))
-        except Exception:
+        except Exception as e:
+            logger.warning(f"DB stats query failed for {t}: {e}")
             stats.append((t, "?"))
 
     html = '<div class="db-stat-grid">'
@@ -788,7 +827,8 @@ async def update_language(
         await db.flush()
     url = "/admin/settings"
     response = RedirectResponse(url=url, status_code=303)
-    response.set_cookie("towt_lang", language, max_age=365*24*3600)
+    response.set_cookie("towt_lang", language, max_age=365*24*3600,
+                        httponly=True, samesite="lax", secure=True)
     return response
 
 

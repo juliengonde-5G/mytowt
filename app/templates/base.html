@@ -9,6 +9,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script>
+    // Auto-inject CSRF token into HTMX requests
+    document.addEventListener('htmx:configRequest', function(evt) {
+        var csrf = document.cookie.split('; ').find(function(c){return c.startsWith('towt_csrf=');});
+        if(csrf) evt.detail.headers['x-csrf-token'] = csrf.split('=')[1];
+    });
+    </script>
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
     <link rel="stylesheet" href="/static/css/app.css">
     <style>

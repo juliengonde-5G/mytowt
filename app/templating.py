@@ -85,3 +85,8 @@ templates.env.globals["has_any_access"] = has_any_access
 # Register site URL for external links (portals)
 from app.config import get_settings
 templates.env.globals["site_url"] = get_settings().SITE_URL
+
+# Register CSRF helper (available in all templates as {{ csrf_input(request) }})
+from app.csrf import csrf_input as _csrf_input
+from markupsafe import Markup
+templates.env.globals["csrf_input"] = lambda request: Markup(_csrf_input(request))

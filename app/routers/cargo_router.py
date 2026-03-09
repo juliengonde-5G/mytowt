@@ -945,6 +945,7 @@ def _lang(request):
     return lang if lang in VALID_LANGS else 'fr'
 
 async def _get_pl(token, db):
+    from datetime import datetime, timezone as tz
     result = await db.execute(
         select(PackingList).options(
             selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.vessel),
@@ -955,6 +956,9 @@ async def _get_pl(token, db):
     )
     pl = result.scalar_one_or_none()
     if not pl:
+        raise HTTPException(404, detail="Lien invalide ou expiré")
+    # Check token expiration
+    if pl.token_expires_at and pl.token_expires_at < datetime.now(tz.utc):
         raise HTTPException(404, detail="Lien invalide ou expiré")
     return pl
 

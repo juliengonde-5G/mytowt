@@ -555,6 +555,11 @@ async def attachment_upload(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, "Fichier trop volumineux (max 20 Mo)")
 
+    # Validate file content matches extension (magic bytes)
+    from app.utils.file_validation import validate_file_content
+    if not validate_file_content(content, ext):
+        raise HTTPException(400, "Le contenu du fichier ne correspond pas à son extension")
+
     # Create upload dir
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -660,6 +665,11 @@ async def doc_attachment_upload(
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, "Fichier trop volumineux (max 20 Mo)")
+
+    # Validate file content matches extension (magic bytes)
+    from app.utils.file_validation import validate_file_content
+    if not validate_file_content(content, ext):
+        raise HTTPException(400, "Le contenu du fichier ne correspond pas à son extension")
 
     os.makedirs(DOC_UPLOAD_DIR, exist_ok=True)
     safe_name = f"doc{doc_id}_{uuid.uuid4().hex[:8]}{ext}"
