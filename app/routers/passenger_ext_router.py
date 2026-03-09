@@ -20,6 +20,24 @@ from app.utils.portal_security import check_token_rate_limit, record_token_attem
 
 ext_router = APIRouter(prefix="/passenger", tags=["passenger-external"])
 
+# Legacy /boarding/ redirect — old links sent to passengers
+boarding_redirect_router = APIRouter(prefix="/boarding", tags=["passenger-external"])
+
+
+@boarding_redirect_router.get("/{token}")
+async def boarding_redirect(token: str, request: Request):
+    """Redirect legacy /boarding/{token} URLs to /passenger/{token}."""
+    lang = request.query_params.get("lang", "fr")
+    return RedirectResponse(url=f"/passenger/{token}?lang={lang}", status_code=301)
+
+
+@boarding_redirect_router.get("/{token}/{path:path}")
+async def boarding_redirect_subpage(token: str, path: str, request: Request):
+    """Redirect legacy /boarding/{token}/xxx URLs to /passenger/{token}/xxx."""
+    qs = f"?{request.query_params}" if request.query_params else ""
+    return RedirectResponse(url=f"/passenger/{token}/{path}{qs}", status_code=301)
+
+
 UPLOAD_DIR = "/app/uploads/passenger_docs"
 
 
