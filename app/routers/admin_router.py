@@ -496,12 +496,19 @@ TABLE_DEFS = {
     "cargo": {"label": "Cargo", "tables": ["packing_lists", "packing_list_batches", "packing_list_audit"]},
     "finance": {"label": "Finance", "tables": ["leg_finances"]},
     "claims": {"label": "Claims", "tables": ["claims", "claim_documents", "claim_timeline"]},
-    "crew": {"label": "Équipage", "tables": ["crew_members", "crew_assignments"]},
+    "crew": {"label": "Équipage", "tables": ["crew_members", "crew_assignments", "crew_tickets"]},
     "crew_assignments": {"label": "Affectations", "tables": ["crew_assignments"]},
+    "escale": {"label": "Escale", "tables": ["escale_operations", "docker_shifts"]},
     "sof": {"label": "SOF", "tables": ["sof_events"]},
+    "onboard": {"label": "On Board", "tables": ["onboard_notifications", "onboard_attachments", "cargo_documents", "cargo_document_attachments", "eta_shifts"]},
     "messages": {"label": "Messages", "tables": ["portal_messages"]},
     "notifications": {"label": "Notifications", "tables": ["notifications"]},
-    "config": {"label": "Config", "tables": ["vessels", "ports", "port_configs", "opex_parameters", "emission_parameters", "cabin_price_grid", "insurance_contracts"]},
+    "activity": {"label": "Journal d'activité", "tables": ["activity_logs"]},
+    "clients": {"label": "Clients", "tables": ["clients"]},
+    "rates": {"label": "Grilles tarifaires", "tables": ["rate_grids", "rate_grid_lines", "rate_offers"]},
+    "kpi": {"label": "KPI", "tables": ["leg_kpis"]},
+    "config": {"label": "Config", "tables": ["vessels", "ports", "port_configs", "opex_parameters", "emission_parameters", "cabin_price_grid", "insurance_contracts", "co2_variables", "mrv_parameters", "mrv_events", "planning_shares", "vessel_positions"]},
+    "access_logs": {"label": "Logs d'accès", "tables": ["portal_access_logs"]},
 }
 
 # Whitelist of all allowed table names for SQL queries (prevents SQL injection)
@@ -621,6 +628,9 @@ async def export_files(
         ("/app/uploads/passenger_docs", "passenger_docs"),
         ("/app/data/claims", "claims"),
         ("app/static/uploads/orders", "orders"),
+        ("/app/uploads/crew_tickets", "crew_tickets"),
+        ("/app/uploads/onboard_attachments", "onboard_attachments"),
+        ("/app/uploads/cargo_doc_attachments", "cargo_doc_attachments"),
     ]
 
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
@@ -662,14 +672,24 @@ async def purge_selective(
 
     # Order matters for FK constraints — delete children first
     purge_order = [
-        "notifications", "messages", "sof", "claims",
-        "cargo", "passengers", "finance", "crew_assignments", "orders", "legs",
+        "notifications", "messages", "activity", "access_logs", "sof",
+        "onboard", "escale", "claims",
+        "cargo", "passengers", "finance", "rates", "clients",
+        "crew_assignments", "orders", "kpi", "legs",
     ]
 
     table_sql = {
         "notifications": ["DELETE FROM notifications"],
         "messages": ["DELETE FROM portal_messages"],
+        "activity": ["DELETE FROM activity_logs"],
+        "access_logs": ["DELETE FROM portal_access_logs"],
         "sof": ["DELETE FROM sof_events WHERE event_type NOT IN ('CLAIM_DECLARED','CLAIM_UPDATED')"],
+        "onboard": [
+            "DELETE FROM cargo_document_attachments", "DELETE FROM cargo_documents",
+            "DELETE FROM onboard_attachments", "DELETE FROM onboard_notifications",
+            "DELETE FROM eta_shifts",
+        ],
+        "escale": ["DELETE FROM escale_operations", "DELETE FROM docker_shifts"],
         "claims": ["DELETE FROM claim_timeline", "DELETE FROM claim_documents", "DELETE FROM claims"],
         "cargo": ["DELETE FROM packing_list_audit", "DELETE FROM packing_list_batches", "DELETE FROM packing_lists"],
         "passengers": [
@@ -679,11 +699,17 @@ async def purge_selective(
         ],
         "orders": ["DELETE FROM order_assignments", "DELETE FROM orders"],
         "finance": ["DELETE FROM leg_finances"],
-        "crew_assignments": ["DELETE FROM crew_assignments"],
+        "rates": ["DELETE FROM rate_offers", "DELETE FROM rate_grid_lines", "DELETE FROM rate_grids"],
+        "clients": ["DELETE FROM clients"],
+        "crew_assignments": ["DELETE FROM crew_tickets", "DELETE FROM crew_assignments"],
+        "kpi": ["DELETE FROM leg_kpis"],
         "legs": [
             "DELETE FROM sof_events", "DELETE FROM escale_operations",
             "DELETE FROM onboard_notifications", "DELETE FROM cargo_documents",
+            "DELETE FROM cargo_document_attachments",
             "DELETE FROM docker_shifts", "DELETE FROM leg_finances", "DELETE FROM leg_kpis",
+            "DELETE FROM eta_shifts", "DELETE FROM onboard_attachments",
+            "DELETE FROM crew_tickets",
             "DELETE FROM legs",
         ],
     }
@@ -719,6 +745,8 @@ async def reset_database(
     purge_sql = [
         "DELETE FROM notifications",
         "DELETE FROM portal_messages",
+        "DELETE FROM portal_access_logs",
+        "DELETE FROM activity_logs",
         "DELETE FROM claim_timeline",
         "DELETE FROM claim_documents",
         "DELETE FROM claims",
@@ -731,16 +759,26 @@ async def reset_database(
         "DELETE FROM passenger_payments",
         "DELETE FROM passengers",
         "DELETE FROM passenger_bookings",
+        "DELETE FROM rate_offers",
+        "DELETE FROM rate_grid_lines",
+        "DELETE FROM rate_grids",
         "DELETE FROM order_assignments",
         "DELETE FROM orders",
+        "DELETE FROM clients",
+        "DELETE FROM crew_tickets",
         "DELETE FROM crew_assignments",
         "DELETE FROM sof_events",
-        "DELETE FROM onboard_notifications",
+        "DELETE FROM cargo_document_attachments",
         "DELETE FROM cargo_documents",
+        "DELETE FROM onboard_attachments",
+        "DELETE FROM onboard_notifications",
+        "DELETE FROM eta_shifts",
         "DELETE FROM docker_shifts",
         "DELETE FROM escale_operations",
         "DELETE FROM leg_finances",
         "DELETE FROM leg_kpis",
+        "DELETE FROM planning_shares",
+        "DELETE FROM vessel_positions",
         "DELETE FROM legs",
     ]
     for sql in purge_sql:
@@ -809,6 +847,45 @@ async def cleanup_audit(
     ))
     await db.execute(text(
         "DELETE FROM passenger_audit_logs WHERE created_at < NOW() - INTERVAL '12 months'"
+    ))
+    await db.commit()
+    return RedirectResponse(url="/admin/settings#database", status_code=303)
+
+
+@router.post("/database/cleanup-activity-logs", response_class=HTMLResponse)
+async def cleanup_activity_logs(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import text
+    await db.execute(text(
+        "DELETE FROM activity_logs WHERE created_at < NOW() - INTERVAL '6 months'"
+    ))
+    await db.commit()
+    return RedirectResponse(url="/admin/settings#database", status_code=303)
+
+
+@router.post("/database/cleanup-onboard-notifications", response_class=HTMLResponse)
+async def cleanup_onboard_notifications(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import text
+    await db.execute(text(
+        "DELETE FROM onboard_notifications WHERE is_read = TRUE AND created_at < NOW() - INTERVAL '30 days'"
+    ))
+    await db.commit()
+    return RedirectResponse(url="/admin/settings#database", status_code=303)
+
+
+@router.post("/database/cleanup-access-logs", response_class=HTMLResponse)
+async def cleanup_access_logs(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import text
+    await db.execute(text(
+        "DELETE FROM portal_access_logs WHERE accessed_at < NOW() - INTERVAL '6 months'"
     ))
     await db.commit()
     return RedirectResponse(url="/admin/settings#database", status_code=303)

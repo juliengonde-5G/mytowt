@@ -308,15 +308,22 @@
                     <div class="db-checkboxes">
                         <label><input type="checkbox" name="tables" value="legs" checked> 🧭 Legs / Voyages</label>
                         <label><input type="checkbox" name="tables" value="orders"> 📦 Commandes</label>
+                        <label><input type="checkbox" name="tables" value="clients"> 🏢 Clients</label>
                         <label><input type="checkbox" name="tables" value="passengers"> 🎫 Passagers & Réservations</label>
                         <label><input type="checkbox" name="tables" value="cargo"> 📄 Packing Lists & Batches</label>
                         <label><input type="checkbox" name="tables" value="finance"> 💰 Finances</label>
+                        <label><input type="checkbox" name="tables" value="rates"> 💹 Grilles tarifaires</label>
                         <label><input type="checkbox" name="tables" value="claims"> ⚠️ Claims & Sinistres</label>
-                        <label><input type="checkbox" name="tables" value="crew"> 👷 Équipage & Affectations</label>
+                        <label><input type="checkbox" name="tables" value="crew"> 👷 Équipage, Affectations & Billets</label>
+                        <label><input type="checkbox" name="tables" value="escale"> ⚓ Escale (opérations, shifts dockers)</label>
+                        <label><input type="checkbox" name="tables" value="onboard"> 🚢 On Board (SOF attachments, ETA shifts, documents cargo)</label>
                         <label><input type="checkbox" name="tables" value="sof"> 📜 SOF Events</label>
+                        <label><input type="checkbox" name="tables" value="kpi"> 📊 KPI</label>
                         <label><input type="checkbox" name="tables" value="messages"> 💬 Messages portail</label>
                         <label><input type="checkbox" name="tables" value="notifications"> 🔔 Notifications</label>
-                        <label><input type="checkbox" name="tables" value="config"> ⚙️ Configuration (ports, navires, paramètres)</label>
+                        <label><input type="checkbox" name="tables" value="activity"> 📋 Journal d'activité</label>
+                        <label><input type="checkbox" name="tables" value="access_logs"> 🔍 Logs d'accès portail</label>
+                        <label><input type="checkbox" name="tables" value="config"> ⚙️ Configuration (ports, navires, paramètres, CO2, MRV)</label>
                     </div>
                     <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="download"></i> Exporter la sélection</button>
                 </form>
@@ -346,14 +353,21 @@
                     <div class="db-checkboxes">
                         <label><input type="checkbox" name="tables" value="notifications"> 🔔 Notifications</label>
                         <label><input type="checkbox" name="tables" value="messages"> 💬 Messages portail</label>
+                        <label><input type="checkbox" name="tables" value="access_logs"> 🔍 Logs d'accès portail</label>
+                        <label><input type="checkbox" name="tables" value="activity"> 📋 Journal d'activité</label>
                         <label><input type="checkbox" name="tables" value="sof"> 📜 SOF Events</label>
+                        <label><input type="checkbox" name="tables" value="onboard"> 🚢 On Board (notifications, attachments, ETA shifts, documents cargo)</label>
+                        <label><input type="checkbox" name="tables" value="escale"> ⚓ Escale (opérations, shifts dockers)</label>
                         <label><input type="checkbox" name="tables" value="claims"> ⚠️ Claims & documents</label>
                         <label><input type="checkbox" name="tables" value="cargo"> 📄 Packing Lists & Batches</label>
                         <label><input type="checkbox" name="tables" value="passengers"> 🎫 Passagers & Réservations</label>
                         <label><input type="checkbox" name="tables" value="orders"> 📦 Commandes</label>
+                        <label><input type="checkbox" name="tables" value="clients"> 🏢 Clients</label>
                         <label><input type="checkbox" name="tables" value="finance"> 💰 Données financières</label>
-                        <label><input type="checkbox" name="tables" value="crew_assignments"> 👷 Affectations équipage</label>
-                        <label><input type="checkbox" name="tables" value="legs"> 🧭 Legs (supprime aussi escale, SOF, finances liés)</label>
+                        <label><input type="checkbox" name="tables" value="rates"> 💹 Grilles tarifaires</label>
+                        <label><input type="checkbox" name="tables" value="crew_assignments"> 👷 Affectations & billets équipage</label>
+                        <label><input type="checkbox" name="tables" value="kpi"> 📊 KPI</label>
+                        <label><input type="checkbox" name="tables" value="legs"> 🧭 Legs (supprime aussi escale, SOF, finances, KPI liés)</label>
                     </div>
                     <div class="db-confirm-row">
                         <label style="font-size:12px;color:#dc2626;font-weight:600;">Tapez SUPPRIMER pour confirmer :</label>
@@ -415,7 +429,51 @@
                 </form>
             </div>
 
-            <!-- RGPD: Droit à l'effacement -->
+            <div class="db-card">
+                <div class="db-card-info">
+                    <strong>📋 Nettoyer le journal d'activité</strong>
+                    <span>Supprime les entrées du journal d'activité de plus de 6 mois.</span>
+                </div>
+                <form method="POST" action="/admin/database/cleanup-activity-logs">
+                    <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
+                </form>
+            </div>
+
+            <div class="db-card">
+                <div class="db-card-info">
+                    <strong>🚢 Nettoyer les notifications On Board</strong>
+                    <span>Supprime les notifications On Board lues de plus de 30 jours.</span>
+                </div>
+                <form method="POST" action="/admin/database/cleanup-onboard-notifications">
+                    <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
+                </form>
+            </div>
+
+            <div class="db-card">
+                <div class="db-card-info">
+                    <strong>🔍 Nettoyer les logs d'accès portail</strong>
+                    <span>Supprime les logs d'accès au portail client de plus de 6 mois.</span>
+                </div>
+                <form method="POST" action="/admin/database/cleanup-access-logs">
+                    <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
+                </form>
+            </div>
+
+            <!-- RGPD -->
+            <div class="db-action-card" style="border-left:4px solid #2563EB;">
+                <div>
+                    <strong>🛡️ RGPD — Droit d'accès (Art. 15)</strong>
+                    <span>Exporte toutes les données personnelles d'une réservation passager au format JSON (nom, email, documents, formulaires, paiements, messages, logs d'accès).</span>
+                </div>
+                <form id="form-rgpd-export" style="display:flex;gap:8px;align-items:center;" hx-boost="false">
+                    <input type="number" name="booking_id" placeholder="N° réservation" required
+                           style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;width:140px;font-family:'Poppins',system-ui,sans-serif;font-size:12px;">
+                    <button type="submit" class="btn btn-sm" style="background:#2563EB;color:white;border:none;"
+                            onclick="event.preventDefault();var bid=this.form.booking_id.value;if(bid)window.location.href='/admin/rgpd/export/passenger/'+bid;">
+                        <i data-lucide="download"></i> Exporter (JSON)
+                    </button>
+                </form>
+            </div>
             <div class="db-action-card" style="border-left:4px solid #e53935;">
                 <div>
                     <strong>🛡️ RGPD — Droit à l'effacement (Art. 17)</strong>
