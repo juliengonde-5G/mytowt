@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Bill of Lading — {{ pl.order.reference }}</title>
+    <title>Bill of Lading — {{ bl_number }}</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:'Poppins',system-ui,-apple-system,sans-serif;font-size:11px;color:#333;padding:20px;max-width:900px;margin:0 auto}
@@ -23,24 +23,25 @@
         .bol-footer{margin-top:16px;border:1px solid #095561;padding:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
         .sig-box{min-height:80px;border:1px solid #ddd;border-radius:4px;padding:8px}
         .sig-box .label{font-size:9px;text-transform:uppercase;font-weight:700;color:#095561;margin-bottom:4px}
+        .obl-info{margin-top:8px;padding:8px 14px;border:1px solid #095561;background:#f0f7f8;font-size:10px;display:flex;justify-content:space-between}
         .fine-print{font-size:8px;color:#999;margin-top:12px;text-align:center}
         @media print{.no-print{display:none !important}}
     </style>
 </head>
 <body>
     <div class="no-print">
-        <button onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button>
+        <button onclick="window.print()">Print / Save as PDF</button>
     </div>
 
     <div class="bol-header">
         <div>
             <h1>BILL OF LADING</h1>
             <p style="font-size:11px;color:#666;">TOWT — Transport à la Voile</p>
-            <img src="/static/logo_towt.png" alt="TOWT" style="height:35px;margin-top:6px;" onerror="this.style.display='none'">
+            <img src="/static/img/logo_towt.png" alt="TOWT" style="height:35px;margin-top:6px;" onerror="this.style.display='none'">
         </div>
         <div class="bol-ref">
             <strong>B/L N°</strong>
-            {{ pl.order.reference }}-BL
+            {{ bl_number }}
             <br><br>
             <span style="font-size:10px;color:#888;">Date: {{ now.strftime('%d/%m/%Y') }}</span>
         </div>
@@ -49,7 +50,7 @@
     <div class="bol-grid">
         <div class="bol-cell">
             <div class="label">Shipper / Expéditeur</div>
-            <div class="value">{% if pl.batches %}{{ pl.batches[0].shipper_name or '—' }}{% endif %}</div>
+            <div class="value">{{ shipper_address }}</div>
         </div>
         <div class="bol-cell">
             <div class="label">Booking Reference</div>
@@ -57,11 +58,11 @@
         </div>
         <div class="bol-cell">
             <div class="label">Consignee / Destinataire</div>
-            <div class="value">{% if pl.batches %}{{ pl.batches[0].consignee_address or '—' }}{% endif %}</div>
+            <div class="value">{{ consignee_address }}</div>
         </div>
         <div class="bol-cell">
             <div class="label">Notify Party</div>
-            <div class="value">{% if pl.batches %}{{ pl.batches[0].notify_address or '—' }}{% endif %}</div>
+            <div class="value">{{ notify_address }}</div>
         </div>
         {% if pl.order.leg %}
         <div class="bol-cell">
@@ -86,19 +87,21 @@
     <table class="cargo-table">
         <thead>
             <tr>
-                <th>Batch</th><th>Description</th><th>Pallet Type</th>
-                <th>Pallets</th><th>Gross Weight (kg)</th><th>Dims (cm)</th>
+                <th>Batch</th><th>Description of Goods</th><th>Pallet Type</th>
+                <th>Packages</th><th>Pallets</th><th>Gross Weight (kg)</th><th>Dims (cm)</th>
                 <th>Volume (m³)</th><th>IMO Class</th>
             </tr>
         </thead>
         <tbody>
             {% set total_pallets = namespace(v=0) %}
             {% set total_weight = namespace(v=0) %}
+            {% set total_packages = namespace(v=0) %}
             {% for batch in pl.batches %}
             <tr>
                 <td>#{{ batch.batch_number }}</td>
-                <td>{{ batch.type_of_goods or '—' }}{% if batch.bio_products == 'Yes' %} 🌿{% endif %}</td>
+                <td>{{ batch.description_of_goods or batch.type_of_goods or '—' }}{% if batch.bio_products == 'Yes' %} BIO{% endif %}</td>
                 <td>{{ batch.pallet_type or '—' }}</td>
+                <td>{{ batch.cases_quantity or '—' }}</td>
                 <td>{{ batch.pallet_quantity or '—' }}</td>
                 <td>{{ batch.weight_kg or '—' }}</td>
                 <td>{{ batch.length_cm or '—' }}×{{ batch.width_cm or '—' }}×{{ batch.height_cm or '—' }}</td>
@@ -107,15 +110,22 @@
             </tr>
             {% if batch.pallet_quantity %}{% set total_pallets.v = total_pallets.v + batch.pallet_quantity %}{% endif %}
             {% if batch.weight_kg %}{% set total_weight.v = total_weight.v + batch.weight_kg %}{% endif %}
+            {% if batch.cases_quantity %}{% set total_packages.v = total_packages.v + batch.cases_quantity %}{% endif %}
             {% endfor %}
             <tr style="font-weight:700;background:#f0f7f8;">
                 <td colspan="3" style="text-align:right;">TOTAL</td>
+                <td>{{ total_packages.v or '—' }}</td>
                 <td>{{ total_pallets.v }}</td>
                 <td>{{ total_weight.v }} kg</td>
                 <td colspan="3"></td>
             </tr>
         </tbody>
     </table>
+
+    <div class="obl-info">
+        <span><strong>Number of Original Bills of Lading:</strong> 3 (THREE)</span>
+        <span><strong>B/L Reference:</strong> {{ bl_number }}</span>
+    </div>
 
     <div class="bol-footer">
         <div class="sig-box">
@@ -132,6 +142,7 @@
 
     <div class="fine-print">
         TOWT SAS — Transport à la Voile · This Bill of Lading is subject to the provisions of the Hague-Visby Rules.
+        · Number of Original Bills of Lading: THREE (3)
     </div>
 </body>
 </html>

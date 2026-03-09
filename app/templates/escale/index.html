@@ -211,7 +211,7 @@
 
     <!-- ═══ FLOW 2: PARALLEL ACTIVITIES ═══ -->
     {% if operations or docker_shifts %}
-    {% set crew_actions = ['embarquement', 'debarquement', 'medicale'] %}
+    {% set crew_actions = ['embarquement', 'debarquement', 'medicale', 'passage_paf'] %}
     {% set supply_actions = ['avitaillement', 'soutage', 'intervention_technique', 'inspection_technique', 'inspection_armement'] %}
     {% set ext_actions = ['relation_presse', 'relation_client', 'relation_prospect'] %}
     {% set pax_ops = operations|selectattr('action', 'in', crew_actions)|list %}
@@ -246,8 +246,9 @@
                     <div class="lane-body">
                         <strong>{{ op.action|replace('_',' ')|capitalize }}</strong>
                         <span class="lane-meta">
-                        {% if op.actual_start %}✅ {{ op.actual_start.strftime('%d/%m %H:%M') }}
-                        {% elif op.planned_start %}🕐 {{ op.planned_start.strftime('%d/%m %H:%M') }}{% endif %}
+                        {% if op.actual_start %}✅ {{ op.actual_start.strftime('%d/%m %H:%M') }}{% if op.actual_end %} → {{ op.actual_end.strftime('%H:%M') }}{% endif %}
+                        {% elif op.planned_start %}🕐 {{ op.planned_start.strftime('%d/%m %H:%M') }}{% if op.planned_end %} → {{ op.planned_end.strftime('%H:%M') }}{% endif %}{% endif %}
+                        {% if op.actual_duration_hours %} · {{ op.actual_duration_hours|round(1) }}h{% elif op.planned_duration_hours %} · ~{{ op.planned_duration_hours|round(1) }}h{% endif %}
                         {% if op.intervenant %} · 👤 {{ op.intervenant }}{% endif %}</span>
                     </div>
                 </div>
@@ -264,8 +265,9 @@
                     <div class="lane-body">
                         <strong>{{ op.action|replace('_',' ')|capitalize }}</strong>
                         <span class="lane-meta">
-                        {% if op.actual_start %}✅ {{ op.actual_start.strftime('%d/%m %H:%M') }}
-                        {% elif op.planned_start %}🕐 {{ op.planned_start.strftime('%d/%m %H:%M') }}{% endif %}
+                        {% if op.actual_start %}✅ {{ op.actual_start.strftime('%d/%m %H:%M') }}{% if op.actual_end %} → {{ op.actual_end.strftime('%H:%M') }}{% endif %}
+                        {% elif op.planned_start %}🕐 {{ op.planned_start.strftime('%d/%m %H:%M') }}{% if op.planned_end %} → {{ op.planned_end.strftime('%H:%M') }}{% endif %}{% endif %}
+                        {% if op.actual_duration_hours %} · {{ op.actual_duration_hours|round(1) }}h{% elif op.planned_duration_hours %} · ~{{ op.planned_duration_hours|round(1) }}h{% endif %}
                         {% if op.intervenant %} · 👤 {{ op.intervenant }}{% endif %}</span>
                     </div>
                 </div>
@@ -282,8 +284,9 @@
                     <div class="lane-body">
                         <strong>{{ op.action|replace('_',' ')|capitalize }}</strong>
                         <span class="lane-meta">
-                        {% if op.actual_start %}✅ {{ op.actual_start.strftime('%d/%m %H:%M') }}
-                        {% elif op.planned_start %}🕐 {{ op.planned_start.strftime('%d/%m %H:%M') }}{% endif %}
+                        {% if op.actual_start %}✅ {{ op.actual_start.strftime('%d/%m %H:%M') }}{% if op.actual_end %} → {{ op.actual_end.strftime('%H:%M') }}{% endif %}
+                        {% elif op.planned_start %}🕐 {{ op.planned_start.strftime('%d/%m %H:%M') }}{% if op.planned_end %} → {{ op.planned_end.strftime('%H:%M') }}{% endif %}{% endif %}
+                        {% if op.actual_duration_hours %} · {{ op.actual_duration_hours|round(1) }}h{% elif op.planned_duration_hours %} · ~{{ op.planned_duration_hours|round(1) }}h{% endif %}
                         {% if op.intervenant %} · 👤 {{ op.intervenant }}{% endif %}</span>
                     </div>
                 </div>

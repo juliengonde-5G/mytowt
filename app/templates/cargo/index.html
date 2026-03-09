@@ -60,7 +60,8 @@
                         <div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap;">
                             <a href="/cargo/{{ pl.id }}" class="btn btn-sm btn-secondary" title="Détail"><i data-lucide="eye"></i></a>
                             <a href="/cargo/{{ pl.id }}/excel" class="btn btn-sm btn-secondary" title="Excel"><i data-lucide="file-spreadsheet"></i></a>
-                            <a href="/cargo/{{ pl.id }}/bol" class="btn btn-sm btn-secondary" target="_blank" title="Bill of Lading"><i data-lucide="file-text"></i></a>
+                            <a href="/cargo/{{ pl.id }}/bol" class="btn btn-sm btn-secondary" target="_blank" title="Bill of Lading (DOCX)"><i data-lucide="file-text"></i></a>
+                            <a href="/cargo/{{ pl.id }}/arrival-notice" class="btn btn-sm btn-secondary" target="_blank" title="Arrival Notice"><i data-lucide="ship"></i></a>
                             <button class="btn btn-sm btn-danger" hx-delete="/cargo/{{ pl.id }}" hx-confirm="Supprimer la packing list {{ pl.order.reference }} ?"><i data-lucide="trash-2"></i></button>
                         </div>
                     </td>
