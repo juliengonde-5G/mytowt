@@ -670,3 +670,275 @@ async def export_kpi_csv(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=kpi_towt.csv"},
     )
+
+
+# ─── SYNC CARGO TONS FROM ORDERS ─────────────────────────────
+@router.post("/sync-cargo", response_class=HTMLResponse)
+async def sync_cargo_from_orders(
+    request: Request,
+    year: Optional[int] = Form(None),
+    vessel: Optional[int] = Form(None),
+    user: User = Depends(require_permission("kpi", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Auto-calculate cargo_tons for each leg from confirmed OrderAssignment total_weight."""
+    current_year = year or datetime.now().year
+    query = select(Leg).where(Leg.year == current_year)
+    if vessel:
+        v_result = await db.execute(select(Vessel).where(Vessel.code == vessel))
+        v_obj = v_result.scalar_one_or_none()
+        if v_obj:
+            query = query.where(Leg.vessel_id == v_obj.id)
+
+    legs_result = await db.execute(query)
+    legs = legs_result.scalars().all()
+    leg_ids = [l.id for l in legs]
+
+    if not leg_ids:
+        url = f"/kpi?year={current_year}&tab=environnement"
+        if request.headers.get("HX-Request"):
+            return HTMLResponse(content="", headers={"HX-Redirect": url})
+        return RedirectResponse(url=url, status_code=303)
+
+    # Sum total_weight from orders via assignments
+    assignments_result = await db.execute(
+        select(OrderAssignment)
+        .options(selectinload(OrderAssignment.order))
+        .where(OrderAssignment.leg_id.in_(leg_ids))
+    )
+    all_assignments = assignments_result.scalars().all()
+
+    # Group by leg
+    weight_by_leg = {}
+    for a in all_assignments:
+        if a.order and a.order.total_weight:
+            weight_by_leg[a.leg_id] = weight_by_leg.get(a.leg_id, 0) + a.order.total_weight
+
+    # Load existing KPI records
+    kpi_result = await db.execute(select(LegKPI).where(LegKPI.leg_id.in_(leg_ids)))
+    kpi_map = {k.leg_id: k for k in kpi_result.scalars().all()}
+
+    synced = 0
+    for lid in leg_ids:
+        tons = round(weight_by_leg.get(lid, 0), 2)
+        if tons > 0:
+            if lid in kpi_map:
+                kpi_map[lid].cargo_tons = tons
+            else:
+                db.add(LegKPI(leg_id=lid, cargo_tons=tons))
+            synced += 1
+
+    await db.flush()
+    await log_activity(db, user, "kpi", "sync_cargo", "LegKPI", 0,
+                        f"Sync tonnage depuis commandes: {synced} legs, année {current_year}")
+
+    url = f"/kpi?year={current_year}&tab=environnement" + (f"&vessel={vessel}" if vessel else "")
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# ─── DECARBONATION CERTIFICATE PDF ──────────────────────────
+@router.get("/certificate", response_class=StreamingResponse)
+async def decarbonation_certificate(
+    client_name: str = Query(...),
+    year: Optional[int] = Query(None),
+    user: User = Depends(require_permission("kpi", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a PDF decarbonation certificate for a specific client."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    current_year = year or datetime.now().year
+    params = await get_emission_params(db)
+    co2_vars = await get_co2_variables(db)
+
+    # Find orders for this client (via client_name on Order or via Client table)
+    orders_q = (
+        select(OrderAssignment)
+        .options(
+            selectinload(OrderAssignment.order).selectinload(Order.rate_grid),
+            selectinload(OrderAssignment.leg).selectinload(Leg.vessel),
+            selectinload(OrderAssignment.leg).selectinload(Leg.departure_port),
+            selectinload(OrderAssignment.leg).selectinload(Leg.arrival_port),
+        )
+        .join(OrderAssignment.order)
+        .join(OrderAssignment.leg)
+        .where(Leg.year == current_year)
+    )
+
+    # Try matching by Order.client_name or Client.company_name
+    from sqlalchemy import or_
+    from app.models.commercial import RateGrid
+    orders_q = orders_q.outerjoin(Order.rate_grid).outerjoin(RateGrid.client).where(
+        or_(
+            Order.client_name.ilike(f"%{client_name}%"),
+            Client.company_name.ilike(f"%{client_name}%"),
+        )
+    )
+
+    result = await db.execute(orders_q)
+    assignments = result.scalars().all()
+
+    if not assignments:
+        raise HTTPException(404, detail=f"Aucune commande trouvée pour '{client_name}' en {current_year}")
+
+    # Compute per-leg CO2 data
+    cert_legs = []
+    total_co2_avoided = 0
+    total_cargo = 0
+    total_distance = 0
+
+    leg_seen = {}
+    for a in assignments:
+        if not a.leg or a.leg.id in leg_seen:
+            continue
+        leg_seen[a.leg.id] = True
+        cargo_tons = a.order.total_weight or 0
+        kpi = compute_leg_kpi(a.leg, cargo_tons, params)
+        decarb = compute_decarbonation(cargo_tons, kpi["distance_nm"], co2_vars)
+        cert_legs.append({
+            "leg_code": a.leg.leg_code,
+            "route": f"{a.leg.departure_port.name if a.leg.departure_port else '?'} → {a.leg.arrival_port.name if a.leg.arrival_port else '?'}",
+            "vessel": a.leg.vessel.name if a.leg.vessel else "?",
+            "cargo_tons": round(cargo_tons, 1),
+            "distance_nm": kpi["distance_nm"],
+            "co2_avoided_kg": kpi["co2_avoided_kg"],
+            "decarb_t": decarb["decarb_t"],
+        })
+        total_co2_avoided += kpi["co2_avoided_kg"]
+        total_cargo += cargo_tons
+        total_distance += kpi["distance_nm"]
+
+    # Generate PDF
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=20*mm, rightMargin=20*mm, topMargin=25*mm, bottomMargin=20*mm)
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle("CertTitle", parent=styles["Title"], fontSize=20,
+                                  textColor=colors.HexColor("#0a6b7a"), spaceAfter=6)
+    subtitle_style = ParagraphStyle("CertSub", parent=styles["Normal"], fontSize=12,
+                                     textColor=colors.HexColor("#666"), spaceAfter=20)
+    body_style = ParagraphStyle("CertBody", parent=styles["Normal"], fontSize=11, leading=16)
+    bold_style = ParagraphStyle("CertBold", parent=body_style, fontName="Helvetica-Bold")
+
+    elements = []
+    elements.append(Paragraph("CERTIFICAT DE DÉCARBONATION", title_style))
+    elements.append(Paragraph("DECARBONATION CERTIFICATE", subtitle_style))
+    elements.append(Spacer(1, 10))
+
+    elements.append(Paragraph(f"<b>Client :</b> {client_name}", body_style))
+    elements.append(Paragraph(f"<b>Année :</b> {current_year}", body_style))
+    elements.append(Paragraph(f"<b>Date d'émission :</b> {datetime.now().strftime('%d/%m/%Y')}", body_style))
+    elements.append(Spacer(1, 15))
+
+    elements.append(Paragraph(
+        "TOWT (Transport à la Voile) certifie que le client ci-dessus a contribué à la décarbonation "
+        "du transport maritime en utilisant nos voiliers-cargos pour les traversées suivantes :",
+        body_style
+    ))
+    elements.append(Spacer(1, 12))
+
+    # Detail table
+    table_data = [["Leg", "Route", "Navire", "Cargo (t)", "Distance (NM)", "CO₂ évité (kg)"]]
+    for cl in cert_legs:
+        table_data.append([
+            cl["leg_code"], cl["route"], cl["vessel"],
+            f"{cl['cargo_tons']:.1f}", f"{cl['distance_nm']:.0f}", f"{cl['co2_avoided_kg']:.1f}"
+        ])
+    table_data.append(["TOTAL", "", "", f"{total_cargo:.1f}", f"{total_distance:.0f}", f"{total_co2_avoided:.1f}"])
+
+    t = Table(table_data, colWidths=[55, 120, 70, 55, 60, 75])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0a6b7a")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#ccc")),
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#e8f5e9")),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(t)
+    elements.append(Spacer(1, 20))
+
+    # Summary
+    co2_avoided_t = total_co2_avoided / 1000
+    equiv_flights = co2_avoided_t / params["co2_per_flight_paris_nyc"] if params["co2_per_flight_paris_nyc"] > 0 else 0
+    equiv_containers = co2_avoided_t / params["co2_per_container_asia_eu"] if params["co2_per_container_asia_eu"] > 0 else 0
+
+    elements.append(Paragraph(f"<b>Total CO₂ évité : {co2_avoided_t:.2f} tonnes</b>", bold_style))
+    elements.append(Paragraph(
+        f"Soit l'équivalent de {equiv_flights:.1f} vols Paris–New York ou {equiv_containers:.0f} containers Asie–Europe par voie conventionnelle.",
+        body_style
+    ))
+    elements.append(Spacer(1, 20))
+
+    elements.append(Paragraph(
+        "Ce certificat est généré automatiquement par la plateforme my_TOWT sur la base des données "
+        "de transport réelles. Les facteurs d'émission utilisés sont conformes aux standards IMO et EU MRV.",
+        ParagraphStyle("Disclaimer", parent=body_style, fontSize=9, textColor=colors.HexColor("#999"))
+    ))
+    elements.append(Spacer(1, 30))
+    elements.append(Paragraph("Pour TOWT — Transport à la Voile", bold_style))
+
+    doc.build(elements)
+    buf.seek(0)
+    safe_name = client_name.replace(" ", "_").replace("/", "_")[:30]
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=certificat_decarbonation_{safe_name}_{current_year}.pdf"},
+    )
+
+
+# ─── LIST CLIENTS FOR CERTIFICATE SELECTOR ───────────────────
+@router.get("/certificate/clients", response_class=HTMLResponse)
+async def certificate_clients(
+    request: Request,
+    year: Optional[int] = Query(None),
+    user: User = Depends(require_permission("kpi", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return list of clients with orders in given year for certificate generation."""
+    current_year = year or datetime.now().year
+    # Get distinct client names from orders assigned to legs in this year
+    result = await db.execute(
+        select(distinct(Order.client_name))
+        .join(OrderAssignment, OrderAssignment.order_id == Order.id)
+        .join(Leg, Leg.id == OrderAssignment.leg_id)
+        .where(Leg.year == current_year, Order.client_name.isnot(None))
+    )
+    client_names = [r[0] for r in result.all() if r[0]]
+
+    # Also get from Client table via rate_grid
+    from app.models.commercial import RateGrid
+    result2 = await db.execute(
+        select(distinct(Client.company_name))
+        .join(RateGrid, RateGrid.client_id == Client.id)
+        .join(Order, Order.rate_grid_id == RateGrid.id)
+        .join(OrderAssignment, OrderAssignment.order_id == Order.id)
+        .join(Leg, Leg.id == OrderAssignment.leg_id)
+        .where(Leg.year == current_year)
+    )
+    for r in result2.all():
+        if r[0] and r[0] not in client_names:
+            client_names.append(r[0])
+
+    client_names.sort()
+
+    # Return as simple HTML fragment (for HTMX)
+    options = "".join(f'<option value="{c}">{c}</option>' for c in client_names)
+    html = f'<select name="client_name" required style="padding:8px;border-radius:6px;border:1px solid #ccc;min-width:200px;font-family:Poppins,system-ui,sans-serif;">'
+    html += '<option value="">— Sélectionner un client —</option>'
+    html += options
+    html += '</select>'
+    return HTMLResponse(html)

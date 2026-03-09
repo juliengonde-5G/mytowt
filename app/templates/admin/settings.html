@@ -414,6 +414,22 @@
                     <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
                 </form>
             </div>
+
+            <!-- RGPD: Droit à l'effacement -->
+            <div class="db-action-card" style="border-left:4px solid #e53935;">
+                <div>
+                    <strong>🛡️ RGPD — Droit à l'effacement (Art. 17)</strong>
+                    <span>Anonymise toutes les données personnelles d'une réservation passager (nom, email, téléphone, documents, formulaires). Les données financières et statistiques sont conservées de manière anonyme.</span>
+                </div>
+                <form method="POST" id="form-rgpd-erase" style="display:flex;gap:8px;align-items:center;">
+                    <input type="number" name="booking_id" placeholder="N° réservation" required
+                           style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;width:140px;font-family:'Poppins',system-ui,sans-serif;font-size:12px;">
+                    <button type="submit" class="btn btn-sm" style="background:#e53935;color:white;border:none;"
+                            onclick="if(!confirm('ATTENTION : Cette action est irréversible. Toutes les données personnelles de cette réservation seront effacées conformément au RGPD Art. 17. Continuer ?'))event.preventDefault();else this.form.action='/admin/rgpd/erase/'+this.form.booking_id.value;">
+                        <i data-lucide="shield-off"></i> Effacer les données
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 

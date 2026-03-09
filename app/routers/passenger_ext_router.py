@@ -243,6 +243,24 @@ async def passenger_documents(token: str, request: Request, lang: str = Query("f
     })
 
 
+@ext_router.post("/{token}/accept-cgv", response_class=HTMLResponse)
+async def accept_cgv(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    """Accept CGV (General Conditions of Transport) from passenger portal."""
+    booking = await _get_booking_by_token(token, db, request)
+    form = await request.form()
+    cgv_accepted = form.get("cgv_accepted") == "on"
+    lang = form.get("lang", "fr")
+
+    if cgv_accepted:
+        booking.cgv_accepted = True
+        booking.cgv_accepted_at = datetime.now(tz.utc)
+        await db.flush()
+
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": f"/passenger/{token}/documents?lang={lang}"})
+    return RedirectResponse(url=f"/passenger/{token}/documents?lang={lang}", status_code=303)
+
+
 @ext_router.get("/{token}/messages", response_class=HTMLResponse)
 async def passenger_messages(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
     booking = await _get_booking_by_token(token, db, request)

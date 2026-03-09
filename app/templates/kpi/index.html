@@ -298,6 +298,25 @@
             </div>
         </div>
 
+        <!-- Actions: Sync + Certificate -->
+        <div style="display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;align-items:center;">
+            <form method="POST" action="/kpi/sync-cargo" style="display:inline;">
+                <input type="hidden" name="year" value="{{ current_year }}">
+                {% if selected_vessel %}<input type="hidden" name="vessel" value="{{ selected_vessel }}">{% endif %}
+                <button type="submit" class="btn btn-secondary btn-sm">
+                    <i data-lucide="refresh-cw"></i> Synchroniser tonnage depuis commandes
+                </button>
+            </form>
+            <form method="GET" action="/kpi/certificate" style="display:inline-flex;gap:6px;align-items:center;" hx-boost="false">
+                <input type="hidden" name="year" value="{{ current_year }}">
+                <input type="text" name="client_name" placeholder="Nom du client" required
+                       style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;font-family:'Poppins',system-ui,sans-serif;font-size:13px;min-width:180px;">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i data-lucide="award"></i> Certificat décarbonation PDF
+                </button>
+            </form>
+        </div>
+
         <!-- Leg detail grid -->
         <div class="section-header" style="margin-top:16px;"><h3>Détail par leg</h3></div>
         {% if leg_kpis %}

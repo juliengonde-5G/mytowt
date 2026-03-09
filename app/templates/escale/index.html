@@ -209,6 +209,55 @@
     </div>
     {% endif %}
 
+    <!-- ═══ COMMERCIAL VISIBILITY: Orders on this leg ═══ -->
+    {% if leg_orders %}
+    <div class="section-block">
+        <h3 class="section-title"><i data-lucide="package" style="width:16px;height:16px;"></i> Commandes affectées ({{ leg_orders_summary.count }})</h3>
+        <div class="perf-grid" style="margin-bottom:12px;">
+            <div class="perf-card">
+                <div class="perf-label">Palettes</div>
+                <div class="perf-value">{{ leg_orders_summary.palettes }}</div>
+            </div>
+            <div class="perf-card">
+                <div class="perf-label">Tonnage</div>
+                <div class="perf-value">{{ leg_orders_summary.weight }} t</div>
+            </div>
+            <div class="perf-card">
+                <div class="perf-label">CA commandes</div>
+                <div class="perf-value">{{ '{:,.0f}'.format(leg_orders_summary.revenue).replace(',', ' ') }} €</div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table compact">
+                <thead>
+                    <tr>
+                        <th>Référence</th>
+                        <th>Client</th>
+                        <th>Palettes</th>
+                        <th>Poids (t)</th>
+                        <th>Montant</th>
+                        <th>Statut</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for o in leg_orders %}
+                    <tr>
+                        <td><strong>{{ o.reference }}</strong></td>
+                        <td>{{ o.client_name or '—' }}</td>
+                        <td>{{ o.quantity_palettes or 0 }} {{ o.palette_format or 'EPAL' }}</td>
+                        <td>{{ '%.1f'|format(o.total_weight or 0) }}</td>
+                        <td>{{ '{:,.0f}'.format(o.total_price or 0).replace(',', ' ') }} €</td>
+                        <td>
+                            <span class="status-badge status-{{ o.status }}">{{ o.status }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- ═══ FLOW 2: PARALLEL ACTIVITIES ═══ -->
     {% if operations or docker_shifts %}
     {% set crew_actions = ['embarquement', 'debarquement', 'medicale', 'passage_paf'] %}

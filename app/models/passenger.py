@@ -140,6 +140,10 @@ class PassengerBooking(Base):
     token = Column(String(40), unique=True, nullable=False, default=_gen_token, index=True)
     token_expires_at = Column(DateTime(timezone=True), nullable=True, default=_default_token_expiry)
 
+    # CGV acceptance
+    cgv_accepted = Column(Boolean, default=False)
+    cgv_accepted_at = Column(DateTime(timezone=True), nullable=True)
+
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

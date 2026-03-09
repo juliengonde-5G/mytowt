@@ -20,6 +20,7 @@ from app.models.leg import Leg, LegStatus
 from app.models.port import Port
 from app.models.planning_share import PlanningShare
 from app.utils.timezones import get_port_timezone, utc_offset_label, TIMEZONE_CHOICES
+from app.utils.notifications import notify_delay
 
 router = APIRouter(prefix="/planning", tags=["planning"])
 
@@ -560,6 +561,17 @@ async def leg_edit_submit(
     # If ETD set but not ETA, recalculate
     if leg.etd and not leg.eta and leg.distance_nm:
         leg.eta = compute_eta(leg.etd, leg.distance_nm, _speed, _elongation)
+
+    # ── Delay detection: compare ETA/ETD vs reference (eta_ref/etd_ref) ──
+    vessel_name = vessel_obj.name if vessel_obj else "Navire"
+    if leg.eta and leg.eta_ref:
+        shift_h = (leg.eta - leg.eta_ref).total_seconds() / 3600
+        if abs(shift_h) >= 4:
+            await notify_delay(db, leg, vessel_name, shift_h, "eta")
+    if leg.etd and leg.etd_ref:
+        shift_h = (leg.etd - leg.etd_ref).total_seconds() / 3600
+        if abs(shift_h) >= 4:
+            await notify_delay(db, leg, vessel_name, shift_h, "etd")
 
     await db.flush()
 

@@ -19,6 +19,7 @@ from app.utils.timezones import get_port_timezone, utc_offset_label, TIMEZONE_CH
 from app.models.operation import EscaleOperation, DockerShift
 from app.models.crew import CrewMember, CrewAssignment, CrewTicket, TRANSPORT_MODES
 from app.models.finance import LegFinance, OpexParameter
+from app.models.order import Order, OrderAssignment
 from app.utils.activity import log_activity
 from app.utils.notifications import notify_arrival, notify_departure
 
@@ -406,6 +407,26 @@ async def escale_home(
         )
         crew_for_tickets = crew_result.scalars().all()
 
+    # ── Commercial visibility: orders assigned to this leg ──
+    leg_orders = []
+    leg_orders_summary = {"count": 0, "palettes": 0, "weight": 0, "revenue": 0}
+    if selected_leg:
+        oa_result = await db.execute(
+            select(OrderAssignment)
+            .options(selectinload(OrderAssignment.order))
+            .where(OrderAssignment.leg_id == selected_leg.id)
+        )
+        assignments = oa_result.scalars().all()
+        for a in assignments:
+            if a.order:
+                leg_orders.append(a.order)
+                leg_orders_summary["count"] += 1
+                leg_orders_summary["palettes"] += a.order.quantity_palettes or 0
+                leg_orders_summary["weight"] += a.order.total_weight or 0
+                leg_orders_summary["revenue"] += float(a.order.total_price or 0)
+        leg_orders_summary["weight"] = round(leg_orders_summary["weight"], 1)
+        leg_orders_summary["revenue"] = round(leg_orders_summary["revenue"], 2)
+
     return templates.TemplateResponse("escale/index.html", {
         "request": request, "user": user,
         "vessels": vessels, "selected_vessel": selected_vessel, "vessel_obj": vessel_obj,
@@ -424,6 +445,8 @@ async def escale_home(
         "port_timezone": get_port_timezone(selected_leg.departure_port.country_code, selected_leg.departure_port.zone_code) if selected_leg and selected_leg.departure_port else "UTC",
         "port_tz_label": selected_leg.departure_port.name if selected_leg and selected_leg.departure_port else "Port",
         "port_tz_offset": utc_offset_label(get_port_timezone(selected_leg.departure_port.country_code, selected_leg.departure_port.zone_code)) if selected_leg and selected_leg.departure_port else "UTC",
+        "leg_orders": leg_orders,
+        "leg_orders_summary": leg_orders_summary,
         "active_module": "escale",
     })
 

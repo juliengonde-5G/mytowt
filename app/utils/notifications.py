@@ -82,6 +82,27 @@ async def notify_cargo_doc_created(
     return await create_notification(db, leg_id, "cargo", title, detail)
 
 
+async def notify_delay(
+    db: AsyncSession,
+    leg,
+    vessel_name: str,
+    shift_hours: float,
+    field: str = "eta",
+):
+    """Notify company when ETA/ETD shifts by more than 4h vs reference schedule."""
+    direction = "retard" if shift_hours > 0 else "avance"
+    abs_hours = abs(shift_hours)
+    field_label = "ETA" if field == "eta" else "ETD"
+    title = f"Décalage {field_label} — {vessel_name} ({direction} {abs_hours:.0f}h)"
+    detail = (
+        f"Le {field_label} du leg {leg.leg_code} a été décalé de {shift_hours:+.1f} heures par rapport au planning de référence.\n"
+        f"Navire: {vessel_name}\n"
+        f"Ce décalage dépasse le seuil de 4h et peut impacter les escales suivantes.\n"
+        f"Veuillez vérifier le planning et informer les agents portuaires concernés."
+    )
+    return await create_notification(db, leg.id, "escale", title, detail)
+
+
 async def notify_cargo_progress(
     db: AsyncSession,
     leg_id: int,

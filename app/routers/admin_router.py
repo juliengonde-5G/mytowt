@@ -1,6 +1,7 @@
 import csv
 import io
 import logging
+import secrets
 from datetime import datetime
 from typing import Optional
 
@@ -1574,3 +1575,113 @@ async def rgpd_export_passenger(
         media_type="application/json",
         headers={"Content-Disposition": f"attachment; filename=RGPD_export_{booking.reference}.json"},
     )
+
+
+# ─── RGPD: RIGHT TO ERASURE (droit à l'effacement) ─────────
+@router.post("/rgpd/erase/{booking_id}", response_class=HTMLResponse)
+async def rgpd_erase_booking(
+    booking_id: int,
+    request: Request,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Anonymize personal data for a passenger booking (RGPD Art. 17 right to erasure).
+
+    Replaces all personal data with anonymized placeholders while preserving
+    booking structure for statistical/financial purposes.
+    """
+    from app.models.passenger import (
+        PassengerBooking, Passenger, PassengerDocument, PassengerPayment,
+        PreBoardingForm, PassengerAuditLog,
+    )
+    import os
+
+    result = await db.execute(
+        select(PassengerBooking).options(
+            selectinload(PassengerBooking.passengers).selectinload(Passenger.documents),
+            selectinload(PassengerBooking.payments),
+        ).where(PassengerBooking.id == booking_id)
+    )
+    booking = result.scalar_one_or_none()
+    if not booking:
+        raise HTTPException(404, detail="Réservation introuvable")
+
+    anon_label = f"ANONYMIZED-{booking_id}"
+
+    # Anonymize booking contact info
+    booking.contact_email = f"{anon_label}@erased.local"
+    booking.contact_phone = "ERASED"
+    booking.notes = "Données personnelles effacées (RGPD Art. 17)"
+    booking.token = f"erased-{booking_id}-{secrets.token_urlsafe(8)}"
+
+    # Anonymize each passenger
+    for pax in booking.passengers:
+        pax.first_name = "ERASED"
+        pax.last_name = anon_label
+        pax.email = f"{anon_label}@erased.local"
+        pax.phone = "ERASED"
+        pax.date_of_birth = None
+        pax.nationality = "XX"
+        pax.passport_number = "ERASED"
+        pax.emergency_contact_name = "ERASED"
+        pax.emergency_contact_phone = "ERASED"
+
+        # Delete uploaded documents (files on disk)
+        for doc in pax.documents:
+            if doc.file_path and os.path.isfile(doc.file_path):
+                try:
+                    os.remove(doc.file_path)
+                except OSError:
+                    pass
+            doc.file_path = None
+            doc.filename = "ERASED"
+            doc.status = "missing"
+
+        # Anonymize pre-boarding forms
+        form_result = await db.execute(
+            select(PreBoardingForm).where(PreBoardingForm.passenger_id == pax.id)
+        )
+        for form in form_result.scalars().all():
+            form.chronic_conditions = "ERASED"
+            form.allergies = "ERASED"
+            form.daily_medication = "ERASED"
+            form.dietary_requirements = "ERASED"
+            form.intolerances = "ERASED"
+
+    # Anonymize payment references
+    for payment in booking.payments:
+        payment.reference = f"ERASED-{payment.id}"
+        payment.notes = "ERASED"
+
+    # Delete audit logs for this booking
+    audit_result = await db.execute(
+        select(PassengerAuditLog).where(PassengerAuditLog.booking_id == booking_id)
+    )
+    for audit in audit_result.scalars().all():
+        audit.user_email = "ERASED"
+        audit.detail = "ERASED (RGPD)"
+
+    # Delete portal access logs
+    try:
+        from app.models.portal_access_log import PortalAccessLog
+        access_result = await db.execute(
+            select(PortalAccessLog).where(
+                PortalAccessLog.token == booking.token,
+            )
+        )
+        for log in access_result.scalars().all():
+            log.ip_address = "0.0.0.0"
+            log.user_agent = "ERASED"
+    except Exception:
+        pass  # Table may not exist
+
+    await db.flush()
+    await log_activity(db, user=user, action="rgpd_erase", module="admin",
+                       entity_type="passenger_booking", entity_id=booking_id,
+                       entity_label=f"Effacement RGPD réservation {booking.reference}",
+                       ip_address=get_client_ip(request))
+
+    url = "/admin/settings?section=database"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
