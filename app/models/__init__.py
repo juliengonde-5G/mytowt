@@ -14,7 +14,7 @@ from app.models.passenger import (
     Passenger, PassengerBooking, PassengerPayment, PassengerDocument,
     CabinPriceGrid, PreBoardingForm, PassengerAuditLog,
 )
-from app.models.activity import ActivityLog
+from app.models.activity_log import ActivityLog
 from app.models.mrv import MrvEvent, MrvParameter
 from app.models.co2_variable import Co2Variable
 from app.models.claim import Claim, ClaimDocument, ClaimTimeline
