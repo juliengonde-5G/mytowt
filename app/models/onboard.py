@@ -157,6 +157,9 @@ ATTACHMENT_CATEGORIES = [
     ("document", "Document"),
     ("report", "Rapport / Report"),
     ("certificate", "Certificat / Certificate"),
+    ("port_agent", "Document agent d'escale / Port agent"),
+    ("bl_signed", "BL signé / Signed BL"),
+    ("letter_protest", "Lettre de protestation / Letter of Protest"),
     ("other", "Autre / Other"),
 ]
 

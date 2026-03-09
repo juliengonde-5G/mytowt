@@ -53,6 +53,15 @@ class Leg(Base):
     notes = Column(Text, nullable=True)
     port_stay_days = Column(Integer, default=3)  # Durée d'escale en jours (entre ETA et ETD suivant)
 
+    # Closure workflow: open → review → approved → locked
+    closure_status = Column(String(20), default="open")
+    closure_reviewed_by = Column(String(200), nullable=True)
+    closure_reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    closure_approved_by = Column(String(200), nullable=True)
+    closure_approved_at = Column(DateTime(timezone=True), nullable=True)
+    closure_notes = Column(Text, nullable=True)
+    closure_pdf_path = Column(String(500), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

@@ -537,6 +537,195 @@
     {% endif %}
 </div>
 
+<!-- DOCUMENTS AGENT D'ESCALE -->
+<div class="ob-section" id="port-agent-docs">
+    <div class="ob-section-header">
+        <h3>🏢 Documents agent d'escale <span class="ob-badge">{{ port_agent_attachments|length }}</span></h3>
+    </div>
+    <p style="font-size:11px;color:#888;margin-bottom:10px;">Documents reçus de l'agent d'escale local : BL signés, lettres de protestation, constats, protocoles…</p>
+
+    {% if port_agent_attachments %}
+    <div class="att-grid">
+        {% for att in port_agent_attachments %}
+        <div class="att-item" style="border-left:3px solid #D97706;">
+            <div class="att-icon">
+                <i data-lucide="file-check" style="width:20px;height:20px;color:#D97706;"></i>
+            </div>
+            <div class="att-info">
+                <strong>{{ att.title }}</strong>
+                <span class="att-meta">
+                    <span class="att-cat-badge att-cat-{{ att.category }}">{{ att.category|replace('_', ' ') }}</span>
+                    · {{ att.filename }}
+                    {% if att.file_size %}· {{ "%.1f"|format(att.file_size / 1024) }} Ko{% endif %}
+                    · {{ att.uploaded_by }}
+                    · {{ att.created_at.strftime('%d/%m %H:%M') }}
+                </span>
+                {% if att.description %}<span class="att-desc">{{ att.description }}</span>{% endif %}
+            </div>
+            <div class="att-actions">
+                <a href="/onboard/attachments/{{ att.id }}/download" class="btn-icon" title="Télécharger"><i data-lucide="download" style="width:14px;height:14px;color:var(--towt-blue);"></i></a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="ob-empty">Aucun document d'agent d'escale.</p>
+    {% endif %}
+
+    {% if not is_locked %}
+    <form method="POST" action="/onboard/attachments/upload" enctype="multipart/form-data" style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;">
+        <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
+        <div class="att-upload-grid">
+            <div class="fg">
+                <label class="field-label">Document de l'agent</label>
+                <input type="file" name="file" required class="fi" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
+            </div>
+            <div class="fg">
+                <label class="field-label">Titre</label>
+                <input type="text" name="title" class="fi" placeholder="Ex: BL signé lot 42">
+            </div>
+            <div class="fg">
+                <label class="field-label">Type</label>
+                <select name="category" class="fi">
+                    <option value="port_agent">Document agent d'escale</option>
+                    <option value="bl_signed">BL signé</option>
+                    <option value="letter_protest">Lettre de protestation</option>
+                </select>
+            </div>
+            <div class="fg">
+                <label class="field-label">Description</label>
+                <input type="text" name="description" class="fi" placeholder="Notes (optionnel)">
+            </div>
+            <div class="fg" style="align-self:end;">
+                <button type="submit" class="btn btn-sm" style="background:#D97706;color:white;"><i data-lucide="upload" style="width:14px;height:14px;"></i> Ajouter</button>
+            </div>
+        </div>
+    </form>
+    {% endif %}
+</div>
+
+<!-- CLÔTURE D'ESCALE -->
+{% set closure = current_leg.closure_status or 'open' %}
+<div class="ob-section closure-section" id="closure">
+    <div class="ob-section-header">
+        <h3>🔒 Clôture d'escale</h3>
+        {% if closure == 'locked' and current_leg.closure_pdf_path %}
+        <a href="/onboard/closure/{{ current_leg.id }}/pdf" class="btn btn-secondary btn-sm"><i data-lucide="file-text"></i> Télécharger PDF</a>
+        {% endif %}
+    </div>
+
+    <!-- Workflow progress bar -->
+    <div class="closure-workflow">
+        <div class="closure-step {% if closure in ('open', 'review', 'approved', 'locked') %}done{% endif %}">
+            <div class="closure-step-dot">1</div>
+            <div class="closure-step-label">Ouverte</div>
+        </div>
+        <div class="closure-step-line {% if closure in ('review', 'approved', 'locked') %}done{% endif %}"></div>
+        <div class="closure-step {% if closure in ('review', 'approved', 'locked') %}done{% endif %} {% if closure == 'review' %}current{% endif %}">
+            <div class="closure-step-dot">2</div>
+            <div class="closure-step-label">En revue</div>
+        </div>
+        <div class="closure-step-line {% if closure in ('approved', 'locked') %}done{% endif %}"></div>
+        <div class="closure-step {% if closure in ('approved', 'locked') %}done{% endif %} {% if closure == 'approved' %}current{% endif %}">
+            <div class="closure-step-dot">3</div>
+            <div class="closure-step-label">Approuvée</div>
+        </div>
+        <div class="closure-step-line {% if closure == 'locked' %}done{% endif %}"></div>
+        <div class="closure-step {% if closure == 'locked' %}done{% endif %} {% if closure == 'locked' %}current{% endif %}">
+            <div class="closure-step-dot">4</div>
+            <div class="closure-step-label">Verrouillée</div>
+        </div>
+    </div>
+
+    <!-- Document checklist -->
+    <div style="margin:16px 0;">
+        <h4 style="font-size:12px;color:#555;text-transform:uppercase;margin-bottom:8px;">Checklist documentaire</h4>
+        <div class="closure-check-grid">
+            {% set doc_types_done = cargo_documents|map(attribute='doc_type')|list %}
+            {% for code, label in cargo_doc_types %}
+            <div class="closure-check-item {% if code in doc_types_done %}check-ok{% else %}check-missing{% endif %}">
+                {% if code in doc_types_done %}✅{% else %}⬜{% endif %}
+                {{ label }}
+            </div>
+            {% endfor %}
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:#888;">
+            {{ cargo_documents|length }} / {{ cargo_doc_types|length }} documents créés ·
+            {{ port_agent_attachments|length }} documents agent d'escale ·
+            {{ attachments|length }} pièces jointes totales
+        </div>
+    </div>
+
+    <!-- Closure details -->
+    {% if current_leg.closure_reviewed_by %}
+    <div style="font-size:12px;color:#555;margin:8px 0;">
+        📋 Revue par <strong>{{ current_leg.closure_reviewed_by }}</strong>
+        {% if current_leg.closure_reviewed_at %} le {{ current_leg.closure_reviewed_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+    </div>
+    {% endif %}
+    {% if current_leg.closure_approved_by %}
+    <div style="font-size:12px;color:#555;margin:8px 0;">
+        ✅ Approuvé par <strong>{{ current_leg.closure_approved_by }}</strong>
+        {% if current_leg.closure_approved_at %} le {{ current_leg.closure_approved_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+    </div>
+    {% endif %}
+    {% if current_leg.closure_notes %}
+    <div style="font-size:12px;color:#666;margin:8px 0;padding:8px 12px;background:#f8fafb;border-radius:6px;">
+        <strong>Notes :</strong> {{ current_leg.closure_notes }}
+    </div>
+    {% endif %}
+
+    <!-- Action buttons -->
+    {% if closure == 'open' %}
+    <form method="POST" action="/onboard/closure/{{ current_leg.id }}/submit-review" style="margin-top:12px;">
+        <div class="fg" style="margin-bottom:8px;">
+            <label class="field-label">Notes de revue (optionnel)</label>
+            <textarea name="closure_notes" class="fi" rows="2" placeholder="Remarques, documents manquants…" style="resize:vertical;min-height:40px;font-family:'Poppins',system-ui,sans-serif;"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Soumettre l\'escale pour revue du commandant ?')">
+            <i data-lucide="send" style="width:14px;height:14px;"></i> Soumettre pour revue
+        </button>
+    </form>
+
+    {% elif closure == 'review' %}
+    <div style="display:flex;gap:8px;margin-top:12px;">
+        <form method="POST" action="/onboard/closure/{{ current_leg.id }}/approve">
+            <button type="submit" class="btn btn-sm" style="background:#16a34a;color:white;" onclick="return confirm('Approuver la clôture d\'escale ?')">
+                <i data-lucide="check" style="width:14px;height:14px;"></i> Approuver (Commandant)
+            </button>
+        </form>
+        <form method="POST" action="/onboard/closure/{{ current_leg.id }}/reopen">
+            <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Rouvrir l\'escale ?')">
+                <i data-lucide="rotate-ccw" style="width:14px;height:14px;"></i> Rouvrir
+            </button>
+        </form>
+    </div>
+
+    {% elif closure == 'approved' %}
+    <div style="display:flex;gap:8px;margin-top:12px;">
+        <form method="POST" action="/onboard/closure/{{ current_leg.id }}/lock">
+            <button type="submit" class="btn btn-sm" style="background:#DC2626;color:white;" onclick="return confirm('Verrouiller définitivement l\'escale ? Un PDF récapitulatif sera généré. Cette action est irréversible.')">
+                <i data-lucide="lock" style="width:14px;height:14px;"></i> Verrouiller définitivement + PDF
+            </button>
+        </form>
+        <form method="POST" action="/onboard/closure/{{ current_leg.id }}/reopen">
+            <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Rouvrir l\'escale ?')">
+                <i data-lucide="rotate-ccw" style="width:14px;height:14px;"></i> Rouvrir
+            </button>
+        </form>
+    </div>
+
+    {% elif closure == 'locked' %}
+    <div style="margin-top:12px;padding:12px 16px;background:rgba(107,114,128,0.06);border:1px solid rgba(107,114,128,0.15);border-radius:8px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:24px;">🔒</span>
+        <div>
+            <strong style="color:#374151;font-size:13px;">Escale définitivement clôturée</strong>
+            <p style="font-size:11px;color:#888;margin:2px 0 0;">Aucune modification possible. Le PDF récapitulatif est disponible en téléchargement.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
 {% endif %}
 
 <style>
@@ -673,6 +862,25 @@
     .eta-badge-delay{background:rgba(220,38,38,0.1);color:#DC2626}
     .eta-badge-advance{background:rgba(22,163,106,0.1);color:#16a34a}
     .eta-cascade-badge{font-size:10px;padding:2px 6px;border-radius:100px;background:rgba(245,158,11,0.1);color:#D97706;font-weight:600}
+    /* Port agent attachment categories */
+    .att-cat-port_agent{background:rgba(245,158,11,0.1);color:#D97706}
+    .att-cat-bl_signed{background:rgba(59,130,246,0.1);color:#2563EB}
+    .att-cat-letter_protest{background:rgba(220,38,38,0.1);color:#DC2626}
+    /* Closure workflow */
+    .closure-workflow{display:flex;align-items:center;gap:0;padding:16px 0;justify-content:center}
+    .closure-step{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:80px}
+    .closure-step-dot{width:32px;height:32px;border-radius:50%;border:2px solid #ddd;background:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#aaa;transition:all 0.2s}
+    .closure-step.done .closure-step-dot{background:var(--towt-blue);border-color:var(--towt-blue);color:white}
+    .closure-step.current .closure-step-dot{background:#87BD2B;border-color:#87BD2B;color:white;box-shadow:0 0 0 4px rgba(135,189,43,0.2)}
+    .closure-step-label{font-size:10px;color:#888;font-weight:500;text-align:center}
+    .closure-step.done .closure-step-label{color:var(--towt-blue);font-weight:600}
+    .closure-step.current .closure-step-label{color:#5a8010;font-weight:700}
+    .closure-step-line{width:40px;height:2px;background:#ddd;margin-bottom:18px}
+    .closure-step-line.done{background:var(--towt-blue)}
+    .closure-check-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px}
+    .closure-check-item{font-size:11px;padding:4px 8px;border-radius:4px}
+    .check-ok{color:#16a34a;background:rgba(34,197,94,0.06)}
+    .check-missing{color:#aaa;background:#fafafa}
 </style>
 <script>
 // Pre-fill SOF date and time with current values
