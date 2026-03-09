@@ -644,7 +644,9 @@ async def arrival_notice(
     if not pl:
         raise HTTPException(404)
 
-    leg = pl.order.leg
+    leg = pl.order.leg if pl.order else None
+    if not leg:
+        raise HTTPException(404, detail="Aucun leg associé à cette commande")
     first = pl.batches[0] if pl.batches else None
     total_pallets = sum(b.pallet_quantity or 0 for b in pl.batches)
     total_weight = sum(b.weight_kg or 0 for b in pl.batches)
