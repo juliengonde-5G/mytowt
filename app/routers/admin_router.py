@@ -1472,3 +1472,105 @@ async def import_planning_csv(
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
     return RedirectResponse(url=url, status_code=303)
+
+
+# ═══ RGPD DATA EXPORT (DSR) ═════════════════════════════════
+@router.get("/rgpd/export/passenger/{booking_id}")
+async def rgpd_export_passenger(
+    booking_id: int, request: Request,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export all personal data for a passenger booking (GDPR Data Subject Request)."""
+    import json
+    from app.models.passenger import PassengerBooking, Passenger, PreBoardingForm
+    from app.models.portal_message import PortalMessage
+    from app.models.portal_access_log import PortalAccessLog
+
+    result = await db.execute(
+        select(PassengerBooking).options(
+            selectinload(PassengerBooking.passengers),
+            selectinload(PassengerBooking.payments),
+        ).where(PassengerBooking.id == booking_id)
+    )
+    booking = result.scalar_one_or_none()
+    if not booking:
+        raise HTTPException(404)
+
+    data = {
+        "export_type": "RGPD_DSR",
+        "export_date": datetime.now().isoformat(),
+        "exported_by": user.username,
+        "booking": {
+            "reference": booking.reference,
+            "status": booking.status,
+            "booking_date": str(booking.booking_date) if booking.booking_date else None,
+            "contact_email": booking.contact_email,
+            "contact_phone": booking.contact_phone,
+            "created_at": booking.created_at.isoformat() if booking.created_at else None,
+        },
+        "passengers": [],
+        "payments": [],
+        "messages": [],
+        "access_logs": [],
+    }
+
+    for pax in booking.passengers:
+        pax_data = {
+            "first_name": pax.first_name, "last_name": pax.last_name,
+            "email": pax.email, "phone": pax.phone,
+            "date_of_birth": str(pax.date_of_birth) if pax.date_of_birth else None,
+            "nationality": pax.nationality, "passport_number": pax.passport_number,
+            "emergency_contact_name": pax.emergency_contact_name,
+            "emergency_contact_phone": pax.emergency_contact_phone,
+        }
+        # Pre-boarding form
+        form_result = await db.execute(select(PreBoardingForm).where(PreBoardingForm.passenger_id == pax.id))
+        form = form_result.scalar_one_or_none()
+        if form:
+            pax_data["questionnaire"] = {
+                "sailed_before": form.sailed_before, "seasick": form.seasick,
+                "chronic_conditions": form.chronic_conditions, "allergies": form.allergies,
+                "daily_medication": form.daily_medication, "dietary_requirements": form.dietary_requirements,
+                "gdpr_consent": form.gdpr_consent,
+                "gdpr_consent_at": form.gdpr_consent_at.isoformat() if form.gdpr_consent_at else None,
+                "signed_at": form.signed_at.isoformat() if form.signed_at else None,
+            }
+        data["passengers"].append(pax_data)
+
+    for pay in booking.payments:
+        data["payments"].append({
+            "type": pay.payment_type, "amount": str(pay.amount),
+            "status": pay.status, "paid_date": str(pay.paid_date) if pay.paid_date else None,
+        })
+
+    # Messages
+    msg_result = await db.execute(
+        select(PortalMessage).where(PortalMessage.booking_id == booking_id).order_by(PortalMessage.created_at))
+    for msg in msg_result.scalars().all():
+        data["messages"].append({
+            "sender": msg.sender_name, "message": msg.message,
+            "created_at": msg.created_at.isoformat() if msg.created_at else None,
+        })
+
+    # Access logs
+    log_result = await db.execute(
+        select(PortalAccessLog).where(PortalAccessLog.booking_id == booking_id)
+        .order_by(PortalAccessLog.accessed_at.desc()).limit(100))
+    for log in log_result.scalars().all():
+        data["access_logs"].append({
+            "ip": log.ip_address, "path": log.path,
+            "accessed_at": log.accessed_at.isoformat() if log.accessed_at else None,
+        })
+
+    await log_activity(db, user=user, action="rgpd_export", module="admin",
+                       entity_type="passenger_booking", entity_id=booking_id,
+                       entity_label=f"Export RGPD réservation {booking.reference}",
+                       ip_address=get_client_ip(request))
+
+    content = json.dumps(data, indent=2, ensure_ascii=False)
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8")),
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename=RGPD_export_{booking.reference}.json"},
+    )

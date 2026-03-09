@@ -1,7 +1,7 @@
 """External passenger portal — accessible by token, no authentication."""
 import os
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone as tz
 from fastapi import APIRouter, Request, Depends, Form, HTTPException, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,13 +16,16 @@ from app.models.passenger import (
     DOCUMENT_TYPES, DOCUMENT_STATUSES, CABIN_TYPE_LABELS,
 )
 from app.models.portal_message import PortalMessage
+from app.utils.portal_security import check_token_rate_limit, record_token_attempt, log_portal_access
 
 ext_router = APIRouter(prefix="/passenger", tags=["passenger-external"])
 
 UPLOAD_DIR = "/app/uploads/passenger_docs"
 
 
-async def _get_booking_by_token(token: str, db: AsyncSession) -> PassengerBooking:
+async def _get_booking_by_token(token: str, db: AsyncSession, request: Request = None) -> PassengerBooking:
+    if request:
+        check_token_rate_limit(request)
     result = await db.execute(
         select(PassengerBooking).options(
             selectinload(PassengerBooking.passengers).selectinload(Passenger.documents),
@@ -35,7 +38,15 @@ async def _get_booking_by_token(token: str, db: AsyncSession) -> PassengerBookin
     )
     booking = result.scalar_one_or_none()
     if not booking:
+        if request:
+            record_token_attempt(request)
         raise HTTPException(404, "Réservation introuvable.")
+    # Check token expiration
+    if booking.token_expires_at and booking.token_expires_at < datetime.now(tz.utc):
+        raise HTTPException(404, "Lien expiré.")
+    # Audit trail
+    if request:
+        await log_portal_access(db, request, "passenger", token, booking_id=booking.id)
     return booking
 
 
@@ -58,7 +69,7 @@ def _lang(request, query_lang):
 
 @ext_router.get("/{token}", response_class=HTMLResponse)
 async def passenger_portal(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     unread = await _get_unread_count(booking.id, db)
     pax_forms = {}
@@ -75,7 +86,7 @@ async def passenger_portal(token: str, request: Request, lang: str = Query("fr")
 
 @ext_router.get("/{token}/admin", response_class=HTMLResponse)
 async def passenger_admin(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     unread = await _get_unread_count(booking.id, db)
     pax_forms = {}
@@ -92,7 +103,7 @@ async def passenger_admin(token: str, request: Request, lang: str = Query("fr"),
 
 @ext_router.get("/{token}/vessel", response_class=HTMLResponse)
 async def passenger_vessel(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     unread = await _get_unread_count(booking.id, db)
     vessel = booking.vessel or (booking.leg.vessel if booking.leg else None)
@@ -104,7 +115,7 @@ async def passenger_vessel(token: str, request: Request, lang: str = Query("fr")
 
 @ext_router.get("/{token}/voyage", response_class=HTMLResponse)
 async def passenger_voyage(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     unread = await _get_unread_count(booking.id, db)
     leg = booking.leg
@@ -132,7 +143,7 @@ async def passenger_voyage(token: str, request: Request, lang: str = Query("fr")
 
 @ext_router.get("/{token}/life", response_class=HTMLResponse)
 async def passenger_life(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     unread = await _get_unread_count(booking.id, db)
     return templates.TemplateResponse("passengers/portal_life.html", {
@@ -143,7 +154,7 @@ async def passenger_life(token: str, request: Request, lang: str = Query("fr"), 
 
 @ext_router.get("/{token}/safety", response_class=HTMLResponse)
 async def passenger_safety(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     unread = await _get_unread_count(booking.id, db)
     vessel = booking.vessel or (booking.leg.vessel if booking.leg else None)
@@ -155,7 +166,7 @@ async def passenger_safety(token: str, request: Request, lang: str = Query("fr")
 
 @ext_router.get("/{token}/passenger-docs", response_class=HTMLResponse)
 async def passenger_docs_page(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     unread = await _get_unread_count(booking.id, db)
     return templates.TemplateResponse("passengers/portal_passenger_docs.html", {
@@ -166,7 +177,7 @@ async def passenger_docs_page(token: str, request: Request, lang: str = Query("f
 
 @ext_router.get("/{token}/questionnaire", response_class=HTMLResponse)
 async def passenger_questionnaire(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     unread = await _get_unread_count(booking.id, db)
     pax_forms = {}
@@ -181,7 +192,7 @@ async def passenger_questionnaire(token: str, request: Request, lang: str = Quer
 
 @ext_router.get("/{token}/destination", response_class=HTMLResponse)
 async def passenger_destination(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     unread = await _get_unread_count(booking.id, db)
     # Future: load destination_info from a port_info table or CMS
@@ -192,9 +203,20 @@ async def passenger_destination(token: str, request: Request, lang: str = Query(
     })
 
 
+@ext_router.get("/{token}/privacy", response_class=HTMLResponse)
+async def passenger_privacy(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
+    booking = await _get_booking_by_token(token, db, request)
+    lang = _lang(request, lang)
+    unread = await _get_unread_count(booking.id, db)
+    return templates.TemplateResponse("passengers/portal_privacy.html", {
+        "request": request, "booking": booking,
+        "token": token, "lang": lang, "active_page": "privacy", "unread_messages": unread,
+    })
+
+
 @ext_router.get("/{token}/documents", response_class=HTMLResponse)
 async def passenger_documents(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     unread = await _get_unread_count(booking.id, db)
     return templates.TemplateResponse("passengers/portal_docs.html", {
@@ -205,7 +227,7 @@ async def passenger_documents(token: str, request: Request, lang: str = Query("f
 
 @ext_router.get("/{token}/messages", response_class=HTMLResponse)
 async def passenger_messages(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     msg_result = await db.execute(
         select(PortalMessage).where(PortalMessage.booking_id == booking.id)
@@ -223,7 +245,7 @@ async def passenger_messages(token: str, request: Request, lang: str = Query("fr
 
 @ext_router.post("/{token}/messages/send", response_class=HTMLResponse)
 async def send_message(token: str, request: Request, message: str = Form(...), lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     sender_name = booking.passengers[0].full_name if booking.passengers else "Passenger"
     db.add(PortalMessage(booking_id=booking.id, sender_type="client", sender_name=sender_name, message=message.strip()))
@@ -245,7 +267,7 @@ async def send_message(token: str, request: Request, message: str = Form(...), l
 # ═══════════════════════════════════════════════════════════════
 @ext_router.get("/{token}/payment-return", response_class=HTMLResponse)
 async def payment_return(token: str, request: Request, payment_id: int = Query(0), lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     unread = await _get_unread_count(booking.id, db)
 
@@ -284,7 +306,7 @@ async def payment_return(token: str, request: Request, payment_id: int = Query(0
 @ext_router.get("/{token}/payments", response_class=HTMLResponse)
 async def portal_payments_page(token: str, request: Request, lang: str = Query("fr"), db: AsyncSession = Depends(get_db)):
     """Portal payments overview — shows pending payments with pay buttons."""
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     lang = _lang(request, lang)
     unread = await _get_unread_count(booking.id, db)
     return templates.TemplateResponse("passengers/portal_payments.html", {
@@ -298,7 +320,7 @@ async def portal_payments_page(token: str, request: Request, lang: str = Query("
 # ═══════════════════════════════════════════════════════════════
 @ext_router.post("/{token}/doc/{doc_id}/upload", response_class=HTMLResponse)
 async def upload_document(token: str, doc_id: int, request: Request, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     doc = await db.get(PassengerDocument, doc_id)
     if not doc: raise HTTPException(404)
     if doc.passenger_id not in [p.id for p in booking.passengers]: raise HTTPException(403)
@@ -321,7 +343,7 @@ async def external_pax_update(token: str, pax_id: int, request: Request,
     passport_number: str = Form(""),
     emergency_contact_name: str = Form(""), emergency_contact_phone: str = Form(""),
     db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     if pax_id not in [p.id for p in booking.passengers]: raise HTTPException(403)
     pax = await db.get(Passenger, pax_id)
     pax.first_name = first_name.strip(); pax.last_name = last_name.strip()
@@ -339,7 +361,7 @@ async def external_crossing_book(token: str, request: Request, db: AsyncSession 
     from fastapi.responses import Response
     from app.models.crew import CrewAssignment
     from app.utils.crossing_book import generate_crossing_book
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     leg = booking.leg; vessel = booking.vessel or (leg.vessel if leg else None)
     crew_result = await db.execute(
         select(CrewAssignment).options(selectinload(CrewAssignment.member))
@@ -362,7 +384,7 @@ async def external_crossing_book_en(token: str, request: Request, db: AsyncSessi
     from fastapi.responses import Response
     from app.models.crew import CrewAssignment
     from app.utils.crossing_book import generate_crossing_book
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     leg = booking.leg; vessel = booking.vessel or (leg.vessel if leg else None)
     crew_result = await db.execute(
         select(CrewAssignment).options(selectinload(CrewAssignment.member))
@@ -386,8 +408,9 @@ async def submit_questionnaire(token: str, pax_id: int, request: Request,
     chronic_conditions: str = Form(""), allergies: str = Form(""),
     daily_medication: str = Form(""), can_swim_50m: str = Form(""),
     dietary_requirements: str = Form(""), intolerances: str = Form(""),
+    gdpr_consent: str = Form(""),
     db: AsyncSession = Depends(get_db)):
-    booking = await _get_booking_by_token(token, db)
+    booking = await _get_booking_by_token(token, db, request)
     if pax_id not in [p.id for p in booking.passengers]: raise HTTPException(403)
     existing = await db.execute(select(PreBoardingForm).where(PreBoardingForm.passenger_id == pax_id))
     form = existing.scalar_one_or_none()
@@ -396,6 +419,11 @@ async def submit_questionnaire(token: str, pax_id: int, request: Request,
         allergies=allergies.strip() or None, daily_medication=daily_medication.strip() or None,
         can_swim_50m=can_swim_50m or None, dietary_requirements=dietary_requirements.strip() or None,
         intolerances=intolerances.strip() or None, signed=True, signed_at=datetime.now())
+    # Record GDPR consent on PreBoardingForm
+    if gdpr_consent:
+        kwargs["gdpr_consent"] = True
+        kwargs["gdpr_consent_at"] = datetime.now(tz.utc)
+        kwargs["gdpr_consent_version"] = "1.0"
     if form:
         for k, v in kwargs.items(): setattr(form, k, v)
     else:

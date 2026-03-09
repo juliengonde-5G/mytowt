@@ -6,6 +6,7 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, date, timedelta
+import io
 
 from app.database import get_db
 from app.auth import get_current_user
@@ -98,6 +99,14 @@ async def crew_list(
         "repos": sum(1 for md in member_data if md["status"] == "repos"),
     }
 
+    # Compliance alerts for banner
+    compliance_alerts = []
+    for m in members:
+        if m.passport_expiry and (m.passport_expiry - today).days < 30:
+            compliance_alerts.append(m)
+        elif m.visa_expiry and (m.visa_expiry - today).days < 30:
+            compliance_alerts.append(m)
+
     return templates.TemplateResponse("crew/index.html", {
         "request": request, "user": user,
         "member_data": member_data,
@@ -106,6 +115,7 @@ async def crew_list(
         "stats": stats,
         "crew_roles": CREW_ROLES,
         "current_role": role,
+        "compliance_alerts": compliance_alerts,
         "active_module": "crew",
     })
 
@@ -126,6 +136,11 @@ async def member_create_submit(
     role: str = Form(...),
     phone: Optional[str] = Form(None), email: Optional[str] = Form(None),
     is_foreign: Optional[str] = Form(None),
+    nationality: Optional[str] = Form(None),
+    passport_number: Optional[str] = Form(None),
+    passport_expiry: Optional[str] = Form(None),
+    visa_type: Optional[str] = Form(None),
+    visa_expiry: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
@@ -134,6 +149,11 @@ async def member_create_submit(
         first_name=first_name.strip(), last_name=last_name.strip(),
         role=role, phone=phone, email=email,
         is_foreign=bool(is_foreign),
+        nationality=nationality.strip() if nationality else None,
+        passport_number=passport_number.strip() if passport_number else None,
+        passport_expiry=parse_date(passport_expiry),
+        visa_type=visa_type.strip() if visa_type else None,
+        visa_expiry=parse_date(visa_expiry),
         notes=notes.strip() if notes else None,
     )
     db.add(member)
@@ -168,6 +188,11 @@ async def member_edit_submit(
     role: str = Form(...),
     phone: Optional[str] = Form(None), email: Optional[str] = Form(None),
     is_foreign: Optional[str] = Form(None),
+    nationality: Optional[str] = Form(None),
+    passport_number: Optional[str] = Form(None),
+    passport_expiry: Optional[str] = Form(None),
+    visa_type: Optional[str] = Form(None),
+    visa_expiry: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
@@ -182,6 +207,11 @@ async def member_edit_submit(
     member.phone = phone
     member.email = email
     member.is_foreign = bool(is_foreign)
+    member.nationality = nationality.strip() if nationality else None
+    member.passport_number = passport_number.strip() if passport_number else None
+    member.passport_expiry = parse_date(passport_expiry)
+    member.visa_type = visa_type.strip() if visa_type else None
+    member.visa_expiry = parse_date(visa_expiry)
     member.notes = notes.strip() if notes else None
     await db.flush()
     await log_activity(db, user, "crew", "update", "CrewMember", mid, f"Modification marin {member.first_name} {member.last_name}")
@@ -363,3 +393,159 @@ async def member_calendar(
         "days_in_year": days_in_year, "today": today,
         "active_module": "crew",
     })
+
+
+# ─── COMPLIANCE DASHBOARD ────────────────────────────────────
+@router.get("/compliance", response_class=HTMLResponse)
+async def crew_compliance(
+    request: Request,
+    user: User = Depends(require_permission("crew", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Dashboard showing visa/passport expiry alerts and foreign crew compliance."""
+    result = await db.execute(
+        select(CrewMember).where(CrewMember.is_active == True)
+        .order_by(CrewMember.role, CrewMember.last_name)
+    )
+    members = result.scalars().all()
+
+    today = date.today()
+    alerts = []
+    foreign_crew = []
+
+    for m in members:
+        if m.is_foreign:
+            foreign_crew.append(m)
+        # Passport alerts
+        if m.passport_expiry:
+            days = (m.passport_expiry - today).days
+            if days < 0:
+                alerts.append({"member": m, "type": "passport", "severity": "expired", "days": days,
+                               "message": f"Passeport expiré depuis {abs(days)} jours"})
+            elif days < 30:
+                alerts.append({"member": m, "type": "passport", "severity": "warning", "days": days,
+                               "message": f"Passeport expire dans {days} jours"})
+        # Visa alerts
+        if m.visa_expiry:
+            days = (m.visa_expiry - today).days
+            if days < 0:
+                alerts.append({"member": m, "type": "visa", "severity": "expired", "days": days,
+                               "message": f"Visa expiré depuis {abs(days)} jours"})
+            elif days < 30:
+                alerts.append({"member": m, "type": "visa", "severity": "warning", "days": days,
+                               "message": f"Visa expire dans {days} jours"})
+        # Missing passport for foreign crew
+        if m.is_foreign and not m.passport_number:
+            alerts.append({"member": m, "type": "missing", "severity": "warning", "days": 0,
+                           "message": "N° passeport manquant"})
+
+    alerts.sort(key=lambda a: a["days"])
+
+    stats = {
+        "total_foreign": len(foreign_crew),
+        "expired": sum(1 for a in alerts if a["severity"] == "expired"),
+        "warnings": sum(1 for a in alerts if a["severity"] == "warning"),
+        "compliant": len([m for m in foreign_crew if m.compliance_status == "ok"]),
+    }
+
+    return templates.TemplateResponse("crew/compliance.html", {
+        "request": request, "user": user,
+        "alerts": alerts, "foreign_crew": foreign_crew,
+        "stats": stats, "today": today,
+        "active_module": "crew",
+    })
+
+
+# ─── BORDER POLICE CREW LIST (PDF) ───────────────────────────
+@router.get("/border-police/{vessel_id}", response_class=HTMLResponse)
+async def border_police_export(
+    vessel_id: int, request: Request,
+    user: User = Depends(require_permission("crew", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate crew manifest PDF for border police."""
+    from fastapi.responses import Response
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+
+    vessel_result = await db.execute(select(Vessel).where(Vessel.id == vessel_id))
+    vessel = vessel_result.scalar_one_or_none()
+    if not vessel:
+        raise HTTPException(404)
+
+    today = date.today()
+    result = await db.execute(
+        select(CrewAssignment).options(selectinload(CrewAssignment.member))
+        .where(
+            CrewAssignment.vessel_id == vessel_id,
+            CrewAssignment.embark_date <= today,
+            (CrewAssignment.disembark_date == None) | (CrewAssignment.disembark_date >= today),
+        )
+    )
+    assignments = result.scalars().all()
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=20*mm, bottomMargin=15*mm)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontName="Helvetica-Bold",
+                                  fontSize=16, alignment=1, spaceAfter=6)
+    sub_style = ParagraphStyle("Sub", parent=styles["Normal"], fontName="Helvetica",
+                                fontSize=10, alignment=1, spaceAfter=12, textColor=colors.grey)
+
+    elements = [
+        Paragraph("CREW LIST / LISTE D'ÉQUIPAGE", title_style),
+        Paragraph(f"Vessel: {vessel.name} ({vessel.code}) — Date: {today.strftime('%d/%m/%Y')}", sub_style),
+        Spacer(1, 6*mm),
+    ]
+
+    # Table headers
+    header = ["#", "Nom / Name", "Prénom / First Name", "Rôle / Role", "Nationalité",
+              "N° Passeport", "Exp. Passeport", "Visa", "Exp. Visa", "Embarquement"]
+    data = [header]
+    for i, a in enumerate(assignments, 1):
+        m = a.member
+        data.append([
+            str(i), m.last_name, m.first_name, m.role_label,
+            m.nationality or "—",
+            m.passport_number or "—",
+            m.passport_expiry.strftime("%d/%m/%Y") if m.passport_expiry else "—",
+            (m.visa_type or "—").upper(),
+            m.visa_expiry.strftime("%d/%m/%Y") if m.visa_expiry else "—",
+            a.embark_date.strftime("%d/%m/%Y"),
+        ])
+
+    col_widths = [20, 80, 80, 70, 60, 70, 60, 50, 60, 60]
+    table = Table(data, colWidths=[w*mm/3 for w in col_widths])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#095561")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 7),
+        ("FONTSIZE", (0, 1), (-1, -1), 7),
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafb")]),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    elements.append(table)
+
+    # Footer with count
+    elements.append(Spacer(1, 8*mm))
+    elements.append(Paragraph(f"Total: {len(assignments)} crew members on board", sub_style))
+    elements.append(Paragraph(f"Foreign nationals: {sum(1 for a in assignments if a.member.is_foreign)}", sub_style))
+
+    doc.build(elements)
+    buf.seek(0)
+    filename = f"CrewList_{vessel.code}_{today.strftime('%Y%m%d')}.pdf"
+
+    await log_activity(db, user=user, action="export", module="crew",
+                       entity_type="border_police", entity_id=vessel_id,
+                       entity_label=f"Export liste équipage {vessel.name}")
+
+    return Response(content=buf.read(), media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename={filename}"})

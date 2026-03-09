@@ -185,12 +185,18 @@ async def cargo_detail(
     portal_messages = msg_result.scalars().all()
     unread_client_msgs = sum(1 for m in portal_messages if m.sender_type == "client" and not m.is_read)
 
+    # IMDG validation warnings
+    imdg_warnings = []
+    for batch in pl.batches:
+        imdg_warnings.extend(validate_imdg(batch))
+
     return templates.TemplateResponse("cargo/detail.html", {
         "request": request, "user": user,
         "pl": pl, "imo_classes": IMO_CLASSES,
         "active_module": "cargo",
         "portal_messages": portal_messages,
         "unread_client_msgs": unread_client_msgs,
+        "imdg_warnings": imdg_warnings,
     })
 
 
@@ -858,6 +864,7 @@ def apply_batch_fields(batch, form_data):
     batch.cases_quantity = pi(form_data.get('cases_quantity'))
     batch.units_per_case = pi(form_data.get('units_per_case'))
     batch.imo_product_class = form_data.get('imo_product_class', batch.imo_product_class)
+    batch.un_number = form_data.get('un_number', batch.un_number)
     batch.pallet_quantity = pi(form_data.get('pallet_quantity'))
     batch.length_cm = pf(form_data.get('length_cm'))
     batch.width_cm = pf(form_data.get('width_cm'))
@@ -865,6 +872,25 @@ def apply_batch_fields(batch, form_data):
     batch.weight_kg = pf(form_data.get('weight_kg'))
     batch.cargo_value_usd = pf(form_data.get('cargo_value_usd'))
     batch.compute_dimensions()
+
+
+# IMDG validation — returns list of warnings for dangerous goods
+IMDG_REQUIRED_FIELDS = {
+    "un_number": "UN Number",
+    "type_of_goods": "Description des marchandises",
+    "weight_kg": "Poids",
+}
+
+
+def validate_imdg(batch) -> list[str]:
+    """Validate IMDG requirements for dangerous goods batches."""
+    warnings = []
+    if batch.imo_product_class and batch.imo_product_class != "Non-Dangerous Goods":
+        for field, label in IMDG_REQUIRED_FIELDS.items():
+            val = getattr(batch, field, None)
+            if val is None or (isinstance(val, str) and not val.strip()):
+                warnings.append(f"Batch #{batch.batch_number}: {label} requis pour marchandises dangereuses ({batch.imo_product_class})")
+    return warnings
 
 
 # === EXPLOITATION EDIT BATCHES (with audit) ===
@@ -1197,8 +1223,11 @@ def _lang(request):
     lang = request.query_params.get('lang') or request.cookies.get('towt_lang') or 'fr'
     return lang if lang in VALID_LANGS else 'fr'
 
-async def _get_pl(token, db):
+async def _get_pl(token, db, request=None):
     from datetime import datetime, timezone as tz
+    from app.utils.portal_security import check_token_rate_limit, record_token_attempt, log_portal_access
+    if request:
+        check_token_rate_limit(request)
     result = await db.execute(
         select(PackingList).options(
             selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.vessel),
@@ -1209,10 +1238,15 @@ async def _get_pl(token, db):
     )
     pl = result.scalar_one_or_none()
     if not pl:
+        if request:
+            record_token_attempt(request)
         raise HTTPException(404, detail="Lien invalide ou expiré")
     # Check token expiration
     if pl.token_expires_at and pl.token_expires_at < datetime.now(tz.utc):
         raise HTTPException(404, detail="Lien invalide ou expiré")
+    # Audit trail
+    if request:
+        await log_portal_access(db, request, "cargo", token, packing_list_id=pl.id)
     return pl
 
 async def _unread_count(pl_id, db):
@@ -1229,15 +1263,27 @@ async def _unread_count(pl_id, db):
 # ── Default: redirect to Voyage ───────────────────────────────
 @ext_router.get("/{token}", response_class=HTMLResponse)
 async def client_portal_default(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     return RedirectResponse(url=f"/p/{token}/voyage?lang={lang}", status_code=303)
+
+
+# ── Privacy policy ────────────────────────────────────────────
+@ext_router.get("/{token}/privacy", response_class=HTMLResponse)
+async def client_portal_privacy(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db, request)
+    lang = _lang(request)
+    return templates.TemplateResponse("cargo/portal_privacy.html", {
+        "request": request, "pl": pl,
+        "lang": lang, "active_page": "privacy", "page_suffix": "/privacy",
+        "unread_messages": await _unread_count(pl.id, db),
+    })
 
 
 # ── Page 1: Packing List ─────────────────────────────────────
 @ext_router.get("/{token}/packing", response_class=HTMLResponse)
 async def client_portal_packing(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     return templates.TemplateResponse("cargo/portal_packing.html", {
         "request": request, "pl": pl, "imo_classes": IMO_CLASSES,
@@ -1249,7 +1295,7 @@ async def client_portal_packing(token: str, request: Request, db: AsyncSession =
 # ── Page 2: Vessel ────────────────────────────────────────────
 @ext_router.get("/{token}/vessel", response_class=HTMLResponse)
 async def client_portal_vessel(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     vessel = pl.order.leg.vessel if pl.order.leg else None
     return templates.TemplateResponse("cargo/portal_vessel.html", {
@@ -1262,7 +1308,7 @@ async def client_portal_vessel(token: str, request: Request, db: AsyncSession = 
 # ── Page 3: Voyage ────────────────────────────────────────────
 @ext_router.get("/{token}/voyage", response_class=HTMLResponse)
 async def client_portal_voyage(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     leg = pl.order.leg
     itinerary = []
@@ -1300,7 +1346,7 @@ async def client_portal_voyage(token: str, request: Request, db: AsyncSession = 
 # ── Page 4: Documents ─────────────────────────────────────────
 @ext_router.get("/{token}/documents", response_class=HTMLResponse)
 async def client_portal_docs(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     return templates.TemplateResponse("cargo/portal_docs.html", {
         "request": request, "pl": pl,
@@ -1312,7 +1358,7 @@ async def client_portal_docs(token: str, request: Request, db: AsyncSession = De
 # ── Page 5: Messages ──────────────────────────────────────────
 @ext_router.get("/{token}/messages", response_class=HTMLResponse)
 async def client_portal_messages(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     # Load messages
     msg_result = await db.execute(
@@ -1335,7 +1381,7 @@ async def client_portal_messages(token: str, request: Request, db: AsyncSession 
 
 @ext_router.post("/{token}/messages/send", response_class=HTMLResponse)
 async def client_portal_send_message(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     form = await request.form()
     message_text = form.get("message", "").strip()
@@ -1446,7 +1492,7 @@ async def client_download_template(token: str, request: Request, db: AsyncSessio
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -1526,7 +1572,7 @@ async def client_import_excel(token: str, request: Request, db: AsyncSession = D
     """Import a filled Excel template into the packing list (external portal)."""
     import openpyxl
 
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     if pl.is_locked:
         raise HTTPException(403, detail="Packing list verrouillée")
 

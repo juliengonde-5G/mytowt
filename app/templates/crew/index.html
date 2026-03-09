@@ -3,11 +3,24 @@
 {% block page_title %}Gestion d'équipage{% endblock %}
 
 {% block topbar_actions %}
+<a href="/crew/compliance" class="btn btn-secondary btn-sm" title="Conformité immigration"><i data-lucide="shield-check"></i> Conformité</a>
+{% for v in vessels %}
+<a href="/crew/border-police/{{ v.id }}" class="btn btn-secondary btn-sm" target="_blank" title="Liste équipage PDF — {{ v.name }}"><i data-lucide="file-text"></i> {{ v.code }}</a>
+{% endfor %}
 <button class="btn btn-primary btn-sm" onclick="loadModal('/crew/members/create')"><i data-lucide="plus"></i> Nouveau marin</button>
 {% endblock %}
 
 {% block content %}
 <div class="crew-page">
+    {% if compliance_alerts %}
+    <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span>⚠️</span>
+        <span><strong>{{ compliance_alerts|length }} alerte{{ 's' if compliance_alerts|length > 1 }}</strong> — Documents expirant sous 30 jours :
+            {% for m in compliance_alerts %}{{ m.full_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </span>
+        <a href="/crew/compliance" style="margin-left:auto;font-weight:600;color:#D97706;">Voir détails →</a>
+    </div>
+    {% endif %}
     <!-- Stats -->
     <div class="stats-grid" style="margin-bottom:20px;">
         <div class="stat-card"><div class="stat-card-icon blue"><i data-lucide="users"></i></div><div class="stat-card-body"><span class="stat-card-value">{{ stats.total }}</span><span class="stat-card-label">Équipage total</span></div></div>

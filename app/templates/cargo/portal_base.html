@@ -84,10 +84,23 @@ body{font-family:'Poppins',sans-serif;background:#f4f7f8;color:#333;min-height:1
       <a href="/p/{{ pl.token }}/documents?lang={{ lang }}" class="{% if active_page=='docs' %}active{% endif %}"><span class="ni">📄</span>{{ t('cp_documents', lang) }}</a>
       <a href="/p/{{ pl.token }}/messages?lang={{ lang }}" class="{% if active_page=='messages' %}active{% endif %}"><span class="ni">💬</span>{{ t('cp_messages', lang) }}{% if unread_messages %}<span class="nbdg">{{ unread_messages }}</span>{% endif %}</a>
     </nav>
-    <div class="psf">TOWT — Les Docks, 52 quai Frissard<br>76600 Le Havre</div>
+    <div class="psf">
+      <a href="/p/{{ pl.token }}/privacy?lang={{ lang }}" style="color:#888;font-size:10px;text-decoration:underline;">
+        {% if lang == 'fr' %}Politique de confidentialité{% elif lang == 'es' %}Política de privacidad{% elif lang == 'pt-br' %}Política de privacidade{% else %}Privacy Policy{% endif %}
+      </a><br>
+      TOWT — Les Docks, 52 quai Frissard<br>76600 Le Havre
+    </div>
   </div>
   <div class="pmain">{% block portal_content %}{% endblock %}</div>
 </div>
-<script>function tSB(){document.getElementById('psb').classList.toggle('open');document.getElementById('sov').classList.toggle('show');}</script>
+<!-- Cookie consent -->
+<div id="ckb" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:14px 24px;z-index:200;font-size:12px;box-shadow:0 -2px 10px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+  <span>{% if lang == 'fr' %}Ce site utilise uniquement des cookies strictement nécessaires. <a href="/p/{{ pl.token }}/privacy?lang={{ lang }}" style="color:#87BD2B;">En savoir plus</a>{% elif lang == 'es' %}Este sitio solo utiliza cookies estrictamente necesarias.{% else %}This site uses only strictly necessary cookies. <a href="/p/{{ pl.token }}/privacy?lang={{ lang }}" style="color:#87BD2B;">Learn more</a>{% endif %}</span>
+  <button onclick="document.getElementById('ckb').style.display='none';try{localStorage.setItem('towt_cookies_ok','1')}catch(e){}" style="background:#87BD2B;color:#fff;border:none;padding:6px 18px;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;">OK</button>
+</div>
+<script>
+function tSB(){document.getElementById('psb').classList.toggle('open');document.getElementById('sov').classList.toggle('show');}
+(function(){try{if(!localStorage.getItem('towt_cookies_ok')){document.getElementById('ckb').style.display='flex';}}catch(e){}})();
+</script>
 </body>
 </html>

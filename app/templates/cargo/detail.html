@@ -23,6 +23,14 @@
 
 {% block content %}
 <div class="cargo-detail" id="cargo-detail">
+    {% if imdg_warnings %}
+    <div style="background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.2);border-radius:8px;padding:12px 16px;margin-bottom:16px;">
+        <div style="font-weight:600;font-size:12px;color:#DC2626;margin-bottom:6px;">⚠️ IMDG — Marchandises dangereuses : champs requis manquants</div>
+        {% for w in imdg_warnings %}
+        <div style="font-size:11px;color:#991B1B;padding:2px 0;">• {{ w }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
     <div class="summary-bar">
         <div class="summary-item"><span class="summary-label">Commande</span><span class="summary-value" style="font-family:monospace;">{{ pl.order.reference }}</span></div>
         <div class="summary-item"><span class="summary-label">Client</span><span class="summary-value">{{ pl.order.client_name }}</span></div>

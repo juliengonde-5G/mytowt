@@ -7,15 +7,22 @@ A booking holds 1 or 2 passengers (up to cabin capacity).
 Documents are per-passenger.
 """
 import secrets
+from datetime import timedelta, timezone, datetime as _dt
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, Date, Numeric, func
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
 
+PASSENGER_TOKEN_VALIDITY_DAYS = 180
+
 
 def _gen_token():
     return secrets.token_urlsafe(24)
+
+
+def _default_token_expiry():
+    return _dt.now(timezone.utc) + timedelta(days=PASSENGER_TOKEN_VALIDITY_DAYS)
 
 
 # ─── CABIN CONFIG PER VESSEL ──────────────────────────────
@@ -131,6 +138,7 @@ class PassengerBooking(Base):
 
     # External access
     token = Column(String(40), unique=True, nullable=False, default=_gen_token, index=True)
+    token_expires_at = Column(DateTime(timezone=True), nullable=True, default=_default_token_expiry)
 
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -261,6 +269,10 @@ class PreBoardingForm(Base):
     # Diet
     dietary_requirements = Column(Text, nullable=True)
     intolerances = Column(Text, nullable=True)
+    # RGPD consent
+    gdpr_consent = Column(Boolean, default=False)
+    gdpr_consent_at = Column(DateTime(timezone=True), nullable=True)
+    gdpr_consent_version = Column(String(20), nullable=True)  # e.g. "1.0"
     # Signature
     signed = Column(Boolean, default=False)
     signed_at = Column(DateTime(timezone=True), nullable=True)

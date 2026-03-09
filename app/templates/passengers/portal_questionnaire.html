@@ -46,6 +46,14 @@
         <div style="margin-top:12px;padding:10px;background:rgba(9,85,97,0.03);border-radius:6px;font-size:11px;color:#555;">
             {% if lang == 'en' %}I acknowledge having received the safety instructions, commit to respecting them and will inform the crew of any changes regarding my health or special needs.{% else %}Je reconnais avoir reçu les consignes de sécurité, m'engage à les respecter et informe l'équipage de toute modification concernant ma santé ou mes besoins particuliers.{% endif %}
         </div>
+        <div style="margin-top:12px;padding:12px;background:rgba(37,99,235,0.04);border:1px solid rgba(37,99,235,0.15);border-radius:8px;">
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#333;text-transform:none;font-weight:400;">
+                <input type="checkbox" name="gdpr_consent" value="1" required style="margin-top:2px;width:16px;height:16px;flex-shrink:0;">
+                <span>
+                    {% if lang == 'en' %}I consent to the processing of my personal data (identity, health, dietary requirements) by TOWT for the purpose of organizing my crossing, in accordance with the <a href="/passenger/{{ token }}/privacy?lang={{ lang }}" target="_blank" style="color:#2563EB;">privacy policy</a>. I may withdraw my consent at any time by contacting privacy@towt.eu.{% else %}J'accepte le traitement de mes données personnelles (identité, santé, régime alimentaire) par TOWT pour l'organisation de ma traversée, conformément à la <a href="/passenger/{{ token }}/privacy?lang={{ lang }}" target="_blank" style="color:#2563EB;">politique de confidentialité</a>. Je peux retirer mon consentement à tout moment en contactant privacy@towt.eu.{% endif %}
+                </span>
+            </label>
+        </div>
         <button type="submit" class="btn btn-primary" style="margin-top:12px;">{% if lang == 'en' %}Sign & Submit{% else %}Signer & Envoyer{% endif %}</button>
     </form>
     {% endif %}
