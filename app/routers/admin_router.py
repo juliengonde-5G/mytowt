@@ -46,7 +46,6 @@ USER_ROLES = [
     {"value": "technique", "label": "Technique"},
     {"value": "data_analyst", "label": "Data Analyst"},
     {"value": "marins", "label": "Marins"},
-    {"value": "gestionnaire_passagers", "label": "Gestionnaire Passagers"},
     {"value": "commercial", "label": "Commercial"},
     {"value": "manager_maritime", "label": "Manager Maritime"},
 ]
