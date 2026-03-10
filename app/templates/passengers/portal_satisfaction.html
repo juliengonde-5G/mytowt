@@ -39,7 +39,8 @@
             {% elif cat_key == 'global' %}{% if lang == 'en' %}Overall{% else %}Évaluation globale{% endif %}{% endif %}
         </h3>
         {% for field, label_fr, label_en in cat_questions %}
-        {% set val = resp[field] if resp[field] is not none else 0 %}
+        {% set val = resp|attr(field) %}
+        {% if val is none %}{% set val = 0 %}{% endif %}
         <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid #eee;">
             <span>{{ label_en if lang == 'en' else label_fr }}</span>
             <span style="color:#f59e0b;">{% if val %}{{ '★' * val }}{{ '☆' * (5 - val) }}{% else %}—{% endif %}</span>

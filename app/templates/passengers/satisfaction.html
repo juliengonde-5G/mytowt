@@ -22,7 +22,8 @@
                 {% if cat_key == 'reservation' %}Réservation{% elif cat_key == 'onboard' %}Vie à bord{% elif cat_key == 'ecology' %}Écologie{% elif cat_key == 'global' %}Évaluation globale{% endif %}
             </h4>
             {% for field, label_fr, label_en in cat_questions %}
-            {% set val = resp[field] if resp[field] is not none else '—' %}
+            {% set val = resp|attr(field) %}
+            {% if val is none %}{% set val = '—' %}{% endif %}
             <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid #eee;">
                 <span style="color:#666;">{{ label_fr }}</span>
                 <strong style="color:{% if val is number and val >= 4 %}#16a34a{% elif val is number and val <= 2 %}#dc2626{% else %}var(--towt-blue){% endif %};">

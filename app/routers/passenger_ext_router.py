@@ -13,7 +13,6 @@ from app.database import get_db
 from app.models.leg import Leg
 from app.models.passenger import (
     PassengerBooking, Passenger, PassengerDocument, PreBoardingForm,
-    SatisfactionResponse,
     DOCUMENT_TYPES, DOCUMENT_STATUSES, CABIN_TYPE_LABELS,
 )
 from app.models.portal_message import PortalMessage

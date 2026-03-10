@@ -12,7 +12,7 @@ from app.models.packing_list import PackingList, PackingListBatch, PackingListAu
 from app.models.onboard import SofEvent, OnboardNotification, CargoDocument
 from app.models.passenger import (
     Passenger, PassengerBooking, PassengerPayment, PassengerDocument,
-    CabinPriceGrid, PreBoardingForm, PassengerAuditLog,
+    CabinPriceGrid, PreBoardingForm, PassengerAuditLog, SatisfactionResponse,
 )
 from app.models.activity_log import ActivityLog
 from app.models.mrv import MrvEvent, MrvParameter
@@ -34,7 +34,7 @@ __all__ = [
     "PackingList", "PackingListBatch", "PackingListAudit",
     "SofEvent", "OnboardNotification", "CargoDocument",
     "Passenger", "PassengerBooking", "PassengerPayment", "PassengerDocument",
-    "CabinPriceGrid", "PreBoardingForm", "PassengerAuditLog",
+    "CabinPriceGrid", "PreBoardingForm", "PassengerAuditLog", "SatisfactionResponse",
     "ActivityLog",
     "MrvEvent", "MrvParameter",
     "Co2Variable",
