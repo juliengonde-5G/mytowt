@@ -5,6 +5,7 @@
             <button class="modal-close" onclick="closeModal()"><i data-lucide="x"></i></button>
         </div>
         <form method="POST" action="{% if vessel %}/admin/vessels/{{ vessel.id }}/edit{% else %}/admin/vessels/create{% endif %}">
+            {{ csrf_input(request) }}
             <div class="modal-body">
                 {% if error %}
                 <div class="alert alert-error">{{ error }}</div>
@@ -35,11 +36,6 @@
                 <div class="form-group">
                     <label class="form-label">Port en lourd (DWT)</label>
                     <input type="text" name="dwt" class="form-input" value="{{ vessel.dwt or '' if vessel else '' }}" placeholder="ex: 1200">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Capacité (palettes)</label>
-                    <input type="number" name="capacity_palettes" class="form-input" value="{{ vessel.capacity_palettes or 0 if vessel else 0 }}">
                 </div>
 
                 <div class="form-group">

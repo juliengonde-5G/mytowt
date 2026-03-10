@@ -108,6 +108,7 @@
     <div class="settings-section" id="sec-economics" style="display:none;">
         <h3>Données économiques</h3>
         <form method="POST" action="/admin/opex/update" style="max-width:400px;">
+            {{ csrf_input(request) }}
             <div class="form-group">
                 <label class="form-label">OPEX journalier en mer (€/jour)</label>
                 <input type="text" name="opex_daily_rate" class="form-input" style="text-align:right;"
@@ -123,6 +124,7 @@
         <h3>Paramètres KPI & Émissions</h3>
         <p style="font-size:12px;color:#666;margin-bottom:16px;">Facteurs d'émission utilisés pour le calcul des KPI environnementaux (CO₂, NOx, SOx par tonne par mille nautique).</p>
         <form method="POST" action="/admin/emissions/update" style="max-width:600px;">
+            {{ csrf_input(request) }}
             {% set em_params_dict = {} %}
             {% for ep in emission_params %}{% if em_params_dict.update({ep.parameter_name: ep.parameter_value}) %}{% endif %}{% endfor %}
 
@@ -185,6 +187,7 @@
         </p>
 
         <form method="POST" action="/admin/co2/update" style="max-width:600px;">
+            {{ csrf_input(request) }}
             {% for var_name, defaults in co2_defaults.items() %}
             {% set current_val = None %}
             {% for cv in co2_variables %}{% if cv.variable_name == var_name %}{% set current_val = cv %}{% endif %}{% endfor %}
@@ -228,6 +231,7 @@
         <h3>⛽ Paramètres MRV Fuel</h3>
         <p style="font-size:12px;color:#666;margin-bottom:16px;">Paramètres pour le module MRV (Monitoring, Reporting, Verification) conformité EU MRV / DNV Veracity.</p>
         <form method="POST" action="/admin/mrv/update" style="max-width:600px;">
+            {{ csrf_input(request) }}
             {% set mrv_dict = {} %}
             {% for mp in mrv_params %}{% if mrv_dict.update({mp.parameter_name: mp.parameter_value}) %}{% endif %}{% endfor %}
 
@@ -250,6 +254,7 @@
         <h3>Verrouillage des escales</h3>
         <p style="font-size:13px;color:#666;margin-bottom:16px;">Verrouiller les escales terminées empêche toute modification. Escales verrouillées : <strong>{{ locked_count }}</strong></p>
         <form method="POST" action="/admin/legs/lock" style="display:inline;">
+            {{ csrf_input(request) }}
             <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="lock"></i> Verrouiller les escales terminées (ATD renseigné)</button>
         </form>
     </div>
@@ -279,7 +284,19 @@
                     <span>Fichier CSV séparateur <code>;</code> avec colonnes : Leg Code, Navire, Départ LOCODE, Port Départ, Arrivée LOCODE, Port Arrivée, ETD, ETA, ATD (réel), ATA (réel), Distance Ortho (NM), Distance Réelle (NM), Vitesse (nds), Durée Est. (h), Statut. Les legs existants seront mis à jour, les nouveaux seront créés. Les ports manquants seront auto-créés.</span>
                 </div>
                 <form method="POST" action="/admin/import/planning" enctype="multipart/form-data" style="display:flex;align-items:center;gap:8px;">
+                    {{ csrf_input(request) }}
                     <input type="file" name="file" accept=".csv" required class="form-input" style="font-size:12px;padding:6px;max-width:280px;">
+                    <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="upload"></i> Importer</button>
+                </form>
+            </div>
+            <div class="db-card">
+                <div class="db-card-info">
+                    <strong>👥 Importer des utilisateurs (Excel)</strong>
+                    <span>Fichier Excel (.xlsx) avec colonnes : username, full_name, email, role, password, language, is_active. <a href="/admin/users/import/template" hx-boost="false">Télécharger le template</a>. Les utilisateurs existants (même username) seront ignorés.</span>
+                </div>
+                <form method="POST" action="/admin/users/import" enctype="multipart/form-data" style="display:flex;align-items:center;gap:8px;">
+                    {{ csrf_input(request) }}
+                    <input type="file" name="file" accept=".xlsx,.xls" required class="form-input" style="font-size:12px;padding:6px;max-width:280px;">
                     <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="upload"></i> Importer</button>
                 </form>
             </div>
@@ -350,6 +367,7 @@
                     <span>Supprime les données des modules sélectionnés. Les données de configuration et les utilisateurs ne sont pas concernés.</span>
                 </div>
                 <form method="POST" action="/admin/database/purge-selective" id="form-purge-selective">
+                    {{ csrf_input(request) }}
                     <div class="db-checkboxes">
                         <label><input type="checkbox" name="tables" value="notifications"> 🔔 Notifications</label>
                         <label><input type="checkbox" name="tables" value="messages"> 💬 Messages portail</label>
@@ -384,6 +402,7 @@
                     <span>⚠️ Supprime <b>la totalité</b> des contenus de la base de données. Seuls les comptes utilisateurs et la configuration système sont conservés. Cette action est <b>irréversible</b>.</span>
                 </div>
                 <form method="POST" action="/admin/database/reset" id="form-reset">
+                    {{ csrf_input(request) }}
                     <div class="db-confirm-row">
                         <label style="font-size:12px;color:#dc2626;font-weight:600;">Tapez REINITIALISER pour confirmer :</label>
                         <input type="text" name="confirm_text" class="form-input" style="max-width:250px;font-size:13px;" placeholder="REINITIALISER" autocomplete="off">
@@ -415,6 +434,7 @@
                     <span>Supprime les notifications marquées comme archivées (plus de 30 jours).</span>
                 </div>
                 <form method="POST" action="/admin/database/cleanup-notifications">
+                    {{ csrf_input(request) }}
                     <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
                 </form>
             </div>
@@ -425,6 +445,7 @@
                     <span>Supprime les entrées d'audit (packing list, passager) de plus de 12 mois.</span>
                 </div>
                 <form method="POST" action="/admin/database/cleanup-audit">
+                    {{ csrf_input(request) }}
                     <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
                 </form>
             </div>
@@ -435,6 +456,7 @@
                     <span>Supprime les entrées du journal d'activité de plus de 6 mois.</span>
                 </div>
                 <form method="POST" action="/admin/database/cleanup-activity-logs">
+                    {{ csrf_input(request) }}
                     <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
                 </form>
             </div>
@@ -445,6 +467,7 @@
                     <span>Supprime les notifications On Board lues de plus de 30 jours.</span>
                 </div>
                 <form method="POST" action="/admin/database/cleanup-onboard-notifications">
+                    {{ csrf_input(request) }}
                     <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
                 </form>
             </div>
@@ -455,6 +478,7 @@
                     <span>Supprime les logs d'accès au portail client de plus de 6 mois.</span>
                 </div>
                 <form method="POST" action="/admin/database/cleanup-access-logs">
+                    {{ csrf_input(request) }}
                     <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
                 </form>
             </div>
@@ -480,6 +504,7 @@
                     <span>Anonymise toutes les données personnelles d'une réservation passager (nom, email, téléphone, documents, formulaires). Les données financières et statistiques sont conservées de manière anonyme.</span>
                 </div>
                 <form method="POST" id="form-rgpd-erase" style="display:flex;gap:8px;align-items:center;">
+                    {{ csrf_input(request) }}
                     <input type="number" name="booking_id" placeholder="N° réservation" required
                            style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;width:140px;font-family:'Poppins',system-ui,sans-serif;font-size:12px;">
                     <button type="submit" class="btn btn-sm" style="background:#e53935;color:white;border:none;"
@@ -579,6 +604,7 @@
         <h3>🌐 Langue de l'interface</h3>
         <p style="font-size:13px;color:#666;margin-bottom:16px;">Choisissez votre langue préférée. Le changement s'appliquera à toute la navigation.</p>
         <form method="POST" action="/admin/settings/language" style="max-width:400px;">
+            {{ csrf_input(request) }}
             <div style="display:flex;flex-direction:column;gap:12px;">
                 {% for code, label in SUPPORTED_LANGUAGES.items() %}
                 <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #eee;border-radius:8px;cursor:pointer;{% if user.language == code or (not user.language and code == 'fr') %}background:#f0f7f8;border-color:var(--towt-blue);{% endif %}">
@@ -603,6 +629,7 @@
             {% for pg in pricing_grid %}
             <tr>
                 <form method="POST" action="/admin/settings/pricing/{{ pg.id }}/edit">
+                {{ csrf_input(request) }}
                 <td>{{ route_ports.get(pg.origin_locode, pg.origin_locode) }} <span style="font-size:10px;color:#888;">({{ pg.origin_locode }})</span></td>
                 <td>{{ route_ports.get(pg.destination_locode, pg.destination_locode) }} <span style="font-size:10px;color:#888;">({{ pg.destination_locode }})</span></td>
                 <td>{{ cabin_type_labels.get(pg.cabin_type, pg.cabin_type) }}</td>
@@ -627,6 +654,7 @@
         <details style="margin-top:12px;">
             <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--towt-blue);">＋ Ajouter un tarif</summary>
             <form method="POST" action="/admin/settings/pricing/add" style="margin-top:10px;">
+                {{ csrf_input(request) }}
                 <div style="display:grid;grid-template-columns:1fr 1fr 100px 80px 1fr;gap:8px;align-items:end;">
                     <div>
                         <label style="font-size:10px;font-weight:600;color:#888;">Route (Origine → Destination)</label>
@@ -676,6 +704,7 @@
             {% for ic in insurance_contracts %}
             <tr>
                 <form method="POST" action="/admin/settings/insurance/{{ ic.id }}/edit">
+                {{ csrf_input(request) }}
                 <td><strong>{{ ic.guarantee_type }}</strong></td>
                 <td><input type="text" name="insurer_name" value="{{ ic.insurer_name }}" style="width:120px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;"></td>
                 <td><input type="text" name="insurer_email" value="{{ ic.insurer_email or '' }}" style="width:120px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;"></td>
@@ -698,6 +727,7 @@
         <details style="margin-top:12px;">
             <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--towt-blue);">＋ Ajouter un contrat</summary>
             <form method="POST" action="/admin/settings/insurance/add" style="margin-top:10px;">
+                {{ csrf_input(request) }}
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
                     <div><label style="font-size:10px;font-weight:600;color:#888;">Type de garantie</label><select name="guarantee_type" required style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;"><option value="pi">P&I</option><option value="hull_div">Hull — DIV</option><option value="war_risk">War Risk</option></select></div>
                     <div><label style="font-size:10px;font-weight:600;color:#888;">Nom assureur</label><input type="text" name="insurer_name" required style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;"></div>
@@ -722,6 +752,7 @@
         </p>
 
         <form method="POST" action="/admin/settings/pipedrive/update" style="max-width:500px;">
+            {{ csrf_input(request) }}
             <div class="form-group" style="margin-bottom:16px;">
                 <label class="form-label">Token API Pipedrive</label>
                 <div style="display:flex;gap:8px;">

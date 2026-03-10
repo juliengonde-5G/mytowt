@@ -4,6 +4,16 @@
 {% block page_title %}Gestion des utilisateurs{% endblock %}
 
 {% block topbar_actions %}
+<a href="/admin/users/import/template" class="btn btn-secondary btn-sm" hx-boost="false" title="Télécharger le template Excel">
+    <i data-lucide="download"></i> Template Excel
+</a>
+<button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-file').click()" title="Importer depuis Excel">
+    <i data-lucide="upload"></i> Importer Excel
+</button>
+<form id="import-form" method="POST" action="/admin/users/import" enctype="multipart/form-data" style="display:none;">
+    {{ csrf_input(request) }}
+    <input type="file" id="import-file" name="file" accept=".xlsx,.xls" onchange="document.getElementById('import-form').submit()">
+</form>
 <button class="btn btn-primary" onclick="openModal()">
     <i data-lucide="user-plus"></i>
     Nouvel utilisateur
@@ -12,6 +22,23 @@
 
 {% block content %}
 <div class="users-page">
+    {% if request.query_params.get('import_success') %}
+    <div style="background:#dcfce7;border:1px solid #86efac;color:#166534;padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:13px;">
+        ✓ {{ request.query_params.get('import_success') }}
+        {% if request.query_params.get('import_detail') %}
+        <div style="margin-top:6px;font-size:12px;color:#15803d;">{{ request.query_params.get('import_detail') }}</div>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% if request.query_params.get('import_error') %}
+    <div style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:13px;">
+        ✗ {{ request.query_params.get('import_error') }}
+        {% if request.query_params.get('import_detail') %}
+        <div style="margin-top:6px;font-size:12px;color:#b91c1c;">{{ request.query_params.get('import_detail') }}</div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <!-- Stats -->
     <div class="stats-grid" style="margin-bottom: 24px;">
         <div class="stat-card">

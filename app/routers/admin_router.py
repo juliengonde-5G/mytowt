@@ -6,7 +6,9 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, Response
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.utils.activity import log_activity, get_client_ip
@@ -312,6 +314,226 @@ async def user_delete(
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/users"})
     return RedirectResponse(url="/admin/users", status_code=303)
+
+
+# ─── USER IMPORT (EXCEL) ────────────────────────────────────
+VALID_ROLES = {r["value"] for r in USER_ROLES}
+
+@router.get("/users/import/template")
+async def users_import_template(user: User = Depends(require_admin)):
+    """Download an Excel template for user import."""
+    wb = openpyxl.Workbook()
+
+    # ── Sheet 1: Template ──
+    ws = wb.active
+    ws.title = "Utilisateurs"
+    headers = ["username", "full_name", "email", "role", "password", "language", "is_active"]
+    header_font = Font(name="Poppins", bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="095561", end_color="095561", fill_type="solid")
+    thin_border = Border(
+        left=Side(style="thin", color="CCCCCC"),
+        right=Side(style="thin", color="CCCCCC"),
+        top=Side(style="thin", color="CCCCCC"),
+        bottom=Side(style="thin", color="CCCCCC"),
+    )
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = thin_border
+
+    # Example rows
+    examples = [
+        ("jdupont", "Jean Dupont", "jean.dupont@towt.eu", "operation", "MotDePasse123", "fr", "oui"),
+        ("mmartin", "Marie Martin", "marie.martin@towt.eu", "commercial", "MotDePasse456", "en", "oui"),
+    ]
+    example_font = Font(name="Poppins", color="888888", italic=True, size=10)
+    for r, row_data in enumerate(examples, 2):
+        for c, val in enumerate(row_data, 1):
+            cell = ws.cell(row=r, column=c, value=val)
+            cell.font = example_font
+            cell.border = thin_border
+
+    # Column widths
+    widths = [18, 25, 30, 22, 20, 12, 12]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+    # ── Sheet 2: Référence rôles ──
+    ws2 = wb.create_sheet("Référence rôles")
+    ws2.cell(row=1, column=1, value="Valeur (role)").font = Font(bold=True)
+    ws2.cell(row=1, column=2, value="Description").font = Font(bold=True)
+    for i, r in enumerate(USER_ROLES, 2):
+        ws2.cell(row=i, column=1, value=r["value"])
+        ws2.cell(row=i, column=2, value=r["label"])
+    ws2.column_dimensions["A"].width = 25
+    ws2.column_dimensions["B"].width = 30
+
+    # ── Sheet 3: Instructions ──
+    ws3 = wb.create_sheet("Instructions")
+    instructions = [
+        "Instructions d'import des utilisateurs",
+        "",
+        "Colonnes obligatoires : username, full_name, password",
+        "Colonnes optionnelles : email, role, language, is_active",
+        "",
+        "username : identifiant unique (3-50 car.), pas d'espaces",
+        "full_name : nom complet (max 100 car.)",
+        "email : si vide, sera généré comme username@towt.eu",
+        "role : voir onglet 'Référence rôles' (défaut: operation)",
+        "password : min 8 caractères",
+        "language : fr, en, es, pt-br, vi (défaut: fr)",
+        "is_active : oui/non ou true/false (défaut: oui)",
+        "",
+        "Les utilisateurs existants (même username) seront ignorés.",
+        "Les lignes avec erreurs seront signalées dans le rapport.",
+    ]
+    for i, line in enumerate(instructions, 1):
+        cell = ws3.cell(row=i, column=1, value=line)
+        if i == 1:
+            cell.font = Font(bold=True, size=13)
+        else:
+            cell.font = Font(size=11)
+    ws3.column_dimensions["A"].width = 60
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=import_utilisateurs_template.xlsx"},
+    )
+
+
+@router.post("/users/import", response_class=HTMLResponse)
+async def users_import_excel(
+    request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Import users from an Excel file."""
+    from app.auth import hash_password
+
+    raw = await file.read()
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+    except Exception:
+        msg = "Fichier Excel invalide. Utilisez le template fourni."
+        return RedirectResponse(url=f"/admin/users?import_error={msg.replace(' ', '+')}", status_code=303)
+
+    ws = wb.active
+    rows = list(ws.iter_rows(min_row=1, values_only=True))
+    if len(rows) < 2:
+        return RedirectResponse(url="/admin/users?import_error=Fichier+vide+ou+sans+données", status_code=303)
+
+    # Map header names to column indices
+    raw_headers = [str(h).strip().lower() if h else "" for h in rows[0]]
+    col_map = {}
+    for i, h in enumerate(raw_headers):
+        col_map[h] = i
+
+    required = {"username", "full_name", "password"}
+    missing = required - set(col_map.keys())
+    if missing:
+        msg = f"Colonnes manquantes : {', '.join(missing)}"
+        return RedirectResponse(url=f"/admin/users?import_error={msg.replace(' ', '+')}", status_code=303)
+
+    def cell_val(row, col_name, default=""):
+        idx = col_map.get(col_name)
+        if idx is None or idx >= len(row) or row[idx] is None:
+            return default
+        return str(row[idx]).strip()
+
+    # Preload existing usernames
+    result = await db.execute(select(User.username))
+    existing_usernames = {u.lower() for u in result.scalars().all()}
+
+    created = 0
+    skipped = 0
+    errors = []
+
+    for line_no, row in enumerate(rows[1:], 2):
+        # Skip empty rows
+        if not any(row):
+            continue
+
+        username = cell_val(row, "username")
+        full_name = cell_val(row, "full_name")
+        password = cell_val(row, "password")
+        email = cell_val(row, "email")
+        role = cell_val(row, "role", "operation").lower()
+        language = cell_val(row, "language", "fr").lower()
+        is_active_str = cell_val(row, "is_active", "oui").lower()
+
+        # Validate
+        if not username or len(username) < 3:
+            errors.append(f"Ligne {line_no}: username manquant ou trop court (<3 car.)")
+            continue
+        username = username[:50]
+
+        if not full_name:
+            errors.append(f"Ligne {line_no}: full_name manquant")
+            continue
+        full_name = full_name[:100]
+
+        if not password or len(password) < 8:
+            errors.append(f"Ligne {line_no}: password manquant ou trop court (<8 car.)")
+            continue
+        password = password[:128]
+
+        if username.lower() in existing_usernames:
+            skipped += 1
+            continue
+
+        if role not in VALID_ROLES:
+            errors.append(f"Ligne {line_no}: rôle '{role}' invalide")
+            continue
+
+        if language not in ("fr", "en", "es", "pt-br", "vi"):
+            language = "fr"
+
+        if not email:
+            email = f"{username}@towt.eu"
+        email = email[:255]
+
+        is_active = is_active_str not in ("non", "false", "0", "no", "inactif")
+
+        new_user = User(
+            username=username,
+            email=email,
+            hashed_password=hash_password(password),
+            full_name=full_name,
+            role=role,
+            language=language,
+            is_active=is_active,
+        )
+        db.add(new_user)
+        existing_usernames.add(username.lower())
+        created += 1
+
+    await db.flush()
+    await log_activity(db, user=user, action="import", module="admin",
+                       entity_type="users_excel", entity_id=None,
+                       entity_label=f"{file.filename}: {created} créés, {skipped} ignorés",
+                       ip_address=get_client_ip(request))
+
+    msg = f"Import terminé : {created} utilisateurs créés, {skipped} existants ignorés"
+    if errors:
+        msg += f", {len(errors)} erreurs"
+    param = "import_success" if created > 0 or (not errors) else "import_error"
+    url = f"/admin/users?{param}={msg.replace(' ', '+')}"
+    if errors:
+        detail = " | ".join(errors[:10])
+        if len(errors) > 10:
+            detail += f" ... et {len(errors)-10} autres"
+        url += f"&import_detail={detail.replace(' ', '+')}"
+
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
 
 
 # ─── VESSELS ─────────────────────────────────────────────────
