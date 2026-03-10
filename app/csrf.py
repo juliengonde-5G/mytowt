@@ -48,7 +48,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 response.set_cookie(
                     CSRF_COOKIE_NAME, token,
                     httponly=False,  # JS/HTMX needs to read it
-                    secure=True,
+                    secure=request.url.scheme == "https",
                     samesite="lax",
                     max_age=60 * 60 * 8,
                 )
