@@ -4,8 +4,15 @@
 
 {% block topbar_actions %}
 <a href="/passengers" class="btn btn-secondary btn-sm"><i data-lucide="arrow-left"></i> Liste</a>
+<a href="/passengers/{{ booking.id }}/confirmation-letter" class="btn btn-secondary btn-sm"><i data-lucide="file-text"></i> Confirmation</a>
 <a href="/passengers/{{ booking.id }}/book" class="btn btn-secondary btn-sm"><i data-lucide="book-open"></i> Book FR</a>
 <a href="/passengers/{{ booking.id }}/book?lang=en" class="btn btn-secondary btn-sm"><i data-lucide="book-open"></i> Book EN</a>
+{% if booking.status in ('embarked', 'completed') %}
+<a href="/passengers/{{ booking.id }}/diploma" class="btn btn-secondary btn-sm"><i data-lucide="award"></i> Diplôme</a>
+{% endif %}
+{% if booking.status == 'completed' %}
+<a href="/passengers/{{ booking.id }}/satisfaction" class="btn btn-secondary btn-sm"><i data-lucide="star"></i> Satisfaction</a>
+{% endif %}
 {% if booking.leg %}
 <a href="/onboard?vessel={{ booking.leg.vessel.code }}&leg_id={{ booking.leg_id }}" class="btn btn-secondary btn-sm"><i data-lucide="compass"></i> On Board</a>
 {% endif %}

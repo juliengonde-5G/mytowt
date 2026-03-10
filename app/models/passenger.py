@@ -112,6 +112,32 @@ DOCUMENT_STATUSES = [
     ("rejected", "Rejeté"),
 ]
 
+# Satisfaction questionnaire structure
+SATISFACTION_QUESTIONS = {
+    "reservation": [
+        ("q_info_clarity", "Clarté des informations disponibles", "Clarity of available information"),
+        ("q_route_diversity", "Diversité des routes et fréquences", "Route diversity and frequency"),
+        ("q_customer_service", "Qualité du contact service client", "Customer service quality"),
+        ("q_booking_ease", "Facilité de réservation", "Booking ease"),
+    ],
+    "onboard": [
+        ("q_crew_welcome", "Accueil et relation avec l'équipage", "Crew welcome and relationship"),
+        ("q_cabin_comfort", "Confort de la cabine", "Cabin comfort"),
+        ("q_common_areas", "Espaces de vie commune", "Common living areas"),
+        ("q_equipment_state", "État général des équipements", "Equipment condition"),
+    ],
+    "ecology": [
+        ("q_decarb_info", "Information sur la décarbonation", "Decarbonation information"),
+        ("q_onboard_measures", "Mesures concrètes à bord", "Onboard measures"),
+        ("q_eco_perception", "Engagement écologique perçu", "Perceived eco commitment"),
+    ],
+    "global": [
+        ("q_overall", "Évaluation globale", "Overall rating"),
+        ("q_recommend", "Recommanderiez-vous ?", "Would you recommend?"),
+        ("q_final_rating", "Note finale", "Final rating"),
+    ],
+}
+
 
 class PassengerBooking(Base):
     """Booking = 1 cabin on 1 leg. Contains 1 or 2 passengers."""
@@ -273,6 +299,9 @@ class PreBoardingForm(Base):
     # Diet
     dietary_requirements = Column(Text, nullable=True)
     intolerances = Column(Text, nullable=True)
+    # Photo rights / copyright waiver
+    photo_rights_consent = Column(Boolean, default=False)
+    photo_rights_consent_at = Column(DateTime(timezone=True), nullable=True)
     # RGPD consent
     gdpr_consent = Column(Boolean, default=False)
     gdpr_consent_at = Column(DateTime(timezone=True), nullable=True)
@@ -301,3 +330,45 @@ class PassengerAuditLog(Base):
     changed_at = Column(DateTime(timezone=True), server_default=func.now())
 
     booking = relationship("PassengerBooking", backref="audit_logs")
+
+
+class SatisfactionResponse(Base):
+    """Post-voyage satisfaction questionnaire response."""
+    __tablename__ = "satisfaction_responses"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    booking_id = Column(Integer, ForeignKey("passenger_bookings.id", ondelete="CASCADE"), nullable=False)
+    passenger_id = Column(Integer, ForeignKey("passengers.id", ondelete="CASCADE"), nullable=False)
+
+    # 1. Reservation
+    q_info_clarity = Column(Integer, nullable=True)        # 1-5
+    q_route_diversity = Column(Integer, nullable=True)     # 1-5
+    q_customer_service = Column(Integer, nullable=True)    # 1-5
+    q_booking_ease = Column(Integer, nullable=True)        # 1-5
+
+    # 2. Equipment & life on board
+    q_crew_welcome = Column(Integer, nullable=True)        # 1-5
+    q_cabin_comfort = Column(Integer, nullable=True)       # 1-5
+    q_common_areas = Column(Integer, nullable=True)        # 1-5
+    q_equipment_state = Column(Integer, nullable=True)     # 1-5
+
+    # 3. Ecological impact
+    q_decarb_info = Column(Integer, nullable=True)         # 1-5
+    q_onboard_measures = Column(Integer, nullable=True)    # 1-5
+    q_eco_perception = Column(Integer, nullable=True)      # 1-5
+
+    # Open questions
+    q_appreciated = Column(Text, nullable=True)
+    q_improvements = Column(Text, nullable=True)
+    q_eco_comments = Column(Text, nullable=True)
+
+    # Global evaluation
+    q_overall = Column(Integer, nullable=True)             # 1-5
+    q_recommend = Column(Integer, nullable=True)           # 1-5
+    q_final_rating = Column(Integer, nullable=True)        # 1-5
+
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    booking = relationship("PassengerBooking", backref="satisfaction_responses")
+    passenger = relationship("Passenger")

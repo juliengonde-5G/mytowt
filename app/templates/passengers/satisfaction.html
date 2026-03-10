@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}my_TOWT — Satisfaction {{ booking.reference }}{% endblock %}
+{% block page_title %}Satisfaction — {{ booking.reference }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/passengers/{{ booking.id }}" class="btn btn-secondary btn-sm"><i data-lucide="arrow-left"></i> Réservation</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:900px;">
+
+{% for pax in booking.passengers %}
+{% set resp = responses.get(pax.id) %}
+<div class="bd-card" style="margin-bottom:16px;">
+    <h3>{{ pax.full_name }} {% if resp %}<span style="font-size:11px;color:#16a34a;">✅ Complété</span>{% else %}<span style="font-size:11px;color:#D97706;">En attente</span>{% endif %}</h3>
+
+    {% if resp %}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:12px;">
+        {% for cat_key, cat_questions in questions.items() %}
+        <div style="background:#f8fafb;border-radius:8px;padding:12px;">
+            <h4 style="font-size:11px;color:#888;text-transform:uppercase;margin:0 0 8px;">
+                {% if cat_key == 'reservation' %}Réservation{% elif cat_key == 'onboard' %}Vie à bord{% elif cat_key == 'ecology' %}Écologie{% elif cat_key == 'global' %}Évaluation globale{% endif %}
+            </h4>
+            {% for field, label_fr, label_en in cat_questions %}
+            {% set val = resp[field] if resp[field] is not none else '—' %}
+            <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid #eee;">
+                <span style="color:#666;">{{ label_fr }}</span>
+                <strong style="color:{% if val is number and val >= 4 %}#16a34a{% elif val is number and val <= 2 %}#dc2626{% else %}var(--towt-blue){% endif %};">
+                    {% if val is number %}{{ '★' * val }}{{ '☆' * (5 - val) }}{% else %}{{ val }}{% endif %}
+                </strong>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if resp.q_appreciated or resp.q_improvements or resp.q_eco_comments %}
+    <div style="margin-top:12px;padding:12px;background:#f8fafb;border-radius:8px;">
+        <h4 style="font-size:11px;color:#888;text-transform:uppercase;margin:0 0 8px;">Commentaires</h4>
+        {% if resp.q_appreciated %}<p style="font-size:12px;margin:4px 0;"><strong>Apprécié :</strong> {{ resp.q_appreciated }}</p>{% endif %}
+        {% if resp.q_improvements %}<p style="font-size:12px;margin:4px 0;"><strong>Améliorations :</strong> {{ resp.q_improvements }}</p>{% endif %}
+        {% if resp.q_eco_comments %}<p style="font-size:12px;margin:4px 0;"><strong>Écologie :</strong> {{ resp.q_eco_comments }}</p>{% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <form method="POST" action="/passengers/{{ booking.id }}/satisfaction" style="margin-top:12px;">
+        {{ csrf_input(request) }}
+        {% for cat_key, cat_questions in questions.items() %}
+        <h4 style="font-size:11px;color:#888;text-transform:uppercase;margin:16px 0 8px;">
+            {% if cat_key == 'reservation' %}1. Réservation{% elif cat_key == 'onboard' %}2. Vie à bord{% elif cat_key == 'ecology' %}3. Écologie{% elif cat_key == 'global' %}Évaluation globale{% endif %}
+        </h4>
+        {% for field, label_fr, label_en in cat_questions %}
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="font-size:12px;min-width:200px;color:#555;">{{ label_fr }}</span>
+            <div style="display:flex;gap:4px;">
+                {% for i in range(1, 6) %}
+                <label style="cursor:pointer;font-size:16px;" title="{{ i }}/5">
+                    <input type="radio" name="pax_{{ pax.id }}_{{ field }}" value="{{ i }}" style="display:none;" onchange="this.parentElement.parentElement.querySelectorAll('label').forEach((l,j)=>l.style.color=j<{{ i }}?'#f59e0b':'#ddd');this.parentElement.style.color='#f59e0b'">
+                    <span>★</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        {% endfor %}
+
+        <h4 style="font-size:11px;color:#888;text-transform:uppercase;margin:16px 0 8px;">Commentaires</h4>
+        <div style="display:grid;gap:8px;">
+            <div><label style="font-size:11px;color:#888;">Ce que vous avez apprécié</label><textarea name="pax_{{ pax.id }}_q_appreciated" class="fi-sm" rows="2" style="width:100%;"></textarea></div>
+            <div><label style="font-size:11px;color:#888;">Améliorations suggérées</label><textarea name="pax_{{ pax.id }}_q_improvements" class="fi-sm" rows="2" style="width:100%;"></textarea></div>
+            <div><label style="font-size:11px;color:#888;">Commentaires écologie</label><textarea name="pax_{{ pax.id }}_q_eco_comments" class="fi-sm" rows="2" style="width:100%;"></textarea></div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm" style="margin-top:12px;">Enregistrer</button>
+    </form>
+    {% endif %}
+</div>
+{% endfor %}
+
+</div>
+
+<style>
+    .bd-card{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px}
+    .bd-card h3{margin:0 0 8px;font-size:14px}
+    .fi-sm{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:'Poppins',system-ui,sans-serif;box-sizing:border-box}
+</style>
+{% endblock %}

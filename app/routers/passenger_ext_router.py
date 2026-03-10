@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models.leg import Leg
 from app.models.passenger import (
     PassengerBooking, Passenger, PassengerDocument, PreBoardingForm,
+    SatisfactionResponse,
     DOCUMENT_TYPES, DOCUMENT_STATUSES, CABIN_TYPE_LABELS,
 )
 from app.models.portal_message import PortalMessage
@@ -438,13 +439,98 @@ async def external_crossing_book_en(token: str, request: Request, db: AsyncSessi
                     headers={"Content-Disposition": f"attachment; filename=Crossing_Book_{booking.reference}.pdf"})
 
 
+@ext_router.get("/{token}/confirmation-letter")
+async def external_confirmation_letter(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    from fastapi.responses import Response
+    from app.utils.passenger_pdfs import generate_confirmation_letter
+    from app.config import settings
+    booking = await _get_booking_by_token(token, db, request)
+    portal_url = f"{settings.SITE_URL}/passenger/{booking.token}"
+    content = generate_confirmation_letter(booking, booking.leg, booking.passengers, portal_url)
+    return Response(content=content, media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename=Confirmation_{booking.reference}.pdf"})
+
+
+@ext_router.get("/{token}/diploma")
+async def external_diploma(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    from fastapi.responses import Response
+    from app.utils.passenger_pdfs import generate_diploma
+    booking = await _get_booking_by_token(token, db, request)
+    leg = booking.leg
+    vessel = booking.vessel or (leg.vessel if leg else None)
+    pax = booking.passengers[0] if booking.passengers else None
+    if not pax:
+        raise HTTPException(404)
+    content = generate_diploma(
+        passenger_name=pax.full_name,
+        vessel_name=vessel.name if vessel else "—",
+        departure_port=leg.departure_port.name if leg and leg.departure_port else "—",
+        arrival_port=leg.arrival_port.name if leg and leg.arrival_port else "—",
+        departure_date=leg.atd or leg.etd if leg else None,
+        arrival_date=leg.ata or leg.eta if leg else None,
+        leg_code=leg.leg_code if leg else "—",
+        distance_nm=getattr(leg, 'distance_nm', None) if leg else None,
+    )
+    return Response(content=content, media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename=Diplome_{booking.reference}_{pax.last_name}.pdf"})
+
+
+@ext_router.get("/{token}/satisfaction")
+async def external_satisfaction_form(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.models.passenger import SatisfactionResponse, SATISFACTION_QUESTIONS
+    booking = await _get_booking_by_token(token, db, request)
+    lang = request.query_params.get("lang", "fr")
+    resp_result = await db.execute(
+        select(SatisfactionResponse).where(SatisfactionResponse.booking_id == booking.id)
+    )
+    responses = {r.passenger_id: r for r in resp_result.scalars().all()}
+    return templates.TemplateResponse("passengers/portal_satisfaction.html", {
+        "request": request, "booking": booking, "token": token, "lang": lang,
+        "responses": responses, "questions": SATISFACTION_QUESTIONS,
+    })
+
+
+@ext_router.post("/{token}/pax/{pax_id}/satisfaction")
+async def external_satisfaction_submit(token: str, pax_id: int, request: Request,
+                                       db: AsyncSession = Depends(get_db)):
+    from app.models.passenger import SatisfactionResponse
+    booking = await _get_booking_by_token(token, db, request)
+    if pax_id not in [p.id for p in booking.passengers]:
+        raise HTTPException(403)
+    form = await request.form()
+    existing = await db.execute(
+        select(SatisfactionResponse).where(
+            SatisfactionResponse.booking_id == booking.id,
+            SatisfactionResponse.passenger_id == pax_id,
+        )
+    )
+    resp = existing.scalar_one_or_none()
+    if not resp:
+        resp = SatisfactionResponse(booking_id=booking.id, passenger_id=pax_id)
+        db.add(resp)
+    for field in ["q_info_clarity", "q_route_diversity", "q_customer_service", "q_booking_ease",
+                  "q_crew_welcome", "q_cabin_comfort", "q_common_areas", "q_equipment_state",
+                  "q_decarb_info", "q_onboard_measures", "q_eco_perception",
+                  "q_overall", "q_recommend", "q_final_rating"]:
+        val = form.get(field)
+        if val:
+            setattr(resp, field, int(val))
+    for field in ["q_appreciated", "q_improvements", "q_eco_comments"]:
+        val = form.get(field)
+        if val is not None:
+            setattr(resp, field, val.strip() or None)
+    await db.flush()
+    lang = form.get("lang", "fr")
+    return RedirectResponse(url=f"/passenger/{token}/satisfaction?lang={lang}", status_code=303)
+
+
 @ext_router.post("/{token}/pax/{pax_id}/questionnaire", response_class=HTMLResponse)
 async def submit_questionnaire(token: str, pax_id: int, request: Request,
     sailed_before: str = Form(""), seasick: str = Form(""), willing_maneuvers: str = Form(""),
     chronic_conditions: str = Form(""), allergies: str = Form(""),
     daily_medication: str = Form(""), can_swim_50m: str = Form(""),
     dietary_requirements: str = Form(""), intolerances: str = Form(""),
-    gdpr_consent: str = Form(""),
+    gdpr_consent: str = Form(""), photo_rights_consent: str = Form(""),
     db: AsyncSession = Depends(get_db)):
     booking = await _get_booking_by_token(token, db, request)
     if pax_id not in [p.id for p in booking.passengers]: raise HTTPException(403)
@@ -455,6 +541,10 @@ async def submit_questionnaire(token: str, pax_id: int, request: Request,
         allergies=allergies.strip() or None, daily_medication=daily_medication.strip() or None,
         can_swim_50m=can_swim_50m or None, dietary_requirements=dietary_requirements.strip() or None,
         intolerances=intolerances.strip() or None, signed=True, signed_at=datetime.now())
+    # Record photo rights consent
+    if photo_rights_consent:
+        kwargs["photo_rights_consent"] = True
+        kwargs["photo_rights_consent_at"] = datetime.now(tz.utc)
     # Record GDPR consent on PreBoardingForm
     if gdpr_consent:
         kwargs["gdpr_consent"] = True

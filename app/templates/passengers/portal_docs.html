@@ -5,13 +5,27 @@
 <h1>📄 {% if lang == 'en' %}Contractual Documents{% else %}Documentation contractuelle{% endif %}</h1>
 
 <div class="card">
-    <h2>{% if lang == 'en' %}Crossing book{% else %}Book de traversée{% endif %}</h2>
-    <p style="font-size:13px;color:#666;margin-bottom:12px;">{% if lang == 'en' %}Your complete crossing book with vessel information, safety procedures, and voyage details.{% else %}Votre book de traversée complet avec les informations du navire, les procédures de sécurité et les détails du voyage.{% endif %}</p>
+    <h2>{% if lang == 'en' %}Your Documents{% else %}Vos documents{% endif %}</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:12px;">{% if lang == 'en' %}Download your crossing documents.{% else %}Téléchargez vos documents de traversée.{% endif %}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="/passenger/{{ token }}/confirmation-letter" class="btn btn-secondary">📄 {% if lang == 'en' %}Confirmation Letter{% else %}Lettre de confirmation{% endif %}</a>
         <a href="/passenger/{{ token }}/book" class="btn btn-primary">📖 Book FR (PDF)</a>
         <a href="/passenger/{{ token }}/book/en" class="btn btn-primary" style="background:#0a6b7a;">📖 Book EN (PDF)</a>
+        {% if booking.status in ('embarked', 'completed') %}
+        {% for pax in booking.passengers %}
+        <a href="/passenger/{{ token }}/diploma" class="btn btn-secondary" style="background:#87BD2B;color:white;border-color:#87BD2B;">🎓 {% if lang == 'en' %}Diploma{% else %}Diplôme{% endif %} — {{ pax.first_name }}</a>
+        {% endfor %}
+        {% endif %}
     </div>
 </div>
+
+{% if booking.status == 'completed' %}
+<div class="card" style="border-left:3px solid #87BD2B;">
+    <h2>⭐ {% if lang == 'en' %}Satisfaction Survey{% else %}Questionnaire de satisfaction{% endif %}</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:12px;">{% if lang == 'en' %}Help us improve by sharing your feedback about your crossing.{% else %}Aidez-nous à nous améliorer en partageant votre avis sur votre traversée.{% endif %}</p>
+    <a href="/passenger/{{ token }}/satisfaction?lang={{ lang }}" class="btn btn-primary">{% if lang == 'en' %}Fill out the survey{% else %}Répondre au questionnaire{% endif %}</a>
+</div>
+{% endif %}
 
 <div class="card content-section">
     <h2>{% if lang == 'en' %}General conditions of transport{% else %}Conditions générales de transport{% endif %}</h2>
