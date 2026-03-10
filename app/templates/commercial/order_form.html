@@ -6,6 +6,7 @@
         </div>
         <form method="POST" id="order-form"
               action="{{ '/commercial/orders/' ~ edit_order.id ~ '/edit' if edit_order else '/commercial/orders/create' }}">
+            {{ csrf_input(request) }}
             <div class="modal-body">
                 {% if error %}
                 <div style="background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;border-left:3px solid #dc2626;">{{ error }}</div>

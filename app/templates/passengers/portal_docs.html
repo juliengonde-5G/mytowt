@@ -59,6 +59,7 @@
             </p>
         {% else %}
             <form method="POST" action="/passenger/{{ token }}/accept-cgv">
+                {{ csrf_input(request) }}
                 <input type="hidden" name="lang" value="{{ lang }}">
                 <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
                     <input type="checkbox" name="cgv_accepted" required style="margin-top:4px;width:18px;height:18px;">

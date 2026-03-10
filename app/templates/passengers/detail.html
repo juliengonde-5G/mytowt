@@ -27,6 +27,7 @@
             {% endfor %}
         </div>
         <form method="POST" action="/passengers/{{ booking.id }}/status" style="display:flex;gap:6px;align-items:center;">
+            {{ csrf_input(request) }}
             <select name="status" class="fi-sm">
                 {% for code, label in booking_statuses %}<option value="{{ code }}" {% if booking.status == code %}selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
@@ -52,6 +53,7 @@
     <div class="bd-card">
         <h3>👤 Passager {{ loop.index }} — {{ pax.full_name }}</h3>
         <form method="POST" action="/passengers/pax/{{ pax.id }}/update">
+            {{ csrf_input(request) }}
             <div class="bd-grid">
                 <div class="fg"><label>Prénom</label><input type="text" name="first_name" value="{{ pax.first_name }}" class="fi-sm" required></div>
                 <div class="fg"><label>Nom</label><input type="text" name="last_name" value="{{ pax.last_name }}" class="fi-sm" required></div>
@@ -80,6 +82,7 @@
                     <td style="font-size:11px;color:#888;">{{ d.notes or '' }}</td>
                     <td>
                         <form method="POST" action="/passengers/doc/{{ d.id }}/status" style="display:inline-flex;gap:4px;">
+                            {{ csrf_input(request) }}
                             <select name="status" class="fi-sm" style="width:auto;">
                                 {% for code, label in document_statuses %}<option value="{{ code }}" {% if d.status == code %}selected{% endif %}>{{ label }}</option>{% endfor %}
                             </select>
@@ -120,6 +123,7 @@
     <div class="bd-card" style="border-left:3px solid #87BD2B;">
         <h3>＋ Ajouter un 2ème passager</h3>
         <form method="POST" action="/passengers/{{ booking.id }}/add-passenger">
+            {{ csrf_input(request) }}
             <div class="bd-grid">
                 <div class="fg"><label>Prénom *</label><input type="text" name="first_name" class="fi-sm" required></div>
                 <div class="fg"><label>Nom *</label><input type="text" name="last_name" class="fi-sm" required></div>
@@ -169,6 +173,7 @@
                 <td>{{ p.due_date.strftime('%d/%m/%Y') if p.due_date else '—' }}</td>
                 <td>
                     <form method="POST" action="/passengers/payment/{{ p.id }}/status" style="display:inline-flex;gap:4px;">
+                        {{ csrf_input(request) }}
                         <select name="status" class="fi-sm" style="width:auto;">
                             <option value="pending" {% if p.status == 'pending' %}selected{% endif %}>⏳ En attente</option>
                             <option value="sent" {% if p.status == 'sent' %}selected{% endif %}>📨 Ordre envoyé</option>
@@ -194,6 +199,7 @@
         <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
             {% if not has_deposit and booking.price_deposit %}
             <form method="POST" action="/passengers/{{ booking.id }}/payment">
+                {{ csrf_input(request) }}
                 <input type="hidden" name="payment_type" value="acompte">
                 <input type="hidden" name="payment_method" value="virement">
                 <input type="hidden" name="amount" value="{{ booking.price_deposit }}">
@@ -202,6 +208,7 @@
             {% endif %}
             {% if not has_balance and booking.price_balance and has_deposit %}
             <form method="POST" action="/passengers/{{ booking.id }}/payment">
+                {{ csrf_input(request) }}
                 <input type="hidden" name="payment_type" value="solde">
                 <input type="hidden" name="payment_method" value="virement">
                 <input type="hidden" name="amount" value="{{ booking.price_balance }}">
@@ -214,6 +221,7 @@
         <details style="margin-top:12px;">
             <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--towt-blue);">＋ Ajouter un paiement personnalisé</summary>
             <form method="POST" action="/passengers/{{ booking.id }}/payment" style="margin-top:10px;">
+                {{ csrf_input(request) }}
                 <div class="bd-grid">
                     <div class="fg"><label>Type</label><select name="payment_type" class="fi-sm" required>{% for c,l in payment_types %}<option value="{{ c }}">{{ l }}</option>{% endfor %}</select></div>
                     <div class="fg"><label>Méthode</label><select name="payment_method" class="fi-sm" required>{% for c,l in payment_methods %}<option value="{{ c }}">{{ l }}</option>{% endfor %}</select></div>

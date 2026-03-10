@@ -32,6 +32,7 @@
     {% endif %}
 
     <form method="POST" id="client-form" action="{% if edit_client %}/commercial/pricing/clients/{{ edit_client.id }}/edit{% else %}/commercial/pricing/clients/create{% endif %}">
+        {{ csrf_input(request) }}
         <input type="hidden" name="pipedrive_org_id" id="pd-org-id" value="{{ edit_client.pipedrive_org_id if edit_client and edit_client.pipedrive_org_id else '' }}">
 
         <!-- Type & Nom -->

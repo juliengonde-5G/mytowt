@@ -11,6 +11,7 @@
     <p style="color:#888;font-size:13px;margin-bottom:20px;">Référence: <strong style="color:var(--towt-blue);">{{ reference }}</strong></p>
 
     <form method="POST" id="gridForm">
+        {{ csrf_input(request) }}
         <!-- ═══ CLIENT ═══════════════════════════════════ -->
         <div style="background:#f8fafc;border-radius:8px;padding:16px;margin-bottom:20px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">

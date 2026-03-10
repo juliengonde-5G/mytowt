@@ -74,10 +74,12 @@
         <div style="margin-left:auto;display:flex;gap:6px;">
             {% if not leg_locked and leg_terminated %}
             <form method="POST" action="/escale/legs/{{ selected_leg.id }}/lock" style="display:inline;">
+                {{ csrf_input(request) }}
                 <button type="submit" class="btn btn-sm btn-secondary" title="Verrouiller"><i data-lucide="lock"></i></button>
             </form>
             {% elif leg_locked %}
             <form method="POST" action="/escale/legs/{{ selected_leg.id }}/unlock" style="display:inline;">
+                {{ csrf_input(request) }}
                 <button type="submit" class="btn btn-sm btn-secondary" title="Déverrouiller"><i data-lucide="unlock"></i></button>
             </form>
             {% endif %}
@@ -103,6 +105,7 @@
 
         {% if next_status %}
         <form method="POST" action="/escale/legs/{{ selected_leg.id }}/port-status" style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+            {{ csrf_input(request) }}
             <input type="hidden" name="new_status" value="{{ next_status }}">
             <div class="tz-input-wrap">
                 <input type="datetime-local" name="status_time" class="form-input" style="font-size:11px;padding:4px 8px;width:180px;"

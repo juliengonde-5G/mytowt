@@ -10,6 +10,7 @@
         </div>
         <form method="POST" id="op-form"
               action="{{ '/escale/operations/' ~ edit_op.id ~ '/edit' if edit_op else '/escale/operations/create' }}">
+            {{ csrf_input(request) }}
             {% if not edit_op %}<input type="hidden" name="leg_id" value="{{ leg_id }}">{% endif %}
             <div class="modal-body">
                 <div class="form-row">

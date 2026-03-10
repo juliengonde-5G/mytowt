@@ -301,6 +301,7 @@
         <!-- Actions: Sync + Certificate -->
         <div style="display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;align-items:center;">
             <form method="POST" action="/kpi/sync-cargo" style="display:inline;">
+                {{ csrf_input(request) }}
                 <input type="hidden" name="year" value="{{ current_year }}">
                 {% if selected_vessel %}<input type="hidden" name="vessel" value="{{ selected_vessel }}">{% endif %}
                 <button type="submit" class="btn btn-secondary btn-sm">
@@ -343,6 +344,7 @@
                         <td>{{ kpi.distance_nm }}</td>
                         <td>
                             <form method="POST" action="/kpi/legs/{{ kpi.leg.id }}/cargo" style="display:inline-flex;gap:4px;align-items:center;">
+                                {{ csrf_input(request) }}
                                 <input type="number" name="cargo_tons" step="0.1" min="0" value="{{ kpi.cargo_tons }}" class="cargo-input-sm">
                                 <button type="submit" class="btn-save-sm">OK</button>
                             </form>

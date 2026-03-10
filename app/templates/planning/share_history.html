@@ -91,6 +91,7 @@
                         <button class="share-btn copy" onclick="copyLink(this, '{{ share.token }}')">📋 Copier</button>
                         {% endif %}
                         <form method="POST" action="/planning/pdf/commercial/shares/{{ share.id }}/toggle" style="margin:0;">
+                            {{ csrf_input(request) }}
                             <button type="submit" class="share-btn {% if share.is_active %}danger{% endif %}">
                                 {% if share.is_active %}🚫 Désactiver{% else %}✅ Réactiver{% endif %}
                             </button>

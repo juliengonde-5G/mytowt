@@ -75,6 +75,7 @@
             {% if current_leg.etd %}· ETD : <strong>{{ current_leg.etd.strftime('%d/%m/%Y %H:%M') }}</strong>{% endif %}
         </p>
         <form method="POST" action="/onboard/eta-shift" class="eta-shift-form">
+            {{ csrf_input(request) }}
             <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
             <div class="eta-shift-grid">
                 <div class="fg">
@@ -198,6 +199,7 @@
     <div class="ob-notif-header">
         🔔 {{ unread|length }} notification{{ 's' if unread|length > 1 }}
         <form method="POST" action="/onboard/notifications/dismiss-all" style="display:inline;">
+            {{ csrf_input(request) }}
             <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
             <button type="submit" class="btn btn-sm btn-secondary" style="font-size:10px;padding:3px 10px;">Tout marquer lu</button>
         </form>
@@ -375,6 +377,7 @@
         <tr class="sof-edit-row" id="sof-edit-{{ evt.id }}" style="display:none;">
             <td colspan="6">
                 <form method="POST" action="/onboard/sof/{{ evt.id }}/edit" class="sof-inline-edit">
+                    {{ csrf_input(request) }}
                     <div class="sof-edit-grid">
                         <input type="text" name="event_label" value="{{ evt.event_label }}" class="sof-edit-fi" placeholder="Libellé">
                         <input type="date" name="event_date" value="{{ evt.event_date.strftime('%Y-%m-%d') if evt.event_date else '' }}" class="sof-edit-fi">
@@ -405,6 +408,7 @@
 
     {% if not is_locked %}
     <form method="POST" action="/onboard/sof/add" class="sof-add-form">
+        {{ csrf_input(request) }}
         <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
         <div class="sof-add-grid">
             <select name="event_type" id="sof-type" required onchange="var o=this.options[this.selectedIndex]; document.getElementById('sof-label').value=o.text;">
@@ -510,6 +514,7 @@
 
     {% if not is_locked %}
     <form method="POST" action="/onboard/attachments/upload" enctype="multipart/form-data" class="att-upload-form">
+        {{ csrf_input(request) }}
         <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
         <div class="att-upload-grid">
             <div class="fg">
@@ -577,6 +582,7 @@
 
     {% if not is_locked %}
     <form method="POST" action="/onboard/attachments/upload" enctype="multipart/form-data" style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;">
+        {{ csrf_input(request) }}
         <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
         <div class="att-upload-grid">
             <div class="fg">
@@ -681,6 +687,7 @@
     <!-- Action buttons -->
     {% if closure == 'open' %}
     <form method="POST" action="/onboard/closure/{{ current_leg.id }}/submit-review" style="margin-top:12px;">
+        {{ csrf_input(request) }}
         <div class="fg" style="margin-bottom:8px;">
             <label class="field-label">Notes de revue (optionnel)</label>
             <textarea name="closure_notes" class="fi" rows="2" placeholder="Remarques, documents manquants…" style="resize:vertical;min-height:40px;font-family:'Poppins',system-ui,sans-serif;"></textarea>
@@ -693,11 +700,13 @@
     {% elif closure == 'review' %}
     <div style="display:flex;gap:8px;margin-top:12px;">
         <form method="POST" action="/onboard/closure/{{ current_leg.id }}/approve">
+            {{ csrf_input(request) }}
             <button type="submit" class="btn btn-sm" style="background:#16a34a;color:white;" onclick="return confirm('Approuver la clôture d\'escale ?')">
                 <i data-lucide="check" style="width:14px;height:14px;"></i> Approuver (Commandant)
             </button>
         </form>
         <form method="POST" action="/onboard/closure/{{ current_leg.id }}/reopen">
+            {{ csrf_input(request) }}
             <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Rouvrir l\'escale ?')">
                 <i data-lucide="rotate-ccw" style="width:14px;height:14px;"></i> Rouvrir
             </button>
@@ -707,11 +716,13 @@
     {% elif closure == 'approved' %}
     <div style="display:flex;gap:8px;margin-top:12px;">
         <form method="POST" action="/onboard/closure/{{ current_leg.id }}/lock">
+            {{ csrf_input(request) }}
             <button type="submit" class="btn btn-sm" style="background:#DC2626;color:white;" onclick="return confirm('Verrouiller définitivement l\'escale ? Un PDF récapitulatif sera généré. Cette action est irréversible.')">
                 <i data-lucide="lock" style="width:14px;height:14px;"></i> Verrouiller définitivement + PDF
             </button>
         </form>
         <form method="POST" action="/onboard/closure/{{ current_leg.id }}/reopen">
+            {{ csrf_input(request) }}
             <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Rouvrir l\'escale ?')">
                 <i data-lucide="rotate-ccw" style="width:14px;height:14px;"></i> Rouvrir
             </button>

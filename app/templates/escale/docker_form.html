@@ -6,6 +6,7 @@
         </div>
         <form method="POST" id="docker-form"
               action="{{ '/escale/dockers/' ~ edit_ds.id ~ '/edit' if edit_ds else '/escale/dockers/create' }}">
+            {{ csrf_input(request) }}
             {% if not edit_ds %}
             <input type="hidden" name="leg_id" value="{{ leg_id }}">
             {% endif %}

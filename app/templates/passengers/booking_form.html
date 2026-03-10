@@ -9,6 +9,7 @@
 
 {% block content %}
 <form method="POST" action="/passengers/create" id="booking-form" style="max-width:900px;margin:0 auto;">
+    {{ csrf_input(request) }}
 
     <!-- STEP 1: Traversée + Cabine -->
     <div class="pf-section">

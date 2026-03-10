@@ -20,6 +20,7 @@
   </div>
 
   <form method="POST" action="/p/{{ pl.token }}/messages/send?lang={{ lang }}">
+      {{ csrf_input(request) }}
     <div class="mib">
       <textarea name="message" placeholder="{{ t('cp_write_msg', lang) }}" required></textarea>
       <button type="submit">{{ t('cp_send', lang) }}</button>

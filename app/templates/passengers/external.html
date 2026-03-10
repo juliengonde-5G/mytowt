@@ -155,6 +155,7 @@
             <details>
                 <summary style="cursor:pointer;font-size:12px;color:#095561;font-weight:600;margin-bottom:10px;">✏️ {% if lang == 'en' %}Edit my information{% else %}Modifier mes informations{% endif %}</summary>
                 <form method="POST" action="/passenger/{{ token }}/pax/{{ pax.id }}/update">
+                    {{ csrf_input(request) }}
                     <div class="form-grid">
                         <div class="fg"><label>{% if lang == 'en' %}First name{% else %}Prénom{% endif %}</label><input type="text" name="first_name" value="{{ pax.first_name }}" class="fi" required></div>
                         <div class="fg"><label>{% if lang == 'en' %}Last name{% else %}Nom{% endif %}</label><input type="text" name="last_name" value="{{ pax.last_name }}" class="fi" required></div>
@@ -179,6 +180,7 @@
                 {% else %}
                 <h3>📋 {% if lang == 'en' %}Pre-boarding questionnaire{% else %}Questionnaire pré-embarquement{% endif %}</h3>
                 <form method="POST" action="/passenger/{{ token }}/pax/{{ pax.id }}/questionnaire">
+                    {{ csrf_input(request) }}
                     <h3 style="font-size:12px;">{% if lang == 'en' %}Maritime experience{% else %}Expérience maritime{% endif %}</h3>
                     <div class="fg"><label>{% if lang == 'en' %}Have you sailed before?{% else %}Avez-vous déjà voyagé en voilier/bateau ?{% endif %}</label>
                         <div class="q-radio"><label><input type="radio" name="sailed_before" value="yes"> {% if lang == 'en' %}Yes{% else %}Oui{% endif %}</label><label><input type="radio" name="sailed_before" value="no"> {% if lang == 'en' %}No{% else %}Non{% endif %}</label></div>
@@ -229,6 +231,7 @@
                     <td>
                         {% if d.status in ('missing', 'rejected') %}
                         <form method="POST" action="/passenger/{{ token }}/doc/{{ d.id }}/upload" enctype="multipart/form-data" class="upload-zone">
+                            {{ csrf_input(request) }}
                             <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" required>
                             <button type="submit" class="btn btn-primary btn-sm">📤</button>
                         </form>

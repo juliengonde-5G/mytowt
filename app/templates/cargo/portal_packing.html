@@ -50,6 +50,7 @@
 </div>
 
 <form method="POST" action="/p/{{ pl.token }}/save">
+    {{ csrf_input(request) }}
 {% for batch in pl.batches %}
 {% set p = 'batch_' ~ batch.id ~ '_' %}
 <div class="bc">
@@ -132,6 +133,7 @@
 <div class="ab">
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     <form method="POST" action="/p/{{ pl.token }}/batch/add" style="display:inline;"><button type="submit" class="btn ba" style="width:auto;padding:10px 20px;">＋ {{ t('pl_add_batch', lang) }}</button></form>
+        {{ csrf_input(request) }}
     <a href="/p/{{ pl.token }}/template" class="btn btn-secondary">📥 {{ t('download_template', lang) }}</a>
     <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='flex'">📤 {{ t('import_excel', lang) }}</button>
   </div>
@@ -146,6 +148,7 @@
         <h3 style="margin-bottom:8px;color:#095561;">📤 {{ t('import_excel_title', lang) }}</h3>
         <p style="font-size:12px;color:#888;margin-bottom:16px;">{{ t('import_excel_desc', lang) }}</p>
         <form method="POST" action="/p/{{ pl.token }}/import" enctype="multipart/form-data">
+            {{ csrf_input(request) }}
             <input type="file" name="file" accept=".xlsx,.xls" class="fi" required style="margin-bottom:16px;">
             <div style="display:flex;gap:8px;justify-content:flex-end;">
                 <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='none'">{{ t('cancel', lang) }}</button>

@@ -6,6 +6,7 @@
             <button class="modal-close" onclick="closeModal()"><i data-lucide="x"></i></button>
         </div>
         <form method="POST" id="fin-form" action="/finance/legs/{{ leg.id }}/edit">
+            {{ csrf_input(request) }}
             <div class="modal-body">
                 <div class="fin-section">
                     <div class="fin-section-title revenue">💰 Chiffre d'affaires</div>

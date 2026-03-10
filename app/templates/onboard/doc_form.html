@@ -22,6 +22,7 @@
     </div>
 
     <form method="POST" action="/onboard/doc/{{ leg.id }}/{{ doc_type }}/save" id="doc-form">
+        {{ csrf_input(request) }}
         {% if doc %}<input type="hidden" name="doc_id" value="{{ doc.id }}">{% endif %}
 
         <!-- ═══ NOR - Notice of Readiness ═══ -->
@@ -298,6 +299,7 @@
         {% endif %}
 
         <form method="POST" action="/onboard/doc/{{ doc.id }}/attachments/upload" enctype="multipart/form-data" class="doc-att-upload">
+            {{ csrf_input(request) }}
             <div class="doc-grid-2">
                 <div class="fg">
                     <label>Fichier (photo, PDF, document...)</label>

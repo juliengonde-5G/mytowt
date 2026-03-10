@@ -149,6 +149,7 @@
         {% endif %}
 
         <form method="POST" action="/crew/tickets/create" enctype="multipart/form-data" class="ticket-add-form" id="ticket-form">
+            {{ csrf_input(request) }}
             <div class="ticket-add-grid">
                 <div class="fg">
                     <label class="field-label">Membre *</label>

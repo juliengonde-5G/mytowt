@@ -9,6 +9,7 @@
 
 {% block content %}
 <form method="POST" action="/claims/create" id="claim-form" style="max-width:900px;margin:0 auto;">
+    {{ csrf_input(request) }}
 
     <!-- TYPE -->
     <div class="cf-section">

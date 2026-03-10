@@ -9,6 +9,7 @@
     </a>
     {% if can_edit_mrv %}
     <form method="POST" action="/mrv/leg/{{ leg.id }}/recalculate" style="display:inline;">
+        {{ csrf_input(request) }}
         <button type="submit" class="btn btn-secondary" style="font-size:0.8rem;">
             <i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> {{ t('mrv_recalculate', lang) }}
         </button>
@@ -122,6 +123,7 @@
     <h4><i data-lucide="link" style="width:14px;height:14px;vertical-align:middle;"></i> {{ t('mrv_sof_suggestions', lang) }}</h4>
     {% for sof in sof_suggestions %}
     <form method="POST" action="/mrv/events/from-sof" style="display:inline;">
+        {{ csrf_input(request) }}
         <input type="hidden" name="sof_event_id" value="{{ sof.id }}">
         <input type="hidden" name="leg_id" value="{{ leg.id }}">
         <button type="submit" class="sof-chip" style="cursor:pointer;">
@@ -217,6 +219,7 @@
 <div class="add-form" id="add-form">
     <h3><i data-lucide="plus-circle" style="width:16px;height:16px;vertical-align:middle;"></i> {{ t('mrv_add_event', lang) }}</h3>
     <form method="POST" action="/mrv/events/add">
+        {{ csrf_input(request) }}
         <input type="hidden" name="leg_id" value="{{ leg.id }}">
 
         <div class="form-grid">
@@ -334,6 +337,7 @@
             <button onclick="closeEditModal({{ evt.id }})" style="border:none;background:none;font-size:1.2rem;cursor:pointer;">&times;</button>
         </div>
         <form method="POST" action="/mrv/events/{{ evt.id }}/edit">
+            {{ csrf_input(request) }}
             <div class="form-grid">
                 <div class="form-group">
                     <label>{{ t('mrv_date_utc', lang) }}</label>

@@ -103,6 +103,7 @@
         {% endif %}
 
         <form method="POST" action="/p/{{ pl.token }}/save">
+            {{ csrf_input(request) }}
             {% for batch in pl.batches %}
             {% set p = 'batch_' ~ batch.id ~ '_' %}
             <div class="batch-card">
@@ -110,6 +111,7 @@
                     <h3>📦 Batch #{{ batch.batch_number }}</h3>
                     {% if not pl.is_locked and pl.batches|length > 1 %}
                     <form method="POST" action="/p/{{ pl.token }}/batch/{{ batch.id }}" style="display:inline;">
+                        {{ csrf_input(request) }}
                         <input type="hidden" name="_method" value="DELETE">
                         <button type="button" class="btn-danger btn" onclick="if(confirm('{{ t('confirm_delete_batch', lang) }}')) fetch('/p/{{ pl.token }}/batch/{{ batch.id }}',{method:'DELETE'}).then(()=>location.reload())">✕ {{ t('delete', lang) }}</button>
                     </form>
@@ -218,6 +220,7 @@
             <div class="actions-bar">
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                     <form method="POST" action="/p/{{ pl.token }}/batch/add" style="display:inline;">
+                        {{ csrf_input(request) }}
                         <button type="submit" class="btn btn-add" style="width:auto;padding:10px 20px;">＋ {{ t('pl_add_batch', lang) }}</button>
                     </form>
                     <a href="/p/{{ pl.token }}/template" class="btn btn-secondary">📥 {{ t('download_template', lang) }}</a>
@@ -235,6 +238,7 @@
             <h3 style="margin-bottom:8px;color:#095561;">📤 {{ t('import_excel_title', lang) }}</h3>
             <p style="font-size:12px;color:#888;margin-bottom:16px;">{{ t('import_excel_desc', lang) }}</p>
             <form method="POST" action="/p/{{ pl.token }}/import" enctype="multipart/form-data">
+                {{ csrf_input(request) }}
                 <input type="file" name="file" accept=".xlsx,.xls" class="form-input" required style="margin-bottom:16px;">
                 <div style="display:flex;gap:8px;justify-content:flex-end;">
                     <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='none'">{{ t('cancel', lang) }}</button>

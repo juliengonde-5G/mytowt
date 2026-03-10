@@ -7,6 +7,7 @@
 
         <form method="POST" id="leg-form"
               action="{{ '/planning/legs/' ~ edit_leg.id ~ '/edit' if edit_leg else '/planning/legs/create' }}">
+            {{ csrf_input(request) }}
 
             <div class="modal-body">
                 {% if error %}
