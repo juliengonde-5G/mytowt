@@ -6,6 +6,7 @@
 <div class="settings-page">
     <!-- Sections as tabs -->
     <div class="settings-tabs">
+        {% if user.role in ('administrateur', 'admin', 'data_analyst') %}
         <button class="stab active" onclick="showSection('users')">👤 Utilisateurs</button>
         <button class="stab" onclick="showSection('vessels')">🚢 Navires</button>
         <button class="stab" onclick="showSection('ports')">⚓ Ports</button>
@@ -17,13 +18,16 @@
         <button class="stab" onclick="showSection('database')">🗄️ Base de données</button>
         <button class="stab" onclick="showSection('activity')">📋 Activité</button>
         <button class="stab" onclick="showSection('language')">🌐 Langue</button>
-        <button class="stab" onclick="showSection('pricing')">🧳 Tarifs passagers</button>
+        {% endif %}
+        <button class="stab {% if user.role == 'commercial' %}active{% endif %}" onclick="showSection('pricing')">🧳 Tarifs passagers</button>
+        {% if user.role in ('administrateur', 'admin', 'data_analyst') %}
         <button class="stab" onclick="showSection('insurance')">🛡️ Assurances</button>
         <button class="stab" onclick="showSection('pipedrive')">🔗 Pipedrive</button>
+        {% endif %}
     </div>
 
     <!-- USERS -->
-    <div class="settings-section" id="sec-users">
+    <div class="settings-section" id="sec-users" {% if user.role == 'commercial' %}style="display:none;"{% endif %}
         <div class="sec-header">
             <h3>Utilisateurs</h3>
             <button class="btn btn-primary btn-sm" onclick="openModal('/admin/users/create')"><i data-lucide="plus"></i> Nouvel utilisateur</button>
@@ -618,7 +622,7 @@
     </div>
 
     <!-- PRICING GRID -->
-    <div class="settings-section" id="sec-pricing" style="display:none;">
+    <div class="settings-section" id="sec-pricing" style="display:{% if user.role == 'commercial' %}block{% else %}none{% endif %};">
         <h3>🧳 Grille tarifaire passagers</h3>
         <p style="font-size:13px;color:#666;margin-bottom:16px;">Prix par traversée (origine → destination) et par type de cabine. L'acompte est calculé en % du prix.</p>
 

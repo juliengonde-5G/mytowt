@@ -120,6 +120,10 @@
                     <a href="/admin/settings" class="nav-item {% if active_module == 'settings' %}active{% endif %}">
                         <i data-lucide="settings"></i><span>{{ t('nav_settings', lang|default('fr')) }}</span>
                     </a>
+                    {% elif user and user.role == 'commercial' %}
+                    <a href="/admin/settings#pricing" class="nav-item {% if active_module == 'settings' %}active{% endif %}">
+                        <i data-lucide="tag"></i><span>Tarifs passagers</span>
+                    </a>
                     {% endif %}
                 </div>
             </nav>

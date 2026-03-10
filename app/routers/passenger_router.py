@@ -42,6 +42,7 @@ def _gen_ref():
 async def passenger_list(
     request: Request,
     status: Optional[str] = Query(None),
+    leg_id: Optional[int] = Query(None),
     user: User = Depends(require_permission("passengers", "C")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -60,6 +61,8 @@ async def passenger_list(
     )
     if status:
         query = query.where(PassengerBooking.status == status)
+    if leg_id:
+        query = query.where(PassengerBooking.leg_id == leg_id)
 
     result = await db.execute(query)
     bookings = result.scalars().all()
@@ -75,11 +78,20 @@ async def passenger_list(
         vc = b.vessel.code if b.vessel else None
         cabin_labels[b.id] = get_cabin_label(vc, b.cabin_number)
 
+    # Load legs for filter dropdown
+    legs_result = await db.execute(
+        select(Leg).options(selectinload(Leg.departure_port), selectinload(Leg.arrival_port), selectinload(Leg.vessel))
+        .order_by(Leg.etd.asc().nulls_last())
+    )
+    legs = legs_result.scalars().all()
+
     return templates.TemplateResponse("passengers/index.html", {
         "request": request, "user": user,
         "bookings": bookings, "stats": stats,
         "cabin_labels": cabin_labels,
         "selected_status": status,
+        "selected_leg_id": leg_id,
+        "legs": legs,
         "booking_statuses": BOOKING_STATUSES,
         "active_module": "passengers",
     })
@@ -96,7 +108,7 @@ async def booking_create_form(
 ):
     legs_result = await db.execute(
         select(Leg).options(selectinload(Leg.departure_port), selectinload(Leg.arrival_port), selectinload(Leg.vessel))
-        .where(Leg.status != "cancelled")
+        .where(Leg.status.notin_(["cancelled", "completed"]))
         .order_by(Leg.etd.asc().nulls_last(), Leg.leg_code.asc())
     )
     legs = legs_result.scalars().all()

@@ -15,10 +15,20 @@
 </div>
 
 <div class="pax-filters">
-    <a href="/passengers" class="pax-filter-btn {% if not selected_status %}active{% endif %}">Toutes</a>
+    <a href="/passengers{% if selected_leg_id %}?leg_id={{ selected_leg_id }}{% endif %}" class="pax-filter-btn {% if not selected_status %}active{% endif %}">Toutes</a>
     {% for code, label in booking_statuses %}
-    <a href="/passengers?status={{ code }}" class="pax-filter-btn {% if selected_status == code %}active{% endif %}">{{ label }}</a>
+    <a href="/passengers?status={{ code }}{% if selected_leg_id %}&leg_id={{ selected_leg_id }}{% endif %}" class="pax-filter-btn {% if selected_status == code %}active{% endif %}">{{ label }}</a>
     {% endfor %}
+    <div style="margin-left:auto;">
+        <select onchange="var v=this.value;var url='/passengers';var p=[];if(v)p.push('leg_id='+v);{% if selected_status %}p.push('status={{ selected_status }}');{% endif %}if(p.length)url+='?'+p.join('&');window.location.href=url;" style="padding:5px 10px;border:1px solid #ddd;border-radius:var(--radius);font-size:12px;font-family:inherit;color:#555;">
+            <option value="">Toutes les traversees</option>
+            {% for l in legs %}
+            <option value="{{ l.id }}" {% if selected_leg_id == l.id %}selected{% endif %}>
+                {{ l.leg_code }} — {{ l.vessel.name }} — {{ l.departure_port.name }} → {{ l.arrival_port.name }}{% if l.etd %} ({{ l.etd.strftime('%d/%m/%Y') }}){% endif %}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
 </div>
 
 <div class="pax-card">
