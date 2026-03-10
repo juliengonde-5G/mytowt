@@ -946,7 +946,7 @@ async def purge_selective(
     await log_activity(db, user=user, action="purge", module="admin",
                        detail=f"Purge sélective: {', '.join(tables_param)}",
                        ip_address=get_client_ip(request))
-    await db.commit()
+    await db.flush()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
 
@@ -1011,7 +1011,7 @@ async def reset_database(
     await log_activity(db, user=user, action="reset", module="admin",
                        detail="Full database reset",
                        ip_address=get_client_ip(request))
-    await db.commit()
+    await db.flush()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
 
@@ -1054,7 +1054,7 @@ async def cleanup_notifications(
     await db.execute(text(
         "DELETE FROM notifications WHERE is_archived = TRUE AND created_at < NOW() - INTERVAL '30 days'"
     ))
-    await db.commit()
+    await db.flush()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
 
@@ -1070,7 +1070,7 @@ async def cleanup_audit(
     await db.execute(text(
         "DELETE FROM passenger_audit_logs WHERE created_at < NOW() - INTERVAL '12 months'"
     ))
-    await db.commit()
+    await db.flush()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
 
@@ -1083,7 +1083,7 @@ async def cleanup_activity_logs(
     await db.execute(text(
         "DELETE FROM activity_logs WHERE created_at < NOW() - INTERVAL '6 months'"
     ))
-    await db.commit()
+    await db.flush()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
 
@@ -1096,7 +1096,7 @@ async def cleanup_onboard_notifications(
     await db.execute(text(
         "DELETE FROM onboard_notifications WHERE is_read = TRUE AND created_at < NOW() - INTERVAL '30 days'"
     ))
-    await db.commit()
+    await db.flush()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
 
@@ -1109,7 +1109,7 @@ async def cleanup_access_logs(
     await db.execute(text(
         "DELETE FROM portal_access_logs WHERE accessed_at < NOW() - INTERVAL '6 months'"
     ))
-    await db.commit()
+    await db.flush()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
 
