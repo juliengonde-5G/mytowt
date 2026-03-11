@@ -623,46 +623,73 @@
 
     <!-- PRICING GRID -->
     <div class="settings-section" id="sec-pricing" style="display:{% if user.role == 'commercial' %}block{% else %}none{% endif %};">
-        <h3>🧳 Grille tarifaire passagers</h3>
-        <p style="font-size:13px;color:#666;margin-bottom:16px;">Prix par traversée (origine → destination) et par type de cabine. L'acompte est calculé en % du prix.</p>
+        <div class="sec-header">
+            <h3>Grille tarifaire passagers</h3>
+        </div>
+        <p style="font-size:13px;color:#666;margin-bottom:16px;font-family:'Poppins',system-ui,sans-serif;">Prix par traversée (origine → destination) et par type de cabine. L'acompte et la remise sont calculés en % du prix.</p>
+
+        <!-- Filters -->
+        <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+            <div>
+                <label class="field-label" style="font-size:11px;">Route</label>
+                <select id="pricing-filter-route" onchange="filterPricingGrid()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:'Poppins',system-ui,sans-serif;min-width:200px;">
+                    <option value="">Toutes les routes</option>
+                    {% for r in existing_routes %}
+                    <option value="{{ r.dep }}|{{ r.arr }}">{{ r.dep_name }} → {{ r.arr_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="field-label" style="font-size:11px;">Type cabine</label>
+                <select id="pricing-filter-cabin" onchange="filterPricingGrid()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:'Poppins',system-ui,sans-serif;min-width:140px;">
+                    <option value="">Tous les types</option>
+                    <option value="double">Lit double</option>
+                    <option value="twin">Lits jumeaux</option>
+                </select>
+            </div>
+        </div>
 
         {% if pricing_grid %}
-        <table class="data-table" style="margin-bottom:16px;">
-            <thead><tr><th>Origine</th><th>Destination</th><th>Type cabine</th><th>Prix (€)</th><th>Acompte %</th><th>Notes</th><th>Actif</th><th></th></tr></thead>
+        <div class="table-container">
+        <table class="data-table" id="pricing-table" style="margin-bottom:16px;">
+            <thead><tr><th>Origine</th><th>Destination</th><th>Type cabine</th><th>Prix (€)</th><th>Acompte %</th><th>Remise %</th><th>Notes</th><th>Actif</th><th style="text-align:right;">Actions</th></tr></thead>
             <tbody>
             {% for pg in pricing_grid %}
-            <tr>
+            <tr data-route="{{ pg.origin_locode }}|{{ pg.destination_locode }}" data-cabin="{{ pg.cabin_type }}">
                 <form method="POST" action="/admin/settings/pricing/{{ pg.id }}/edit">
                 {{ csrf_input(request) }}
                 <td>{{ route_ports.get(pg.origin_locode, pg.origin_locode) }} <span style="font-size:10px;color:#888;">({{ pg.origin_locode }})</span></td>
                 <td>{{ route_ports.get(pg.destination_locode, pg.destination_locode) }} <span style="font-size:10px;color:#888;">({{ pg.destination_locode }})</span></td>
                 <td>{{ cabin_type_labels.get(pg.cabin_type, pg.cabin_type) }}</td>
-                <td><input type="number" name="price" value="{{ pg.price }}" step="0.01" style="width:80px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;"></td>
-                <td><input type="number" name="deposit_pct" value="{{ pg.deposit_pct }}" min="0" max="100" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;">%</td>
-                <td><input type="text" name="notes" value="{{ pg.notes or '' }}" style="width:100px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;"></td>
+                <td><input type="number" name="price" value="{{ pg.price }}" step="0.01" class="pricing-input" style="width:80px;"></td>
+                <td><input type="number" name="deposit_pct" value="{{ pg.deposit_pct }}" min="0" max="100" class="pricing-input" style="width:55px;"></td>
+                <td><input type="number" name="discount_rate" value="{{ pg.discount_rate or 0 }}" min="0" max="100" step="0.01" class="pricing-input" style="width:55px;"></td>
+                <td><input type="text" name="notes" value="{{ pg.notes or '' }}" class="pricing-input" style="width:100px;"></td>
                 <td><input type="checkbox" name="is_active" {% if pg.is_active %}checked{% endif %}></td>
-                <td style="white-space:nowrap;">
-                    <button type="submit" class="btn btn-sm btn-secondary" style="padding:3px 8px;font-size:10px;">💾</button>
-                    <button type="button" class="btn btn-sm" style="padding:3px 8px;font-size:10px;color:#dc2626;"
-                            hx-delete="/admin/settings/pricing/{{ pg.id }}" hx-confirm="Supprimer ?" hx-target="closest tr" hx-swap="outerHTML">🗑</button>
+                <td style="white-space:nowrap;text-align:right;">
+                    <button type="submit" class="btn btn-sm btn-secondary" title="Enregistrer"><i data-lucide="save"></i></button>
+                    <button type="button" class="btn btn-sm btn-danger"
+                            hx-delete="/admin/settings/pricing/{{ pg.id }}" hx-confirm="Supprimer ce tarif ?" hx-target="closest tr" hx-swap="outerHTML"
+                            title="Supprimer"><i data-lucide="trash-2"></i></button>
                 </td>
                 </form>
             </tr>
             {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}
-        <p style="color:#aaa;text-align:center;padding:20px;">Aucun tarif configuré.</p>
+        <p style="color:#aaa;text-align:center;padding:20px;font-family:'Poppins',system-ui,sans-serif;">Aucun tarif configuré.</p>
         {% endif %}
 
         <details style="margin-top:12px;">
-            <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--towt-blue);">＋ Ajouter un tarif</summary>
+            <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--towt-blue);font-family:'Poppins',system-ui,sans-serif;"><i data-lucide="plus" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i> Ajouter un tarif</summary>
             <form method="POST" action="/admin/settings/pricing/add" style="margin-top:10px;">
                 {{ csrf_input(request) }}
-                <div style="display:grid;grid-template-columns:1fr 1fr 100px 80px 1fr;gap:8px;align-items:end;">
+                <div style="display:grid;grid-template-columns:1fr 1fr 100px 80px 80px 1fr;gap:8px;align-items:end;">
                     <div>
-                        <label style="font-size:10px;font-weight:600;color:#888;">Route (Origine → Destination)</label>
-                        <select name="route" id="pricing-route" required onchange="var v=this.value.split('|');document.getElementById('h-origin').value=v[0]||'';document.getElementById('h-dest').value=v[1]||'';" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                        <label class="field-label" style="font-size:10px;">Route (Origine → Destination)</label>
+                        <select name="route" id="pricing-route" required onchange="var v=this.value.split('|');document.getElementById('h-origin').value=v[0]||'';document.getElementById('h-dest').value=v[1]||'';" class="pricing-select">
                             <option value="">— Choisir une route —</option>
                             {% for r in existing_routes %}
                             <option value="{{ r.dep }}|{{ r.arr }}">{{ r.dep_name }} ({{ r.dep }}) → {{ r.arr_name }} ({{ r.arr }})</option>
@@ -672,26 +699,30 @@
                         <input type="hidden" name="destination_locode" id="h-dest">
                     </div>
                     <div>
-                        <label style="font-size:10px;font-weight:600;color:#888;">Type cabine</label>
-                        <select name="cabin_type" required style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                        <label class="field-label" style="font-size:10px;">Type cabine</label>
+                        <select name="cabin_type" required class="pricing-select">
                             <option value="double">Lit double</option>
                             <option value="twin">Lits jumeaux</option>
                         </select>
                     </div>
                     <div>
-                        <label style="font-size:10px;font-weight:600;color:#888;">Prix (€)</label>
-                        <input type="number" name="price" step="0.01" required style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                        <label class="field-label" style="font-size:10px;">Prix (€)</label>
+                        <input type="number" name="price" step="0.01" required class="pricing-input-add">
                     </div>
                     <div>
-                        <label style="font-size:10px;font-weight:600;color:#888;">Acompte %</label>
-                        <input type="number" name="deposit_pct" value="30" min="0" max="100" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                        <label class="field-label" style="font-size:10px;">Acompte %</label>
+                        <input type="number" name="deposit_pct" value="30" min="0" max="100" class="pricing-input-add">
                     </div>
                     <div>
-                        <label style="font-size:10px;font-weight:600;color:#888;">Notes</label>
-                        <input type="text" name="notes" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                        <label class="field-label" style="font-size:10px;">Remise %</label>
+                        <input type="number" name="discount_rate" value="0" min="0" max="100" step="0.01" class="pricing-input-add">
+                    </div>
+                    <div>
+                        <label class="field-label" style="font-size:10px;">Notes</label>
+                        <input type="text" name="notes" class="pricing-input-add">
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary btn-sm" style="margin-top:10px;">Ajouter</button>
+                <button type="submit" class="btn btn-primary btn-sm" style="margin-top:10px;"><i data-lucide="plus" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i> Ajouter</button>
             </form>
         </details>
     </div>
@@ -816,6 +847,15 @@
 <div id="modal-container"></div>
 
 <style>
+    .pricing-input{padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;font-family:'Poppins',system-ui,sans-serif;}
+    .pricing-input:focus{border-color:var(--towt-blue);outline:none;}
+    .pricing-input-add{width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:'Poppins',system-ui,sans-serif;}
+    .pricing-input-add:focus{border-color:var(--towt-blue);outline:none;}
+    .pricing-select{width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:'Poppins',system-ui,sans-serif;}
+    .pricing-select:focus{border-color:var(--towt-blue);outline:none;}
+    #pricing-table td,#pricing-table th{font-family:'Poppins',system-ui,sans-serif;font-size:12px;}
+    #pricing-table .btn-sm{padding:4px 8px;}
+    #pricing-table .btn-sm i{width:14px;height:14px;}
     .settings-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:20px;background:white;padding:6px;border-radius:var(--radius-lg);box-shadow:var(--shadow);}
     .stab{padding:8px 16px;border:none;background:transparent;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;color:var(--towt-gray);font-family:'Poppins',system-ui,sans-serif;}
     .stab:hover{background:var(--towt-light);}.stab.active{background:var(--towt-blue);color:white;}
@@ -854,6 +894,18 @@
 </style>
 
 <script>
+    /* ─── Pricing grid filter ─── */
+    window.filterPricingGrid = function() {
+        var route = document.getElementById('pricing-filter-route').value;
+        var cabin = document.getElementById('pricing-filter-cabin').value;
+        var rows = document.querySelectorAll('#pricing-table tbody tr');
+        rows.forEach(function(tr) {
+            var rMatch = !route || tr.dataset.route === route;
+            var cMatch = !cabin || tr.dataset.cabin === cabin;
+            tr.style.display = (rMatch && cMatch) ? '' : 'none';
+        });
+    };
+
     window.showSection = function(name) {
         document.querySelectorAll('.settings-section').forEach(function(s){s.style.display='none';});
         document.querySelectorAll('.stab').forEach(function(t){t.classList.remove('active');});

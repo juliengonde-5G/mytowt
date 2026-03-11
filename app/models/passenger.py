@@ -272,6 +272,7 @@ class CabinPriceGrid(Base):
     price = Column(Numeric(10, 2), nullable=False)
     currency = Column(String(3), default="EUR")
     deposit_pct = Column(Integer, default=30)
+    discount_rate = Column(Numeric(5, 2), default=0)  # % discount
     notes = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -1152,6 +1152,7 @@ async def pricing_add(
     cabin_type: str = Form(...),
     price: float = Form(...),
     deposit_pct: int = Form(30),
+    discount_rate: float = Form(0),
     notes: str = Form(""),
     user: User = Depends(require_admin_or_commercial),
     db: AsyncSession = Depends(get_db),
@@ -1163,6 +1164,7 @@ async def pricing_add(
         cabin_type=cabin_type,
         price=price,
         deposit_pct=deposit_pct,
+        discount_rate=min(max(discount_rate, 0), 100),
         notes=notes.strip() or None,
     )
     db.add(entry)
@@ -1175,6 +1177,7 @@ async def pricing_edit(
     price_id: int, request: Request,
     price: float = Form(...),
     deposit_pct: int = Form(30),
+    discount_rate: float = Form(0),
     notes: str = Form(""),
     is_active: Optional[str] = Form(None),
     user: User = Depends(require_admin_or_commercial),
@@ -1185,6 +1188,7 @@ async def pricing_edit(
     if entry:
         entry.price = price
         entry.deposit_pct = deposit_pct
+        entry.discount_rate = min(max(discount_rate, 0), 100)
         entry.notes = notes.strip() or None
         entry.is_active = is_active == "on"
         await db.flush()
