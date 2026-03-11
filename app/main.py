@@ -182,8 +182,9 @@ app.include_router(auth_router)
 app.include_router(dashboard_router)
 app.include_router(planning_router, dependencies=[Depends(require_permission("planning", "C"))])
 app.include_router(api_ports_router)
-from app.routers.admin_router import require_admin
+from app.routers.admin_router import require_admin, account_router
 app.include_router(admin_router, dependencies=[Depends(require_admin)])
+app.include_router(account_router)
 app.include_router(kpi_router, dependencies=[Depends(require_permission("kpi", "C"))])
 app.include_router(commercial_router, dependencies=[Depends(require_permission("commercial", "C"))])
 app.include_router(escale_router, dependencies=[Depends(require_permission("escale", "C"))])

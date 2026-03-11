@@ -29,6 +29,7 @@ from app.models.co2_variable import Co2Variable, CO2_DEFAULTS
 from app.models.mrv import MrvParameter, MRV_DEFAULTS
 
 ADMIN_ROLES = {"administrateur", "admin", "data_analyst"}
+ADMIN_OR_COMMERCIAL = ADMIN_ROLES | {"commercial"}
 
 
 async def require_admin(user: User = Depends(get_current_user)):
@@ -37,7 +38,18 @@ async def require_admin(user: User = Depends(get_current_user)):
         raise HTTPException(403, detail="Admin access required")
     return user
 
+
+async def require_admin_or_commercial(user: User = Depends(get_current_user)):
+    """Require admin, data_analyst or commercial role."""
+    if user.role not in ADMIN_OR_COMMERCIAL:
+        raise HTTPException(403, detail="Access denied")
+    return user
+
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+# Separate router for routes accessible to all authenticated users (my-account)
+# or admin+commercial (settings)
+account_router = APIRouter(prefix="/admin", tags=["admin"])
 
 USER_ROLES = [
     {"value": "administrateur", "label": "Administrateur"},
@@ -69,10 +81,10 @@ def pf(val, default=0):
 
 
 # ─── SETTINGS HOME ───────────────────────────────────────────
-@router.get("/settings", response_class=HTMLResponse)
+@account_router.get("/settings", response_class=HTMLResponse)
 async def settings_home(
     request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin_or_commercial),
     db: AsyncSession = Depends(get_db),
 ):
     # Users
@@ -1132,7 +1144,7 @@ async def update_language(
 
 
 # ─── CABIN PRICING GRID ──────────────────────────────────────
-@router.post("/settings/pricing/add", response_class=HTMLResponse)
+@account_router.post("/settings/pricing/add", response_class=HTMLResponse)
 async def pricing_add(
     request: Request,
     origin_locode: str = Form(...),
@@ -1141,7 +1153,7 @@ async def pricing_add(
     price: float = Form(...),
     deposit_pct: int = Form(30),
     notes: str = Form(""),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin_or_commercial),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.passenger import CabinPriceGrid
@@ -1158,14 +1170,14 @@ async def pricing_add(
     return RedirectResponse(url="/admin/settings#pricing", status_code=303)
 
 
-@router.post("/settings/pricing/{price_id}/edit", response_class=HTMLResponse)
+@account_router.post("/settings/pricing/{price_id}/edit", response_class=HTMLResponse)
 async def pricing_edit(
     price_id: int, request: Request,
     price: float = Form(...),
     deposit_pct: int = Form(30),
     notes: str = Form(""),
     is_active: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin_or_commercial),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.passenger import CabinPriceGrid
@@ -1179,10 +1191,10 @@ async def pricing_edit(
     return RedirectResponse(url="/admin/settings#pricing", status_code=303)
 
 
-@router.delete("/settings/pricing/{price_id}", response_class=HTMLResponse)
+@account_router.delete("/settings/pricing/{price_id}", response_class=HTMLResponse)
 async def pricing_delete(
     price_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin_or_commercial),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.passenger import CabinPriceGrid
@@ -1333,7 +1345,7 @@ async def pipedrive_test(
 
 
 # ─── MON COMPTE (accessible à tous les rôles) ─────────────────
-@router.get("/my-account", response_class=HTMLResponse)
+@account_router.get("/my-account", response_class=HTMLResponse)
 async def my_account(
     request: Request,
     success: Optional[str] = Query(None),
@@ -1352,7 +1364,7 @@ async def my_account(
     })
 
 
-@router.post("/my-account/password", response_class=HTMLResponse)
+@account_router.post("/my-account/password", response_class=HTMLResponse)
 async def my_account_password(
     request: Request,
     current_password: str = Form(...),
@@ -1373,7 +1385,7 @@ async def my_account_password(
     return RedirectResponse(url="/admin/my-account?success=Mot+de+passe+modifié+avec+succès", status_code=303)
 
 
-@router.post("/my-account/language", response_class=HTMLResponse)
+@account_router.post("/my-account/language", response_class=HTMLResponse)
 async def my_account_language(
     request: Request,
     language: str = Form(...),

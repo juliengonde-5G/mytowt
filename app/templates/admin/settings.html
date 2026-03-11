@@ -27,7 +27,7 @@
     </div>
 
     <!-- USERS -->
-    <div class="settings-section" id="sec-users" {% if user.role == 'commercial' %}style="display:none;"{% endif %}
+    <div class="settings-section" id="sec-users" {% if user.role not in ('administrateur', 'admin', 'data_analyst') %}style="display:none;"{% endif %}>
         <div class="sec-header">
             <h3>Utilisateurs</h3>
             <button class="btn btn-primary btn-sm" onclick="openModal('/admin/users/create')"><i data-lucide="plus"></i> Nouvel utilisateur</button>
