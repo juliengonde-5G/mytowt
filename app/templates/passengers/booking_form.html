@@ -41,6 +41,15 @@
             {% endfor %}
         </div>
 
+        <!-- Discount -->
+        <div style="margin-top:12px;">
+            <label style="font-size:12px;font-weight:600;color:#555;">Remise (%)</label>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+                <input type="number" name="discount_rate" id="discount-input" value="0" min="0" max="100" step="0.01" class="fi" style="width:80px;" oninput="autoPrice()">
+                <span style="font-size:11px;color:#888;">Remise sur le tarif catalogue</span>
+            </div>
+        </div>
+
         <!-- Auto-price display -->
         <div id="price-box" style="display:none;margin-top:16px;padding:14px 18px;background:rgba(135,189,43,0.06);border:1px solid rgba(135,189,43,0.2);border-radius:8px;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -189,7 +198,7 @@ function autoPrice() {
 
     if (match) {
         var catalog = match.price;
-        var discountRate = match.discount_rate || 0;
+        var discountRate = parseFloat(document.getElementById('discount-input').value) || 0;
         var total = discountRate > 0 ? Math.round(catalog * (1 - discountRate / 100) * 100) / 100 : catalog;
         var deposit = Math.round(total * match.deposit_pct / 100 * 100) / 100;
         var balance = Math.round((total - deposit) * 100) / 100;

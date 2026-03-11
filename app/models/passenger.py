@@ -152,10 +152,11 @@ class PassengerBooking(Base):
     status = Column(String(20), nullable=False, default="draft")
     booking_date = Column(Date, nullable=True)
 
-    # Pricing (auto from grid)
+    # Pricing (auto from grid, discount applied per booking)
     price_total = Column(Numeric(10, 2), nullable=True)
     price_deposit = Column(Numeric(10, 2), nullable=True)
     price_balance = Column(Numeric(10, 2), nullable=True)
+    discount_rate = Column(Numeric(5, 2), default=0)  # % discount on catalog price
     currency = Column(String(3), default="EUR")
 
     # Booker contact
@@ -272,7 +273,6 @@ class CabinPriceGrid(Base):
     price = Column(Numeric(10, 2), nullable=False)
     currency = Column(String(3), default="EUR")
     deposit_pct = Column(Integer, default=30)
-    discount_rate = Column(Numeric(5, 2), default=0)  # % discount
     notes = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

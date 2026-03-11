@@ -117,8 +117,7 @@ async def booking_create_form(
     pricing_entries = pricing_result.scalars().all()
     pricing_json = [
         {"origin": p.origin_locode, "dest": p.destination_locode, "cabin": p.cabin_type,
-         "price": float(p.price), "deposit_pct": p.deposit_pct,
-         "discount_rate": float(p.discount_rate or 0)}
+         "price": float(p.price), "deposit_pct": p.deposit_pct}
         for p in pricing_entries
     ]
 
@@ -171,9 +170,12 @@ async def booking_create_submit(
     pax2_passport: str = Form(""),
     pax2_emergency_name: str = Form(""), pax2_emergency_phone: str = Form(""),
     notes: str = Form(""),
+    discount_rate: float = Form(0),
     user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
+    discount_rate = min(max(discount_rate, 0), 100)
+
     # Get leg and vessel
     leg = await db.get(Leg, leg_id)
     if not leg:
@@ -204,7 +206,6 @@ async def booking_create_submit(
 
     if price_entry:
         catalog_price = float(price_entry.price)
-        discount_rate = float(price_entry.discount_rate or 0)
         price_total = round(catalog_price * (1 - discount_rate / 100), 2) if discount_rate > 0 else catalog_price
     else:
         price_total = None
@@ -222,6 +223,7 @@ async def booking_create_submit(
         price_total=price_total,
         price_deposit=price_deposit,
         price_balance=price_balance,
+        discount_rate=discount_rate,
         contact_email=contact_email.strip() or None,
         contact_phone=contact_phone.strip() or None,
         notes=notes.strip() or None,

@@ -250,6 +250,9 @@
         <div class="bd-info-row"><span>Date</span><strong>{{ booking.booking_date.strftime('%d/%m/%Y') if booking.booking_date else '—' }}</strong></div>
         <div class="bd-info-row"><span>Cabine</span><strong>{{ booking.cabin_number }} · {{ booking.cabin_label }}</strong></div>
         <div class="bd-info-row"><span>Prix</span><strong>{{ "%.2f"|format(booking.price_total or 0) }} €</strong></div>
+        {% if booking.discount_rate and booking.discount_rate > 0 %}
+        <div class="bd-info-row"><span>Remise</span><strong style="color:#87BD2B;">-{{ "%.2f"|format(booking.discount_rate) }}%</strong></div>
+        {% endif %}
         <div class="bd-info-row"><span>Acompte</span><strong>{{ "%.2f"|format(booking.price_deposit or 0) }} €</strong></div>
         <div class="bd-info-row"><span>Solde</span><strong>{{ "%.2f"|format(booking.price_balance or 0) }} €</strong></div>
     </div>

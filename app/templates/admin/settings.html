@@ -626,7 +626,7 @@
         <div class="sec-header">
             <h3>Grille tarifaire passagers</h3>
         </div>
-        <p style="font-size:13px;color:#666;margin-bottom:16px;font-family:'Poppins',system-ui,sans-serif;">Prix par traversée (origine → destination) et par type de cabine. L'acompte et la remise sont calculés en % du prix.</p>
+        <p style="font-size:13px;color:#666;margin-bottom:16px;font-family:'Poppins',system-ui,sans-serif;">Prix catalogue par traversée (origine → destination) et par type de cabine. L'acompte est calculé en % du prix. La remise se configure par réservation.</p>
 
         <!-- Filters -->
         <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
@@ -652,7 +652,7 @@
         {% if pricing_grid %}
         <div class="table-container">
         <table class="data-table" id="pricing-table" style="margin-bottom:16px;">
-            <thead><tr><th>Origine</th><th>Destination</th><th>Type cabine</th><th>Prix (€)</th><th>Acompte %</th><th>Remise %</th><th>Notes</th><th>Actif</th><th style="text-align:right;">Actions</th></tr></thead>
+            <thead><tr><th>Origine</th><th>Destination</th><th>Type cabine</th><th>Prix (€)</th><th>Acompte %</th><th>Notes</th><th>Actif</th><th style="text-align:right;">Actions</th></tr></thead>
             <tbody>
             {% for pg in pricing_grid %}
             <tr data-route="{{ pg.origin_locode }}|{{ pg.destination_locode }}" data-cabin="{{ pg.cabin_type }}">
@@ -663,7 +663,6 @@
                 <td>{{ cabin_type_labels.get(pg.cabin_type, pg.cabin_type) }}</td>
                 <td><input type="number" name="price" value="{{ pg.price }}" step="0.01" class="pricing-input" style="width:80px;"></td>
                 <td><input type="number" name="deposit_pct" value="{{ pg.deposit_pct }}" min="0" max="100" class="pricing-input" style="width:55px;"></td>
-                <td><input type="number" name="discount_rate" value="{{ pg.discount_rate or 0 }}" min="0" max="100" step="0.01" class="pricing-input" style="width:55px;"></td>
                 <td><input type="text" name="notes" value="{{ pg.notes or '' }}" class="pricing-input" style="width:100px;"></td>
                 <td><input type="checkbox" name="is_active" {% if pg.is_active %}checked{% endif %}></td>
                 <td style="white-space:nowrap;text-align:right;">
@@ -686,7 +685,7 @@
             <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--towt-blue);font-family:'Poppins',system-ui,sans-serif;"><i data-lucide="plus" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i> Ajouter un tarif</summary>
             <form method="POST" action="/admin/settings/pricing/add" style="margin-top:10px;">
                 {{ csrf_input(request) }}
-                <div style="display:grid;grid-template-columns:1fr 1fr 100px 80px 80px 1fr;gap:8px;align-items:end;">
+                <div style="display:grid;grid-template-columns:1fr 1fr 100px 80px 1fr;gap:8px;align-items:end;">
                     <div>
                         <label class="field-label" style="font-size:10px;">Route (Origine → Destination)</label>
                         <select name="route" id="pricing-route" required onchange="var v=this.value.split('|');document.getElementById('h-origin').value=v[0]||'';document.getElementById('h-dest').value=v[1]||'';" class="pricing-select">
@@ -712,10 +711,6 @@
                     <div>
                         <label class="field-label" style="font-size:10px;">Acompte %</label>
                         <input type="number" name="deposit_pct" value="30" min="0" max="100" class="pricing-input-add">
-                    </div>
-                    <div>
-                        <label class="field-label" style="font-size:10px;">Remise %</label>
-                        <input type="number" name="discount_rate" value="0" min="0" max="100" step="0.01" class="pricing-input-add">
                     </div>
                     <div>
                         <label class="field-label" style="font-size:10px;">Notes</label>
