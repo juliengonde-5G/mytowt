@@ -47,6 +47,7 @@
                 <div>
                     <span style="font-size:11px;color:#888;text-transform:uppercase;">Prix de la traversée</span>
                     <div style="font-size:24px;font-weight:700;color:var(--towt-blue);" id="price-display">—</div>
+                    <div id="discount-info" style="display:none;font-size:11px;color:#87BD2B;font-weight:600;margin-top:2px;"></div>
                 </div>
                 <div style="text-align:right;">
                     <div style="font-size:12px;color:#666;">Acompte : <strong id="deposit-display">—</strong></div>
@@ -187,10 +188,22 @@ function autoPrice() {
     });
 
     if (match) {
-        var total = match.price;
+        var catalog = match.price;
+        var discountRate = match.discount_rate || 0;
+        var total = discountRate > 0 ? Math.round(catalog * (1 - discountRate / 100) * 100) / 100 : catalog;
         var deposit = Math.round(total * match.deposit_pct / 100 * 100) / 100;
         var balance = Math.round((total - deposit) * 100) / 100;
-        document.getElementById('price-display').textContent = total.toFixed(2) + ' €';
+
+        var priceHtml = total.toFixed(2) + ' €';
+        var discountEl = document.getElementById('discount-info');
+        if (discountRate > 0) {
+            priceHtml = '<span style="text-decoration:line-through;color:#999;font-size:16px;font-weight:400;">' + catalog.toFixed(2) + ' €</span> ' + total.toFixed(2) + ' €';
+            if (discountEl) discountEl.style.display = 'block';
+            if (discountEl) discountEl.textContent = 'Remise ' + discountRate + '% appliquée';
+        } else {
+            if (discountEl) discountEl.style.display = 'none';
+        }
+        document.getElementById('price-display').innerHTML = priceHtml;
         document.getElementById('deposit-display').textContent = deposit.toFixed(2) + ' €';
         document.getElementById('balance-display').textContent = balance.toFixed(2) + ' €';
         document.getElementById('price-box').style.display = 'block';

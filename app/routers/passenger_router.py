@@ -117,7 +117,8 @@ async def booking_create_form(
     pricing_entries = pricing_result.scalars().all()
     pricing_json = [
         {"origin": p.origin_locode, "dest": p.destination_locode, "cabin": p.cabin_type,
-         "price": float(p.price), "deposit_pct": p.deposit_pct}
+         "price": float(p.price), "deposit_pct": p.deposit_pct,
+         "discount_rate": float(p.discount_rate or 0)}
         for p in pricing_entries
     ]
 
@@ -201,7 +202,12 @@ async def booking_create_submit(
     )
     price_entry = price_result.scalar_one_or_none()
 
-    price_total = float(price_entry.price) if price_entry else None
+    if price_entry:
+        catalog_price = float(price_entry.price)
+        discount_rate = float(price_entry.discount_rate or 0)
+        price_total = round(catalog_price * (1 - discount_rate / 100), 2) if discount_rate > 0 else catalog_price
+    else:
+        price_total = None
     deposit_pct = price_entry.deposit_pct if price_entry else 30
     price_deposit = round(price_total * deposit_pct / 100, 2) if price_total else None
     price_balance = round(price_total - price_deposit, 2) if price_total and price_deposit else None
