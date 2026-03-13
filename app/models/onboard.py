@@ -2,7 +2,7 @@
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, Date, func
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from app.database import Base
 
 
@@ -45,7 +45,7 @@ class ETAShift(Base):
     # Snapshot of cascading impact
     legs_affected = Column(Integer, default=0)  # number of downstream legs recalculated
 
-    leg = relationship("Leg", backref="eta_shifts")
+    leg = relationship("Leg", backref=backref("eta_shifts", passive_deletes=True))
     vessel = relationship("Vessel")
 
 
@@ -116,7 +116,7 @@ class SofEvent(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    leg = relationship("Leg", backref="sof_events")
+    leg = relationship("Leg", backref=backref("sof_events", passive_deletes=True))
 
 
 class OnboardNotification(Base):
@@ -131,7 +131,7 @@ class OnboardNotification(Base):
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    leg = relationship("Leg", backref="onboard_notifications")
+    leg = relationship("Leg", backref=backref("onboard_notifications", passive_deletes=True))
 
 
 class CargoDocument(Base):
@@ -147,7 +147,7 @@ class CargoDocument(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    leg = relationship("Leg", backref="cargo_documents")
+    leg = relationship("Leg", backref=backref("cargo_documents", passive_deletes=True))
 
 
 # ─── ATTACHMENT CATEGORIES ─────────────────────────────────────
@@ -176,4 +176,4 @@ class OnboardAttachment(Base):
     uploaded_by = Column(String(200), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    leg = relationship("Leg", backref="attachments")
+    leg = relationship("Leg", backref=backref("attachments", passive_deletes=True))

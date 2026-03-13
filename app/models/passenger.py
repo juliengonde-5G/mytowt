@@ -10,7 +10,7 @@ import secrets
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, Date, Numeric, func
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from app.database import Base
 
 
@@ -136,7 +136,7 @@ class PassengerBooking(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    leg = relationship("Leg", backref="passenger_bookings")
+    leg = relationship("Leg", backref=backref("passenger_bookings", passive_deletes=True))
     vessel = relationship("Vessel")
     passengers = relationship("Passenger", back_populates="booking", cascade="all, delete-orphan")
     payments = relationship("PassengerPayment", back_populates="booking", cascade="all, delete-orphan")
