@@ -134,7 +134,10 @@ async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int):
                 computed_etd = prev_eta + timedelta(days=leg.port_stay_days or DEFAULT_PORT_STAY_DAYS)
                 # Only overwrite ETD if leg has no ETD yet, or if existing ETD
                 # is BEFORE prev leg's ETA (inconsistent — must be corrected)
-                if not leg.etd or leg.etd < prev_eta:
+                # Compare as naive to avoid offset-naive vs offset-aware errors
+                etd_naive = leg.etd.replace(tzinfo=None) if leg.etd and leg.etd.tzinfo else leg.etd
+                prev_eta_naive = prev_eta.replace(tzinfo=None) if prev_eta.tzinfo else prev_eta
+                if not leg.etd or etd_naive < prev_eta_naive:
                     leg.etd = computed_etd
 
         # Recalculate ETA from ETD (always, including on the edited leg)
