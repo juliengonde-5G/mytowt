@@ -111,6 +111,12 @@ async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int):
     )
     legs = result.scalars().all()
 
+    # First pass: set temporary unique codes to avoid UNIQUE constraint violations
+    # when reordering causes leg_code swaps (e.g. leg A gets B's old code before B is updated)
+    for leg in legs:
+        leg.leg_code = f"_RESEQ_{leg.id}"
+    await db.flush()
+
     for i, leg in enumerate(legs):
         leg.sequence = i + 1
         # Update leg code
