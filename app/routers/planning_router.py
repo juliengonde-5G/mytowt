@@ -101,8 +101,9 @@ async def get_previous_leg(db: AsyncSession, vessel_id: int, year: int, current_
     return result.scalar_one_or_none()
 
 
-async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int):
-    """Resequence all legs for a vessel/year by ETD, update codes, and recalculate dates chain."""
+async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int, edited_leg_id: int = None):
+    """Resequence all legs for a vessel/year by ETD, update codes, and recalculate dates chain.
+    If edited_leg_id is provided, preserve that leg's manually-set dates."""
     result = await db.execute(
         select(Leg)
         .options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
@@ -126,15 +127,17 @@ async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int):
             arr_country=leg.arrival_port.country_code,
         )
         # Recalculate dates chain (skip first leg - its ETD is manual)
-        if i > 0:
+        # Skip overwriting dates on the leg that was just manually edited
+        is_edited = edited_leg_id is not None and leg.id == edited_leg_id
+        if i > 0 and not is_edited:
             prev_leg = legs[i - 1]
             prev_eta = prev_leg.ata or prev_leg.eta  # Use actual if available
             if prev_eta and not leg.atd:
                 # ETD = previous ETA + port stay duration
                 leg.etd = prev_eta + timedelta(days=leg.port_stay_days or DEFAULT_PORT_STAY_DAYS)
 
-        # Recalculate ETA from ETD
-        if leg.etd and leg.distance_nm and not leg.ata:
+        # Recalculate ETA from ETD (skip if manually edited)
+        if leg.etd and leg.distance_nm and not leg.ata and not is_edited:
             speed = leg.speed_knots or DEFAULT_SPEED
             elong = leg.elongation_coeff or DEFAULT_ELONGATION
             leg.eta = compute_eta(leg.etd, leg.distance_nm, speed, elong)
@@ -560,8 +563,8 @@ async def leg_edit_submit(
 
     await db.flush()
 
-    # Resequence and recalculate chain
-    await resequence_and_recalc(db, _vessel_id, _year)
+    # Resequence and recalculate chain (preserve manually-edited dates)
+    await resequence_and_recalc(db, _vessel_id, _year, edited_leg_id=leg.id)
     if old_vessel_id != _vessel_id or old_year != _year:
         await resequence_and_recalc(db, old_vessel_id, old_year)
 
