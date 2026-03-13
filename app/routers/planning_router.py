@@ -139,6 +139,7 @@ async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int):
                 prev_eta_naive = prev_eta.replace(tzinfo=None) if prev_eta.tzinfo else prev_eta
                 if not leg.etd or etd_naive < prev_eta_naive:
                     leg.etd = computed_etd
+                    leg.etd_manual = False
 
         # Recalculate ETA from ETD (always, including on the edited leg)
         if leg.etd and leg.distance_nm and not leg.ata:
@@ -397,6 +398,7 @@ async def leg_create_submit(
     distance = haversine_nm(dep_port.latitude, dep_port.longitude, arr_port.latitude, arr_port.longitude)
 
     # If not first leg, compute ETD from previous leg's ETA + port stay
+    _etd_manual = _etd is not None  # User provided ETD explicitly
     if not _etd and sequence > 1:
         prev_leg = await get_previous_leg(db, _vessel_id, _year, sequence)
         if prev_leg:
@@ -423,6 +425,7 @@ async def leg_create_submit(
         computed_distance=_computed_dist,
         estimated_duration_hours=_duration,
         port_stay_days=_port_stay,
+        etd_manual=_etd_manual,
         notes=notes if notes and notes.strip() else None,
         leg_code="TEMP",
     )
@@ -546,6 +549,7 @@ async def leg_edit_submit(
     leg.departure_port_locode = dep_port.locode
     leg.arrival_port_locode = arr_port.locode
     leg.etd = parse_datetime(etd)
+    leg.etd_manual = parse_datetime(etd) is not None
     leg.eta = parse_datetime(eta)
     leg.ata = parse_datetime(ata)
     leg.atd = parse_datetime(atd)

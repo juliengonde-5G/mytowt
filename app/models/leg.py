@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, Integer, String, Float, DateTime, ForeignKey, Text, func
+    Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, func
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -32,6 +32,8 @@ class Leg(Base):
     # Planning - Previsionnel
     eta = Column(DateTime(timezone=True), nullable=True)  # Estimated Time of Arrival
     etd = Column(DateTime(timezone=True), nullable=True)  # Estimated Time of Departure
+
+    etd_manual = Column(Boolean, default=False, server_default="false")  # ETD set manually by user
 
     # Planning - Realise
     ata = Column(DateTime(timezone=True), nullable=True)  # Actual Time of Arrival
