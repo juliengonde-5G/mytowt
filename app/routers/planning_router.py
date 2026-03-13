@@ -127,7 +127,7 @@ async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int, edi
             arr_country=leg.arrival_port.country_code,
         )
         # Recalculate dates chain (skip first leg - its ETD is manual)
-        # Skip overwriting dates on the leg that was just manually edited
+        # On the edited leg, preserve its manually-set ETD but recalculate ETA from it
         is_edited = edited_leg_id is not None and leg.id == edited_leg_id
         if i > 0 and not is_edited:
             prev_leg = legs[i - 1]
@@ -136,8 +136,8 @@ async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int, edi
                 # ETD = previous ETA + port stay duration
                 leg.etd = prev_eta + timedelta(days=leg.port_stay_days or DEFAULT_PORT_STAY_DAYS)
 
-        # Recalculate ETA from ETD (skip if manually edited)
-        if leg.etd and leg.distance_nm and not leg.ata and not is_edited:
+        # Recalculate ETA from ETD (always, including on the edited leg)
+        if leg.etd and leg.distance_nm and not leg.ata:
             speed = leg.speed_knots or DEFAULT_SPEED
             elong = leg.elongation_coeff or DEFAULT_ELONGATION
             leg.eta = compute_eta(leg.etd, leg.distance_nm, speed, elong)
