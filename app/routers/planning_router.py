@@ -7,7 +7,6 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, timedelta, timezone
-from itsdangerous import URLSafeSerializer, BadSignature
 import csv
 import io
 import math
@@ -20,6 +19,7 @@ from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg, LegStatus
 from app.models.port import Port
+from app.models.shared_link import SharedLink
 
 router = APIRouter(prefix="/planning", tags=["planning"])
 share_router = APIRouter(prefix="/share", tags=["share"])
@@ -897,9 +897,17 @@ async def pdf_commercial(
 
 
 # ─── SHARE LINK GENERATION ─────────────────────────────────
-def _get_share_serializer():
-    settings = get_settings()
-    return URLSafeSerializer(settings.SECRET_KEY, salt="commercial-share")
+def _build_share_label(vessel_name, origin, destination, year, lang):
+    """Build a human-readable label for the shared link."""
+    parts = []
+    if vessel_name:
+        parts.append(vessel_name)
+    if origin:
+        parts.append(f"from {origin}" if lang == "en" else f"dep. {origin}")
+    if destination:
+        parts.append(f"to {destination}" if lang == "en" else f"vers {destination}")
+    parts.append(str(year))
+    return " · ".join(parts) if parts else f"Tous les départs {year}"
 
 
 @router.post("/pdf/commercial/share")
@@ -912,50 +920,147 @@ async def generate_share_link(
     legs_ids: Optional[str] = Form(None),
     lang: str = Form("fr"),
     user: User = Depends(require_permission("planning", "C")),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Generate a signed share token encoding the current filter parameters."""
-    s = _get_share_serializer()
-    payload = {"y": year, "l": lang}
-    if vessel and vessel.strip():
-        payload["v"] = vessel.strip()
-    if origin and origin.strip():
-        payload["o"] = origin.strip()
-    if destination and destination.strip():
-        payload["d"] = destination.strip()
-    if legs_ids and legs_ids.strip():
-        payload["ids"] = legs_ids.strip()
+    """Generate a share link stored in DB and return the public URL."""
+    _vessel = vessel.strip() if vessel and vessel.strip() else None
+    _origin = origin.strip().upper() if origin and origin.strip() else None
+    _destination = destination.strip().upper() if destination and destination.strip() else None
+    _legs_ids = legs_ids.strip() if legs_ids and legs_ids.strip() else None
 
-    token = s.dumps(payload)
+    # Resolve vessel name for label
+    vessel_name = None
+    if _vessel:
+        v_r = await db.execute(select(Vessel).where(Vessel.code == int(_vessel)))
+        v = v_r.scalar_one_or_none()
+        if v:
+            vessel_name = v.name
+
+    # Resolve port names for label
+    origin_name = _origin
+    dest_name = _destination
+    if _origin:
+        p_r = await db.execute(select(Port).where(Port.locode == _origin))
+        p = p_r.scalar_one_or_none()
+        if p:
+            origin_name = p.name
+    if _destination:
+        p_r = await db.execute(select(Port).where(Port.locode == _destination))
+        p = p_r.scalar_one_or_none()
+        if p:
+            dest_name = p.name
+
+    label = _build_share_label(vessel_name, origin_name, dest_name, year, lang)
+
+    link = SharedLink(
+        created_by_id=user.id,
+        created_by_name=user.username,
+        label=label,
+        year=year,
+        vessel_code=_vessel,
+        origin_locode=_origin,
+        destination_locode=_destination,
+        legs_ids=_legs_ids,
+        lang=lang,
+    )
+    db.add(link)
+    await db.flush()
+
     settings = get_settings()
-    share_url = f"{settings.SITE_URL}/share/commercial/{token}"
+    share_url = f"{settings.SITE_URL}/share/commercial/{link.token}"
 
-    return JSONResponse({"url": share_url, "token": token})
+    await log_activity(db, user=user, action="create", module="planning",
+                       entity_type="shared_link", entity_id=link.id,
+                       entity_label=label, ip_address=get_client_ip(request))
+
+    return JSONResponse({"url": share_url, "token": link.token})
+
+
+# ─── SHARED LINKS HISTORY ──────────────────────────────────
+@router.get("/shared-links", response_class=HTMLResponse)
+async def shared_links_history(
+    request: Request,
+    user: User = Depends(require_permission("planning", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all generated share links."""
+    result = await db.execute(
+        select(SharedLink).order_by(SharedLink.created_at.desc())
+    )
+    links = result.scalars().all()
+
+    settings = get_settings()
+
+    return templates.TemplateResponse("planning/shared_links.html", {
+        "request": request,
+        "user": user,
+        "links": links,
+        "site_url": settings.SITE_URL,
+        "active_module": "planning",
+    })
+
+
+@router.post("/shared-links/{link_id}/toggle")
+async def toggle_shared_link(
+    link_id: int,
+    request: Request,
+    user: User = Depends(require_permission("planning", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Activate or deactivate a shared link."""
+    result = await db.execute(select(SharedLink).where(SharedLink.id == link_id))
+    link = result.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404)
+
+    link.is_active = not link.is_active
+    await db.flush()
+
+    action = "update"
+    detail = f"{'Activé' if link.is_active else 'Désactivé'}"
+    await log_activity(db, user=user, action=action, module="planning",
+                       entity_type="shared_link", entity_id=link.id,
+                       entity_label=link.label, detail=detail,
+                       ip_address=get_client_ip(request))
+
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/planning/shared-links"})
+    return RedirectResponse(url="/planning/shared-links", status_code=303)
+
+
+@router.delete("/shared-links/{link_id}")
+async def delete_shared_link(
+    link_id: int,
+    request: Request,
+    user: User = Depends(require_permission("planning", "S")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a shared link permanently."""
+    result = await db.execute(select(SharedLink).where(SharedLink.id == link_id))
+    link = result.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404)
+
+    await log_activity(db, user=user, action="delete", module="planning",
+                       entity_type="shared_link", entity_id=link.id,
+                       entity_label=link.label,
+                       ip_address=get_client_ip(request))
+
+    await db.delete(link)
+    await db.flush()
+
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/planning/shared-links"})
+    return RedirectResponse(url="/planning/shared-links", status_code=303)
 
 
 # ─── PUBLIC SHARED COMMERCIAL SUPPORT ───────────────────────
-@share_router.get("/commercial/{token}", response_class=HTMLResponse)
-async def shared_commercial(
-    token: str,
-    request: Request,
-    lang: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db),
-):
-    """Public endpoint — no auth required. Renders the commercial support from a signed token."""
-    s = _get_share_serializer()
-    try:
-        payload = s.loads(token)
-    except BadSignature:
-        raise HTTPException(status_code=404, detail="Lien invalide ou expiré.")
-
+async def _render_commercial_support(db, request, link, effective_lang):
+    """Shared logic to render the commercial support page from SharedLink params."""
     from datetime import timezone as tz
-    current_year = payload.get("y", datetime.now().year)
-    effective_lang = lang or payload.get("l", "fr")
-    vessel = payload.get("v")
-    origin = payload.get("o")
-    destination = payload.get("d")
-    legs_ids_str = payload.get("ids")
 
-    vessel_code = int(vessel) if vessel and str(vessel).strip() else None
+    current_year = link.year
+    vessel_code = int(link.vessel_code) if link.vessel_code else None
 
     vessels_result = await db.execute(select(Vessel).where(Vessel.is_active == True).order_by(Vessel.code))
     vessels = vessels_result.scalars().all()
@@ -972,42 +1077,32 @@ async def shared_commercial(
         if v:
             query = query.where(Leg.vessel_id == v.id)
 
-    if destination:
-        query = query.where(Leg.arrival_port_locode == destination.upper())
-    if origin:
-        query = query.where(Leg.departure_port_locode == origin.upper())
+    if link.destination_locode:
+        query = query.where(Leg.arrival_port_locode == link.destination_locode)
+    if link.origin_locode:
+        query = query.where(Leg.departure_port_locode == link.origin_locode)
 
     result = await db.execute(query.order_by(Leg.vessel_id, Leg.sequence))
     legs = result.scalars().all()
 
     selected_leg_ids = set()
-    if legs_ids_str:
-        selected_leg_ids = set(int(x) for x in legs_ids_str.split(",") if x.strip().isdigit())
+    if link.legs_ids:
+        selected_leg_ids = set(int(x) for x in link.legs_ids.split(",") if x.strip().isdigit())
         legs = [l for l in legs if l.id in selected_leg_ids]
 
-    # Group by vessel
     legs_by_vessel = {}
     for leg in legs:
         vname = leg.vessel.name
-        if vname not in legs_by_vessel:
-            legs_by_vessel[vname] = []
-        legs_by_vessel[vname].append(leg)
+        legs_by_vessel.setdefault(vname, []).append(leg)
 
-    # Group by route
     legs_by_route = {}
     for leg in legs:
         route = f"{leg.departure_port.name} → {leg.arrival_port.name}"
-        if route not in legs_by_route:
-            legs_by_route[route] = []
-        legs_by_route[route].append(leg)
+        legs_by_route.setdefault(route, []).append(leg)
 
-    # Group by destination
     legs_by_dest = {}
     for leg in legs:
-        dest = leg.arrival_port.name
-        if dest not in legs_by_dest:
-            legs_by_dest[dest] = []
-        legs_by_dest[dest].append(leg)
+        legs_by_dest.setdefault(leg.arrival_port.name, []).append(leg)
 
     all_destinations = sorted(set(
         (leg.arrival_port_locode, leg.arrival_port.name) for leg in legs
@@ -1023,11 +1118,11 @@ async def shared_commercial(
         vname = next((v.name for v in vessels if v.code == vessel_code), "")
         if vname:
             title_parts.append(vname)
-    if origin:
-        oname = next((o[1] for o in all_origins if o[0] == origin.upper()), origin)
+    if link.origin_locode:
+        oname = next((o[1] for o in all_origins if o[0] == link.origin_locode), link.origin_locode)
         title_parts.append(f"from {oname}" if effective_lang == "en" else f"au départ de {oname}")
-    if destination:
-        dname = next((d[1] for d in all_destinations if d[0] == destination.upper()), destination)
+    if link.destination_locode:
+        dname = next((d[1] for d in all_destinations if d[0] == link.destination_locode), link.destination_locode)
         title_parts.append(f"to {dname}" if effective_lang == "en" else f"vers {dname}")
 
     if title_parts:
@@ -1051,9 +1146,34 @@ async def shared_commercial(
         "selected_leg_ids": selected_leg_ids,
         "current_year": current_year,
         "selected_vessel": vessel_code,
-        "selected_destination": destination,
-        "selected_origin": origin,
+        "selected_destination": link.destination_locode,
+        "selected_origin": link.origin_locode,
         "lang": effective_lang,
         "now": datetime.now(tz.utc),
         "is_shared": True,
     })
+
+
+@share_router.get("/commercial/{token}", response_class=HTMLResponse)
+async def shared_commercial(
+    token: str,
+    request: Request,
+    lang: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Public endpoint — no auth required. Renders the commercial support from a DB-stored token."""
+    result = await db.execute(
+        select(SharedLink).where(SharedLink.token == token)
+    )
+    link = result.scalar_one_or_none()
+
+    if not link or not link.is_active:
+        raise HTTPException(status_code=404, detail="Lien invalide, désactivé ou expiré.")
+
+    # Track view
+    link.view_count = (link.view_count or 0) + 1
+    link.last_viewed_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    effective_lang = lang or link.lang or "fr"
+    return await _render_commercial_support(db, request, link, effective_lang)
