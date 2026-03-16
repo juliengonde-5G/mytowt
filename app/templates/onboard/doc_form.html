@@ -78,8 +78,8 @@
             </div>
         </div>
 
-        <!-- ═══ HOLDS_CERT ═══ -->
-        {% elif doc_type == 'HOLDS_CERT' %}
+        <!-- ═══ HOLDS_CERT / HOLD_READINESS ═══ -->
+        {% elif doc_type in ('HOLDS_CERT', 'HOLD_READINESS') %}
         <div class="doc-section">
             <h3>HOLDS READINESS PRIOR LOADING</h3>
             <div class="doc-grid-2">

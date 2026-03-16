@@ -21,6 +21,7 @@ from app.models.packing_list import PackingList, PackingListBatch
 from app.models.onboard import (
     SofEvent, OnboardNotification, CargoDocument, ETAShift, OnboardAttachment,
     SOF_EVENT_TYPES, CARGO_DOC_TYPES, ETA_SHIFT_REASONS, ATTACHMENT_CATEGORIES,
+    MANDATORY_DOCS, OPTIONAL_DOCS, CONDITIONAL_DOCS, CARGO_DOC_LABELS,
 )
 from app.models.hold import (
     HoldAssignment, HoldPlanConfirmation,
@@ -69,6 +70,8 @@ async def onboard_home(
     eta_shifts = []
     hold_summary = {}
     hold_confirmation = None
+    existing_doc_types = set()
+    existing_docs_map = {}
     attachments = []
 
     next_leg = None  # leg export (départ du port)
@@ -199,6 +202,14 @@ async def onboard_home(
             )
             notifications = notif_result.scalars().all()
 
+            # ─── CARGO DOCUMENTS status ───
+            doc_result = await db.execute(
+                select(CargoDocument).where(CargoDocument.leg_id == current_leg.id)
+            )
+            existing_docs = doc_result.scalars().all()
+            existing_doc_types = {d.doc_type for d in existing_docs}
+            existing_docs_map = {d.doc_type: d for d in existing_docs}
+
             # ─── PASSENGERS for this leg ───
             from app.models.passenger import PassengerBooking, Passenger, PassengerDocument, DOCUMENT_TYPES, CABIN_CONFIG
             pax_result = await db.execute(
@@ -244,6 +255,12 @@ async def onboard_home(
         "attachment_categories": ATTACHMENT_CATEGORIES,
         "sof_event_types": SOF_EVENT_TYPES,
         "cargo_doc_types": CARGO_DOC_TYPES,
+        "mandatory_docs": MANDATORY_DOCS,
+        "optional_docs": OPTIONAL_DOCS,
+        "conditional_docs": CONDITIONAL_DOCS,
+        "cargo_doc_labels": CARGO_DOC_LABELS,
+        "existing_doc_types": existing_doc_types,
+        "existing_docs_map": existing_docs_map,
         "hold_summary": hold_summary if current_leg else {},
         "hold_codes": HOLD_CODES,
         "hold_confirmation": hold_confirmation if current_leg else None,
@@ -818,7 +835,7 @@ def _build_doc_paragraphs(doc_data: dict, doc_type: str, prefill: dict) -> list:
             ("Time (LT)", doc_data.get("notice_time", "")),
             ("Master", doc_data.get("master_name", "")),
         ]
-    elif doc_type == "HOLDS_CERT":
+    elif doc_type in ("HOLDS_CERT", "HOLD_READINESS"):
         rows += [
             ("To", doc_data.get("to", "")),
             ("Port", doc_data.get("port", "")),

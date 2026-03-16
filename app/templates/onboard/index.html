@@ -473,22 +473,178 @@
     {% endif %}
 </div>
 
-<!-- DOCUMENTS CARGO -->
-<div class="ob-section">
+<!-- DOCUMENTS CARGO — Organised by category -->
+<div class="ob-section" id="documents">
     <div class="ob-section-header">
-        <h3>📄 Documents cargo</h3>
-    </div>
-    <div class="ob-doc-grid">
-        {% for code, label in cargo_doc_types %}
-        <a href="/onboard/doc/{{ current_leg.id }}/{{ code }}" class="ob-doc-btn">
-            <span class="ob-doc-icon">📄</span>
-            <span class="ob-doc-name">{{ label }}</span>
-            <span class="ob-doc-actions">
-                <i data-lucide="pencil" style="width:12px;height:12px;"></i>
+        <h3>📄 Documents d'escale
+            {% set done_mandatory = mandatory_docs|select('in', existing_doc_types)|list|length %}
+            <span class="doc-progress-badge {% if done_mandatory == mandatory_docs|length %}complete{% elif done_mandatory > 0 %}partial{% endif %}">
+                {{ done_mandatory }}/{{ mandatory_docs|length }} obligatoires
             </span>
-        </a>
-        {% endfor %}
+        </h3>
     </div>
+
+    <!-- Obligatoires -->
+    <div class="doc-category">
+        <div class="doc-cat-header mandatory">
+            <span class="doc-cat-icon">🔴</span>
+            <span class="doc-cat-title">Obligatoires</span>
+        </div>
+        <div class="doc-cat-grid">
+            {% for code in mandatory_docs %}
+            {% set filled = code in existing_doc_types %}
+            <a href="/onboard/doc/{{ current_leg.id }}/{{ code }}" class="doc-card {% if filled %}filled{% endif %}">
+                <div class="doc-card-status">
+                    {% if filled %}
+                    <i data-lucide="check-circle" style="width:16px;height:16px;color:#16a34a;"></i>
+                    {% else %}
+                    <i data-lucide="circle" style="width:16px;height:16px;color:#ddd;"></i>
+                    {% endif %}
+                </div>
+                <div class="doc-card-info">
+                    <div class="doc-card-name">{{ cargo_doc_labels.get(code, code) }}</div>
+                    {% if filled and existing_docs_map.get(code) %}
+                    <div class="doc-card-meta">{{ existing_docs_map[code].updated_at.strftime('%d/%m %H:%M') }} · {{ existing_docs_map[code].created_by or '' }}</div>
+                    {% else %}
+                    <div class="doc-card-meta missing">Non rempli</div>
+                    {% endif %}
+                </div>
+                <div class="doc-card-actions">
+                    {% if filled %}
+                    <i data-lucide="pencil" style="width:12px;height:12px;"></i>
+                    {% else %}
+                    <i data-lucide="plus" style="width:12px;height:12px;"></i>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Facultatifs -->
+    <div class="doc-category">
+        <div class="doc-cat-header optional">
+            <span class="doc-cat-icon">🟡</span>
+            <span class="doc-cat-title">Facultatifs</span>
+        </div>
+        <div class="doc-cat-grid">
+            {% for code in optional_docs %}
+            {% set filled = code in existing_doc_types %}
+            <a href="/onboard/doc/{{ current_leg.id }}/{{ code }}" class="doc-card {% if filled %}filled{% endif %}">
+                <div class="doc-card-status">
+                    {% if filled %}
+                    <i data-lucide="check-circle" style="width:16px;height:16px;color:#16a34a;"></i>
+                    {% else %}
+                    <i data-lucide="circle" style="width:16px;height:16px;color:#ddd;"></i>
+                    {% endif %}
+                </div>
+                <div class="doc-card-info">
+                    <div class="doc-card-name">{{ cargo_doc_labels.get(code, code) }}</div>
+                    {% if filled and existing_docs_map.get(code) %}
+                    <div class="doc-card-meta">{{ existing_docs_map[code].updated_at.strftime('%d/%m %H:%M') }} · {{ existing_docs_map[code].created_by or '' }}</div>
+                    {% else %}
+                    <div class="doc-card-meta">Optionnel</div>
+                    {% endif %}
+                </div>
+                <div class="doc-card-actions">
+                    <i data-lucide="{{ 'pencil' if filled else 'plus' }}" style="width:12px;height:12px;"></i>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Conditionnels (Letters of Protest) -->
+    <div class="doc-category">
+        <div class="doc-cat-header conditional">
+            <span class="doc-cat-icon">⚠️</span>
+            <span class="doc-cat-title">Lettres de protestation (si nécessaire)</span>
+        </div>
+        <div class="doc-cat-grid">
+            {% for code in conditional_docs %}
+            {% set filled = code in existing_doc_types %}
+            <a href="/onboard/doc/{{ current_leg.id }}/{{ code }}" class="doc-card {% if filled %}filled{% endif %} {% if filled %}lop-active{% endif %}">
+                <div class="doc-card-status">
+                    {% if filled %}
+                    <i data-lucide="alert-triangle" style="width:16px;height:16px;color:#D97706;"></i>
+                    {% else %}
+                    <i data-lucide="circle" style="width:16px;height:16px;color:#ddd;"></i>
+                    {% endif %}
+                </div>
+                <div class="doc-card-info">
+                    <div class="doc-card-name">{{ cargo_doc_labels.get(code, code) }}</div>
+                    {% if filled and existing_docs_map.get(code) %}
+                    <div class="doc-card-meta" style="color:#D97706;">{{ existing_docs_map[code].updated_at.strftime('%d/%m %H:%M') }}</div>
+                    {% else %}
+                    <div class="doc-card-meta">Non déclenché</div>
+                    {% endif %}
+                </div>
+                <div class="doc-card-actions">
+                    <i data-lucide="{{ 'pencil' if filled else 'plus' }}" style="width:12px;height:12px;"></i>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- CLÔTURE D'ESCALE -->
+<div class="ob-section" id="closure">
+    <div class="ob-section-header">
+        <h3>🔒 Clôture d'escale
+            {% if is_locked %}<span style="font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(34,197,94,0.1);color:#16a34a;font-weight:600;margin-left:8px;">Clôturée</span>{% endif %}
+        </h3>
+    </div>
+
+    <!-- Checklist indicative -->
+    <div class="closure-checklist">
+        <div class="closure-title">Checklist de clôture</div>
+        <div class="closure-items">
+            {% for code in mandatory_docs %}
+            {% set filled = code in existing_doc_types %}
+            <div class="closure-item {% if filled %}done{% else %}missing{% endif %}">
+                {% if filled %}
+                <i data-lucide="check-circle" style="width:14px;height:14px;color:#16a34a;"></i>
+                {% else %}
+                <i data-lucide="x-circle" style="width:14px;height:14px;color:#DC2626;"></i>
+                {% endif %}
+                <span>{{ cargo_doc_labels.get(code, code) }}</span>
+                {% if not filled %}<span class="closure-missing-tag">Manquant</span>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% set missing_count = mandatory_docs|reject('in', existing_doc_types)|list|length %}
+        {% if missing_count > 0 and not is_locked %}
+        <div class="closure-warning">
+            <i data-lucide="alert-triangle" style="width:16px;height:16px;"></i>
+            <span>{{ missing_count }} document{{ 's' if missing_count > 1 }} obligatoire{{ 's' if missing_count > 1 }} manquant{{ 's' if missing_count > 1 }}. La clôture reste possible mais ces documents devraient être complétés.</span>
+        </div>
+        {% elif not is_locked %}
+        <div class="closure-ready">
+            <i data-lucide="check-check" style="width:16px;height:16px;"></i>
+            <span>Tous les documents obligatoires sont remplis. L'escale peut être clôturée.</span>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if not is_locked %}
+    <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+        <form method="POST" action="/escale/legs/{{ current_leg.id }}/lock">
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Clôturer cette escale ? Les documents et le SOF ne pourront plus être modifiés.')">
+                <i data-lucide="lock"></i> Clôturer l'escale
+            </button>
+        </form>
+    </div>
+    {% else %}
+    <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+        <form method="POST" action="/escale/legs/{{ current_leg.id }}/unlock">
+            <button type="submit" class="btn btn-secondary btn-sm">
+                <i data-lucide="unlock"></i> Réouvrir l'escale
+            </button>
+        </form>
+    </div>
+    {% endif %}
 </div>
 
 <!-- FICHIERS & PHOTOS -->
@@ -644,11 +800,33 @@
     .sof-add-grid select,.sof-add-grid input{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px}
     .sof-add-grid select{min-width:200px}.sof-add-grid input[type="text"]{flex:1;min-width:100px}
     .sof-add-grid input[type="date"],.sof-add-grid input[type="time"]{width:130px}
-    .ob-doc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
-    .ob-doc-btn{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f8fafb;border:1px solid #eee;border-radius:8px;text-decoration:none;color:#333;font-size:12px;font-weight:500;transition:all 0.15s}
-    .ob-doc-btn:hover{background:#eef4f6;border-color:var(--towt-blue)}
-    .ob-doc-icon{font-size:18px;flex-shrink:0}.ob-doc-name{flex:1}
-    .ob-doc-actions{color:#aaa;flex-shrink:0}.ob-doc-btn:hover .ob-doc-actions{color:var(--towt-blue)}
+    /* Document categories */
+    .doc-progress-badge{font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(220,38,38,0.08);color:#DC2626;font-weight:600;margin-left:8px}
+    .doc-progress-badge.partial{background:rgba(245,158,11,0.1);color:#D97706}
+    .doc-progress-badge.complete{background:rgba(34,197,94,0.1);color:#16a34a}
+    .doc-category{margin-bottom:16px}
+    .doc-cat-header{display:flex;align-items:center;gap:6px;padding:6px 0;margin-bottom:8px;border-bottom:1px solid #f0f0f0}
+    .doc-cat-icon{font-size:14px}.doc-cat-title{font-size:12px;font-weight:700;color:#555;text-transform:uppercase}
+    .doc-cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px}
+    .doc-card{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafb;border:1px solid #eee;border-radius:8px;text-decoration:none;color:#333;font-size:12px;transition:all 0.15s}
+    .doc-card:hover{background:#eef4f6;border-color:var(--towt-blue)}
+    .doc-card.filled{background:#f0fdf4;border-color:#bbf7d0}
+    .doc-card.lop-active{background:#FFFBEB;border-color:#FDE68A}
+    .doc-card-status{flex-shrink:0}
+    .doc-card-info{flex:1;min-width:0}
+    .doc-card-name{font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .doc-card-meta{font-size:10px;color:#888;margin-top:1px}
+    .doc-card-meta.missing{color:#DC2626;font-weight:600}
+    .doc-card-actions{color:#aaa;flex-shrink:0}.doc-card:hover .doc-card-actions{color:var(--towt-blue)}
+    /* Closure */
+    .closure-checklist{background:#f8fafb;border-radius:8px;padding:16px;border:1px solid #eee}
+    .closure-title{font-size:12px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:10px}
+    .closure-items{display:flex;flex-direction:column;gap:6px}
+    .closure-item{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0}
+    .closure-item.done{color:#333}.closure-item.missing{color:#888}
+    .closure-missing-tag{font-size:9px;padding:1px 6px;border-radius:100px;background:rgba(220,38,38,0.08);color:#DC2626;font-weight:600;margin-left:auto}
+    .closure-warning{display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 14px;border-radius:8px;background:#FFFBEB;color:#D97706;font-size:12px;border:1px solid #FDE68A}
+    .closure-ready{display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 14px;border-radius:8px;background:#ECFDF5;color:#16a34a;font-size:12px;border:1px solid #A7F3D0}
     .btn-icon{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px}.btn-icon:hover{background:#fee2e2}
     /* SOF editable */
     .sof-row-editable{cursor:pointer;transition:background 0.1s}

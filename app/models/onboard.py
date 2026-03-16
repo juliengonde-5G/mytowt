@@ -91,6 +91,7 @@ CARGO_DOC_TYPES = [
     ("HOLDS_CERT", "Holds Readiness Certificate"),
     ("KEY_MEETING", "Key Transfer Meeting"),
     ("PRE_MEETING", "Pre-Loading / Discharging Meeting"),
+    ("HOLD_READINESS", "Hold Readiness Prior Loading"),
     ("LOP_FP", "Letter of Protest - Free Pratique"),
     ("LOP_DELAYS", "Letter of Protest - Delays & Restrictions"),
     ("LOP_DOCUMENT", "Letter of Protest - Documentation"),
@@ -99,6 +100,13 @@ CARGO_DOC_TYPES = [
     ("LOP_OTHER", "Letter of Protest - Other"),
     ("MATES_RECEIPT", "Mate's Receipt"),
 ]
+
+# Organised by category for the onboard UI
+MANDATORY_DOCS = ["SOF", "NOR", "PRE_MEETING", "HOLD_READINESS", "MATES_RECEIPT"]
+OPTIONAL_DOCS = ["NOR_RT", "HOLDS_CERT", "KEY_MEETING"]
+CONDITIONAL_DOCS = ["LOP_QTY", "LOP_DEADFREIGHT", "LOP_DELAYS", "LOP_OTHER"]
+
+CARGO_DOC_LABELS = {code: label for code, label in CARGO_DOC_TYPES}
 
 
 class SofEvent(Base):
