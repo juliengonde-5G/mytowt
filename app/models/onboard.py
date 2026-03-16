@@ -99,11 +99,12 @@ CARGO_DOC_TYPES = [
     ("LOP_DEADFREIGHT", "Letter of Protest - Deadfreight"),
     ("LOP_OTHER", "Letter of Protest - Other"),
     ("MATES_RECEIPT", "Mate's Receipt"),
+    ("AGENT_OTHER", "Autres documents agent / Other agent documents"),
 ]
 
 # Organised by category for the onboard UI
-MANDATORY_DOCS = ["SOF", "NOR", "PRE_MEETING", "HOLD_READINESS", "MATES_RECEIPT"]
-OPTIONAL_DOCS = ["NOR_RT", "HOLDS_CERT", "KEY_MEETING"]
+MANDATORY_DOCS = ["NOR", "PRE_MEETING", "HOLD_READINESS", "MATES_RECEIPT"]
+OPTIONAL_DOCS = ["NOR_RT", "HOLDS_CERT", "KEY_MEETING", "AGENT_OTHER"]
 CONDITIONAL_DOCS = ["LOP_QTY", "LOP_DEADFREIGHT", "LOP_DELAYS", "LOP_OTHER"]
 
 CARGO_DOC_LABELS = {code: label for code, label in CARGO_DOC_TYPES}

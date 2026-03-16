@@ -38,10 +38,12 @@
 <div style="text-align:center;padding:60px;color:#888;font-size:14px;">Aucun leg sélectionné. Choisissez un navire et un leg ci-dessus.</div>
 {% else %}
 
+{% set is_locked = current_leg.status == 'completed' %}
+
 <!-- LEG HEADER -->
 <div class="ob-header">
     <div class="ob-leg-info">
-        <h2>{{ current_leg.leg_code }}</h2>
+        <h2>{{ current_leg.leg_code }}{% if is_locked %} <span class="sof-lock-badge">🔒 Clôturée</span>{% endif %}</h2>
         <span>{{ current_leg.departure_port.country_code|flag }} {{ current_leg.departure_port.name }} → {{ current_leg.arrival_port.country_code|flag }} {{ current_leg.arrival_port.name }}</span>
         <span class="ob-dates">ETD {{ current_leg.etd.strftime('%d/%m/%Y') if current_leg.etd else '—' }} · ETA {{ current_leg.eta.strftime('%d/%m/%Y') if current_leg.eta else '—' }}</span>
     </div>
@@ -53,134 +55,33 @@
             <span>{{ last_sof.event_date.strftime('%d/%m') if last_sof.event_date else '' }} {{ last_sof.event_time or '' }}</span>
         </div>
         {% endif %}
+        <!-- ACTION BUTTONS -->
+        <div class="ob-action-buttons">
+            {% if not is_locked %}
+            <button class="ob-action-btn ob-action-eta" onclick="document.getElementById('eta-shift-modal').style.display='flex'">
+                <i data-lucide="clock" style="width:14px;height:14px;"></i> Décalage ETA
+            </button>
+            <button class="ob-action-btn ob-action-close" onclick="document.getElementById('closure-modal').style.display='flex'">
+                <i data-lucide="lock" style="width:14px;height:14px;"></i> Clôturer
+            </button>
+            {% else %}
+            <a href="/onboard/archive/{{ current_leg.id }}" class="ob-action-btn ob-action-archive">
+                <i data-lucide="archive" style="width:14px;height:14px;"></i> Archive
+            </a>
+            <form method="POST" action="/escale/legs/{{ current_leg.id }}/unlock" style="margin:0;">
+                <button type="submit" class="ob-action-btn ob-action-unlock">
+                    <i data-lucide="unlock" style="width:14px;height:14px;"></i> Réouvrir
+                </button>
+            </form>
+            {% endif %}
+        </div>
         <a href="/escale?vessel={{ selected_vessel }}&leg_id={{ current_leg.id }}" class="ob-escale-btn">
             <i data-lucide="anchor" style="width:16px;height:16px;"></i> Voir l'escale
         </a>
     </div>
 </div>
 
-<!-- ETA SHIFT SECTION -->
-<div class="ob-section" id="eta-shifts">
-    <div class="ob-section-header">
-        <h3>🕐 Décalage ETA</h3>
-    </div>
-
-    <!-- ETA Shift Form -->
-    <div class="eta-shift-form-wrap">
-        <p class="eta-shift-current">
-            ETA actuelle : <strong>{{ current_leg.eta.strftime('%d/%m/%Y %H:%M') if current_leg.eta else '— non définie —' }}</strong>
-            {% if current_leg.etd %}· ETD : <strong>{{ current_leg.etd.strftime('%d/%m/%Y %H:%M') }}</strong>{% endif %}
-        </p>
-        <form method="POST" action="/onboard/eta-shift" class="eta-shift-form">
-            <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
-            <div class="eta-shift-grid">
-                <div class="fg">
-                    <label class="field-label">Nouvelle ETA</label>
-                    <input type="datetime-local" name="new_eta" required class="fi"
-                           value="{{ current_leg.eta.strftime('%Y-%m-%dT%H:%M') if current_leg.eta else '' }}">
-                </div>
-                <div class="fg">
-                    <label class="field-label">Raison</label>
-                    <select name="reason" required class="fi">
-                        <option value="">— Sélectionner —</option>
-                        {% for code, label in eta_shift_reasons %}
-                        <option value="{{ code }}">{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="fg fg-wide">
-                    <label class="field-label">Justification (obligatoire)</label>
-                    <textarea name="justification" required rows="2" class="fi" placeholder="Détaillez la raison du décalage..."></textarea>
-                </div>
-                <div class="fg" style="align-self:end;">
-                    <button type="submit" class="btn btn-primary btn-sm">Déclarer le décalage</button>
-                </div>
-            </div>
-        </form>
-    </div>
-
-    <!-- ETA Shifts History -->
-    {% set leg_shifts = eta_shifts|selectattr('leg_id', 'equalto', current_leg.id)|list %}
-    {% if leg_shifts %}
-    <div class="eta-shift-history">
-        <h4>Historique des décalages — {{ current_leg.leg_code }}</h4>
-        <table class="ob-table">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Ancienne ETA</th>
-                    <th>Nouvelle ETA</th>
-                    <th>Décalage</th>
-                    <th>Raison</th>
-                    <th>Justification</th>
-                    <th>Par</th>
-                    <th>Impact</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for s in leg_shifts %}
-            <tr class="{% if s.shift_hours > 0 %}eta-delay{% else %}eta-advance{% endif %}">
-                <td>{{ s.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
-                <td style="font-family:monospace;font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
-                <td style="font-family:monospace;font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
-                <td>
-                    {% if s.shift_hours > 0 %}
-                    <span class="eta-badge eta-badge-delay">+{{ "%.1f"|format(s.shift_hours) }}h</span>
-                    {% else %}
-                    <span class="eta-badge eta-badge-advance">{{ "%.1f"|format(s.shift_hours) }}h</span>
-                    {% endif %}
-                </td>
-                <td style="font-size:11px;">{{ s.reason }}</td>
-                <td style="font-size:11px;max-width:200px;">{{ s.justification }}</td>
-                <td style="font-size:11px;color:#888;">{{ s.created_by }}</td>
-                <td style="font-size:11px;">
-                    {% if s.legs_affected > 0 %}
-                    <span class="eta-cascade-badge">{{ s.legs_affected }} leg(s)</span>
-                    {% else %}—{% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% endif %}
-
-    <!-- Full vessel history (all legs) -->
-    {% set other_shifts = eta_shifts|rejectattr('leg_id', 'equalto', current_leg.id)|list %}
-    {% if other_shifts %}
-    <details class="eta-shift-all" style="margin-top:12px;">
-        <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#888;">Historique complet du navire ({{ eta_shifts|length }} évolution{{ 's' if eta_shifts|length > 1 }})</summary>
-        <table class="ob-table" style="margin-top:8px;">
-            <thead>
-                <tr><th>Leg</th><th>Date</th><th>Ancienne</th><th>Nouvelle</th><th>Décalage</th><th>Raison</th><th>Par</th></tr>
-            </thead>
-            <tbody>
-            {% for s in eta_shifts %}
-            <tr class="{% if s.shift_hours > 0 %}eta-delay{% else %}eta-advance{% endif %}">
-                <td style="font-family:monospace;font-size:11px;font-weight:600;color:var(--towt-blue);">
-                    {% for l in legs %}{% if l.id == s.leg_id %}{{ l.leg_code }}{% endif %}{% endfor %}
-                </td>
-                <td>{{ s.created_at.strftime('%d/%m %H:%M') }}</td>
-                <td style="font-family:monospace;font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
-                <td style="font-family:monospace;font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
-                <td>
-                    {% if s.shift_hours > 0 %}
-                    <span class="eta-badge eta-badge-delay">+{{ "%.1f"|format(s.shift_hours) }}h</span>
-                    {% else %}
-                    <span class="eta-badge eta-badge-advance">{{ "%.1f"|format(s.shift_hours) }}h</span>
-                    {% endif %}
-                </td>
-                <td style="font-size:11px;">{{ s.reason }}</td>
-                <td style="font-size:11px;color:#888;">{{ s.created_by }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </details>
-    {% endif %}
-</div>
-
-<!-- NOTIFICATIONS -->
+<!-- ═══ 1. NOTIFICATIONS (en premier) ═══ -->
 {% set unread = notifications|selectattr('is_read', 'false')|list %}
 {% if unread|length > 0 %}
 <div class="ob-notif-zone">
@@ -203,7 +104,89 @@
 </div>
 {% endif %}
 
-<!-- SECTIONS GRID -->
+<!-- ═══ 2. HOLD PLAN (fond blanc, cliquable) ═══ -->
+{% if hold_summary %}
+<div class="ob-section" id="hold-plan">
+    <div class="ob-section-header">
+        <h3>🚢 Plan de cales
+            {% if hold_confirmation %}<span class="hold-confirmed-badge">✓ Confirmé</span>{% endif %}
+        </h3>
+    </div>
+
+    <div class="hold-visual-light">
+        <div class="hold-grid-wrap">
+            <div class="hv-ship-label left">← PROUE</div>
+            <div class="hv-grid">
+                <div class="hv-col-hdr"></div>
+                <div class="hv-col-hdr">CALE AVANT</div>
+                <div class="hv-col-hdr">CALE ARRIÈRE</div>
+
+                {% for level, holds in [("SUP.", ["SUP_AV","SUP_AR"]), ("INT.", ["INT_AV","INT_AR"]), ("INF.", ["INF_AV","INF_AR"])] %}
+                <div class="hv-row-label">{{ level }}</div>
+                {% for hc in holds %}
+                {% set hs = hold_summary.get(hc, {"total_palettes":0,"capacity":0,"fill_pct":0,"batches":[]}) %}
+                <div class="hv-cell {{ 'empty' if hs.fill_pct == 0 else ('low' if hs.fill_pct < 30 else ('mid' if hs.fill_pct < 60 else ('high' if hs.fill_pct < 90 else 'full'))) }}"
+                     onclick="toggleHoldDetail('{{ hc }}')" style="cursor:pointer;" title="Cliquer pour détails">
+                    <div class="hv-pct">{{ hs.fill_pct }}%</div>
+                    <div class="hv-count">{{ hs.total_palettes }}/{{ hs.capacity }}</div>
+                    <div class="hv-bar"><div class="hv-fill" style="width:{{ hs.fill_pct }}%"></div></div>
+                </div>
+                {% endfor %}
+                {% endfor %}
+            </div>
+            <div class="hv-ship-label right">POUPE →</div>
+        </div>
+
+        <div class="hv-legend">
+            <span><span class="hv-dot empty"></span> Vide</span>
+            <span><span class="hv-dot low"></span> &lt;30%</span>
+            <span><span class="hv-dot mid"></span> 30–60%</span>
+            <span><span class="hv-dot high"></span> 60–90%</span>
+            <span><span class="hv-dot full"></span> Plein</span>
+        </div>
+
+        {% if hold_confirmation %}
+        <div style="margin-top:12px;font-size:11px;color:#888;text-align:center;">
+            Confirmé par {{ hold_confirmation.confirmed_by }} le {{ hold_confirmation.confirmed_at.strftime('%d/%m/%Y %H:%M') }}
+            {% if hold_confirmation.notes %} — {{ hold_confirmation.notes }}{% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Hold detail panels (hidden by default) -->
+        {% for level, holds in [("SUP.", ["SUP_AV","SUP_AR"]), ("INT.", ["INT_AV","INT_AR"]), ("INF.", ["INF_AV","INF_AR"])] %}
+        {% for hc in holds %}
+        {% set hs = hold_summary.get(hc, {"total_palettes":0,"capacity":0,"fill_pct":0,"batches":[]}) %}
+        <div class="hold-detail-panel" id="hold-detail-{{ hc }}" style="display:none;">
+            <div class="hold-detail-header">
+                <strong>{{ hc|replace('_',' ') }}</strong>
+                <span>{{ hs.total_palettes }}/{{ hs.capacity }} palettes · {{ hs.fill_pct }}%</span>
+                <button class="ob-notif-dismiss" onclick="document.getElementById('hold-detail-{{ hc }}').style.display='none'">✕</button>
+            </div>
+            {% if hs.get('batches') %}
+            <table class="ob-table" style="font-size:11px;">
+                <thead><tr><th>Batch</th><th>Type</th><th>Palettes</th><th>Empilable</th></tr></thead>
+                <tbody>
+                {% for b in hs.batches %}
+                <tr>
+                    <td>{{ b.batch_ref or b.batch_id }}</td>
+                    <td>{{ b.pallet_type }}</td>
+                    <td>{{ b.pallet_quantity }}</td>
+                    <td>{{ 'Oui' if b.is_stackable else 'Non' }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="ob-empty" style="padding:8px;">Aucun chargement dans cette cale.</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- ═══ 3. SECTIONS GRID (Équipage, Cargo, Passagers) ═══ -->
 <div class="ob-grid">
     <div class="ob-card">
         <h3>👥 Équipage <span class="ob-badge">{{ crew_onboard|length }}</span></h3>
@@ -326,62 +309,11 @@
     </div>
 </div>
 
-<!-- HOLD PLAN VISUAL -->
-{% if hold_summary %}
-<div class="ob-section" id="hold-plan">
-    <div class="ob-section-header">
-        <h3>🚢 Plan de cales
-            {% if hold_confirmation %}<span style="font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(34,197,94,0.1);color:#16a34a;font-weight:600;margin-left:8px;">✓ Confirmé</span>{% endif %}
-        </h3>
-    </div>
-
-    <div class="hold-visual-dark">
-        <div class="hold-grid-wrap">
-            <div class="hv-ship-label left">← PROUE</div>
-            <div class="hv-grid">
-                <div class="hv-col-hdr"></div>
-                <div class="hv-col-hdr">CALE AVANT</div>
-                <div class="hv-col-hdr">CALE ARRIÈRE</div>
-
-                {% for level, holds in [("SUP.", ["SUP_AV","SUP_AR"]), ("INT.", ["INT_AV","INT_AR"]), ("INF.", ["INF_AV","INF_AR"])] %}
-                <div class="hv-row-label">{{ level }}</div>
-                {% for hc in holds %}
-                {% set hs = hold_summary.get(hc, {"total_palettes":0,"capacity":0,"fill_pct":0}) %}
-                <div class="hv-cell {{ 'empty' if hs.fill_pct == 0 else ('low' if hs.fill_pct < 30 else ('mid' if hs.fill_pct < 60 else ('high' if hs.fill_pct < 90 else 'full'))) }}">
-                    <div class="hv-pct">{{ hs.fill_pct }}%</div>
-                    <div class="hv-count">{{ hs.total_palettes }}/{{ hs.capacity }}</div>
-                    <div class="hv-bar"><div class="hv-fill" style="width:{{ hs.fill_pct }}%"></div></div>
-                </div>
-                {% endfor %}
-                {% endfor %}
-            </div>
-            <div class="hv-ship-label right">POUPE →</div>
-        </div>
-
-        <div class="hv-legend">
-            <span><span class="hv-dot empty"></span> Vide</span>
-            <span><span class="hv-dot low"></span> &lt;30%</span>
-            <span><span class="hv-dot mid"></span> 30–60%</span>
-            <span><span class="hv-dot high"></span> 60–90%</span>
-            <span><span class="hv-dot full"></span> Plein</span>
-        </div>
-
-        {% if hold_confirmation %}
-        <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.5);text-align:center;">
-            Confirmé par {{ hold_confirmation.confirmed_by }} le {{ hold_confirmation.confirmed_at.strftime('%d/%m/%Y %H:%M') }}
-            {% if hold_confirmation.notes %} — {{ hold_confirmation.notes }}{% endif %}
-        </div>
-        {% endif %}
-    </div>
-</div>
-{% endif %}
-
-<!-- SOF -->
-{% set is_locked = current_leg.status == 'completed' %}
+<!-- ═══ 4. SOF ═══ -->
 <div class="ob-section" id="sof">
     <div class="ob-section-header">
         <h3>📋 Statement of Facts (SOF)
-            {% if is_locked %}<span class="sof-lock-badge">🔒 Escale clôturée</span>{% endif %}
+            {% if is_locked %}<span class="sof-lock-badge">🔒 Verrouillé</span>{% endif %}
         </h3>
         <div style="display:flex;gap:6px;">
             <a href="/onboard/sof/{{ current_leg.id }}/excel" class="btn btn-secondary btn-sm"><i data-lucide="file-spreadsheet"></i> Excel</a>
@@ -473,10 +405,10 @@
     {% endif %}
 </div>
 
-<!-- DOCUMENTS CARGO — Organised by category -->
+<!-- ═══ 5. GÉNÉRATION DE DOCUMENTS (ex Documents d'escale, sans SOF) ═══ -->
 <div class="ob-section" id="documents">
     <div class="ob-section-header">
-        <h3>📄 Documents d'escale
+        <h3>📄 Génération de documents
             {% set done_mandatory = mandatory_docs|select('in', existing_doc_types)|list|length %}
             <span class="doc-progress-badge {% if done_mandatory == mandatory_docs|length %}complete{% elif done_mandatory > 0 %}partial{% endif %}">
                 {{ done_mandatory }}/{{ mandatory_docs|length }} obligatoires
@@ -492,6 +424,7 @@
         </div>
         <div class="doc-cat-grid">
             {% for code in mandatory_docs %}
+            {% if code != 'SOF' %}
             {% set filled = code in existing_doc_types %}
             <a href="/onboard/doc/{{ current_leg.id }}/{{ code }}" class="doc-card {% if filled %}filled{% endif %}">
                 <div class="doc-card-status">
@@ -517,6 +450,7 @@
                     {% endif %}
                 </div>
             </a>
+            {% endif %}
             {% endfor %}
         </div>
     </div>
@@ -588,66 +522,89 @@
     </div>
 </div>
 
-<!-- CLÔTURE D'ESCALE -->
-<div class="ob-section" id="closure">
+<!-- ═══ 6. ETA SHIFT HISTORY (section compacte, historique seulement) ═══ -->
+{% set leg_shifts = eta_shifts|selectattr('leg_id', 'equalto', current_leg.id)|list %}
+{% if leg_shifts %}
+<div class="ob-section" id="eta-shifts">
     <div class="ob-section-header">
-        <h3>🔒 Clôture d'escale
-            {% if is_locked %}<span style="font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(34,197,94,0.1);color:#16a34a;font-weight:600;margin-left:8px;">Clôturée</span>{% endif %}
-        </h3>
+        <h3>🕐 Historique décalages ETA</h3>
     </div>
-
-    <!-- Checklist indicative -->
-    <div class="closure-checklist">
-        <div class="closure-title">Checklist de clôture</div>
-        <div class="closure-items">
-            {% for code in mandatory_docs %}
-            {% set filled = code in existing_doc_types %}
-            <div class="closure-item {% if filled %}done{% else %}missing{% endif %}">
-                {% if filled %}
-                <i data-lucide="check-circle" style="width:14px;height:14px;color:#16a34a;"></i>
+    <table class="ob-table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Ancienne ETA</th>
+                <th>Nouvelle ETA</th>
+                <th>Décalage</th>
+                <th>Raison</th>
+                <th>Justification</th>
+                <th>Par</th>
+                <th>Impact</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for s in leg_shifts %}
+        <tr class="{% if s.shift_hours > 0 %}eta-delay{% else %}eta-advance{% endif %}">
+            <td>{{ s.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td style="font-family:monospace;font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
+            <td style="font-family:monospace;font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
+            <td>
+                {% if s.shift_hours > 0 %}
+                <span class="eta-badge eta-badge-delay">+{{ "%.1f"|format(s.shift_hours) }}h</span>
                 {% else %}
-                <i data-lucide="x-circle" style="width:14px;height:14px;color:#DC2626;"></i>
+                <span class="eta-badge eta-badge-advance">{{ "%.1f"|format(s.shift_hours) }}h</span>
                 {% endif %}
-                <span>{{ cargo_doc_labels.get(code, code) }}</span>
-                {% if not filled %}<span class="closure-missing-tag">Manquant</span>{% endif %}
-            </div>
+            </td>
+            <td style="font-size:11px;">{{ s.reason }}</td>
+            <td style="font-size:11px;max-width:200px;">{{ s.justification }}</td>
+            <td style="font-size:11px;color:#888;">{{ s.created_by }}</td>
+            <td style="font-size:11px;">
+                {% if s.legs_affected > 0 %}
+                <span class="eta-cascade-badge">{{ s.legs_affected }} leg(s)</span>
+                {% else %}—{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Full vessel history (all legs) -->
+    {% set other_shifts = eta_shifts|rejectattr('leg_id', 'equalto', current_leg.id)|list %}
+    {% if other_shifts %}
+    <details class="eta-shift-all" style="margin-top:12px;">
+        <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#888;">Historique complet du navire ({{ eta_shifts|length }} évolution{{ 's' if eta_shifts|length > 1 }})</summary>
+        <table class="ob-table" style="margin-top:8px;">
+            <thead>
+                <tr><th>Leg</th><th>Date</th><th>Ancienne</th><th>Nouvelle</th><th>Décalage</th><th>Raison</th><th>Par</th></tr>
+            </thead>
+            <tbody>
+            {% for s in eta_shifts %}
+            <tr class="{% if s.shift_hours > 0 %}eta-delay{% else %}eta-advance{% endif %}">
+                <td style="font-family:monospace;font-size:11px;font-weight:600;color:var(--towt-blue);">
+                    {% for l in legs %}{% if l.id == s.leg_id %}{{ l.leg_code }}{% endif %}{% endfor %}
+                </td>
+                <td>{{ s.created_at.strftime('%d/%m %H:%M') }}</td>
+                <td style="font-family:monospace;font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
+                <td style="font-family:monospace;font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
+                <td>
+                    {% if s.shift_hours > 0 %}
+                    <span class="eta-badge eta-badge-delay">+{{ "%.1f"|format(s.shift_hours) }}h</span>
+                    {% else %}
+                    <span class="eta-badge eta-badge-advance">{{ "%.1f"|format(s.shift_hours) }}h</span>
+                    {% endif %}
+                </td>
+                <td style="font-size:11px;">{{ s.reason }}</td>
+                <td style="font-size:11px;color:#888;">{{ s.created_by }}</td>
+            </tr>
             {% endfor %}
-        </div>
-
-        {% set missing_count = mandatory_docs|reject('in', existing_doc_types)|list|length %}
-        {% if missing_count > 0 and not is_locked %}
-        <div class="closure-warning">
-            <i data-lucide="alert-triangle" style="width:16px;height:16px;"></i>
-            <span>{{ missing_count }} document{{ 's' if missing_count > 1 }} obligatoire{{ 's' if missing_count > 1 }} manquant{{ 's' if missing_count > 1 }}. La clôture reste possible mais ces documents devraient être complétés.</span>
-        </div>
-        {% elif not is_locked %}
-        <div class="closure-ready">
-            <i data-lucide="check-check" style="width:16px;height:16px;"></i>
-            <span>Tous les documents obligatoires sont remplis. L'escale peut être clôturée.</span>
-        </div>
-        {% endif %}
-    </div>
-
-    {% if not is_locked %}
-    <div style="display:flex;justify-content:flex-end;margin-top:12px;">
-        <form method="POST" action="/escale/legs/{{ current_leg.id }}/lock">
-            <button type="submit" class="btn btn-primary" onclick="return confirm('Clôturer cette escale ? Les documents et le SOF ne pourront plus être modifiés.')">
-                <i data-lucide="lock"></i> Clôturer l'escale
-            </button>
-        </form>
-    </div>
-    {% else %}
-    <div style="display:flex;justify-content:flex-end;margin-top:12px;">
-        <form method="POST" action="/escale/legs/{{ current_leg.id }}/unlock">
-            <button type="submit" class="btn btn-secondary btn-sm">
-                <i data-lucide="unlock"></i> Réouvrir l'escale
-            </button>
-        </form>
-    </div>
+            </tbody>
+        </table>
+    </details>
     {% endif %}
 </div>
+{% endif %}
 
-<!-- FICHIERS & PHOTOS -->
+<!-- ═══ 7. FICHIERS & PHOTOS ═══ -->
 <div class="ob-section" id="attachments">
     <div class="ob-section-header">
         <h3>📎 Fichiers & Photos <span class="ob-badge">{{ attachments|length }}</span></h3>
@@ -720,6 +677,126 @@
     {% endif %}
 </div>
 
+<!-- ═══ MODAL: DÉCALAGE ETA ═══ -->
+<div class="ob-modal-overlay" id="eta-shift-modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="ob-modal">
+        <div class="ob-modal-header">
+            <h3>🕐 Déclaration de décalage ETA</h3>
+            <button class="ob-modal-close" onclick="document.getElementById('eta-shift-modal').style.display='none'">✕</button>
+        </div>
+        <div class="ob-modal-body">
+            <p class="eta-shift-current">
+                ETA actuelle : <strong>{{ current_leg.eta.strftime('%d/%m/%Y %H:%M') if current_leg.eta else '— non définie —' }}</strong>
+                {% if current_leg.etd %}· ETD : <strong>{{ current_leg.etd.strftime('%d/%m/%Y %H:%M') }}</strong>{% endif %}
+            </p>
+            <form method="POST" action="/onboard/eta-shift">
+                <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
+                <div class="eta-shift-grid">
+                    <div class="fg">
+                        <label class="field-label">Nouvelle ETA</label>
+                        <input type="datetime-local" name="new_eta" required class="fi"
+                               value="{{ current_leg.eta.strftime('%Y-%m-%dT%H:%M') if current_leg.eta else '' }}">
+                    </div>
+                    <div class="fg">
+                        <label class="field-label">Raison</label>
+                        <select name="reason" required class="fi">
+                            <option value="">— Sélectionner —</option>
+                            {% for code, label in eta_shift_reasons %}
+                            <option value="{{ code }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="fg fg-wide">
+                        <label class="field-label">Justification (obligatoire)</label>
+                        <textarea name="justification" required rows="3" class="fi" placeholder="Détaillez la raison du décalage..."></textarea>
+                    </div>
+                    <div class="fg" style="align-self:end;">
+                        <button type="submit" class="btn btn-primary">Déclarer le décalage</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ MODAL: CLÔTURE D'ESCALE ═══ -->
+<div class="ob-modal-overlay" id="closure-modal" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="ob-modal ob-modal-lg">
+        <div class="ob-modal-header">
+            <h3>🔒 Clôture d'escale — {{ current_leg.leg_code }}</h3>
+            <button class="ob-modal-close" onclick="document.getElementById('closure-modal').style.display='none'">✕</button>
+        </div>
+        <div class="ob-modal-body">
+            <!-- Checklist documents obligatoires -->
+            <div class="closure-checklist">
+                <div class="closure-title">Checklist des documents obligatoires</div>
+                <div class="closure-items">
+                    {% for code in mandatory_docs %}
+                    {% if code != 'SOF' %}
+                    {% set filled = code in existing_doc_types %}
+                    <div class="closure-item {% if filled %}done{% else %}missing{% endif %}">
+                        {% if filled %}
+                        <i data-lucide="check-circle" style="width:14px;height:14px;color:#16a34a;"></i>
+                        {% else %}
+                        <i data-lucide="x-circle" style="width:14px;height:14px;color:#DC2626;"></i>
+                        {% endif %}
+                        <span>{{ cargo_doc_labels.get(code, code) }}</span>
+                        {% if not filled %}<span class="closure-missing-tag">Manquant</span>{% endif %}
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Documents générés -->
+            {% if existing_doc_types %}
+            <div style="margin-top:16px;">
+                <div class="closure-title">Documents générés</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+                    {% for code in existing_doc_types %}
+                    <span class="doc-gen-badge">{{ cargo_doc_labels.get(code, code) }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Rappel SOF -->
+            <div style="margin-top:16px;">
+                <div class="closure-title">Statement of Facts</div>
+                <div style="font-size:12px;color:#666;margin-top:4px;">
+                    {{ sof_events|length }} événement{{ 's' if sof_events|length > 1 }} enregistré{{ 's' if sof_events|length > 1 }}
+                    {% if last_sof %}· Dernier : <strong>{{ last_sof.event_label }}</strong> ({{ last_sof.event_date.strftime('%d/%m') if last_sof.event_date else '' }}){% endif %}
+                </div>
+            </div>
+
+            {% set missing_count = mandatory_docs|reject('equalto','SOF')|reject('in', existing_doc_types)|list|length %}
+            {% if missing_count > 0 %}
+            <div class="closure-warning" style="margin-top:16px;">
+                <i data-lucide="alert-triangle" style="width:16px;height:16px;"></i>
+                <span>{{ missing_count }} document{{ 's' if missing_count > 1 }} obligatoire{{ 's' if missing_count > 1 }} manquant{{ 's' if missing_count > 1 }}. La clôture reste possible mais ces documents devraient être complétés.</span>
+            </div>
+            {% else %}
+            <div class="closure-ready" style="margin-top:16px;">
+                <i data-lucide="check-check" style="width:16px;height:16px;"></i>
+                <span>Tous les documents obligatoires sont remplis. L'escale peut être clôturée.</span>
+            </div>
+            {% endif %}
+
+            <div class="closure-actions">
+                <p style="font-size:11px;color:#888;margin:16px 0 8px;">La clôture verrouille : le SOF, les documents, les informations de l'escale. Un fichier d'archive sera disponible au téléchargement.</p>
+                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                    <button class="btn btn-secondary" onclick="document.getElementById('closure-modal').style.display='none'">Annuler</button>
+                    <form method="POST" action="/escale/legs/{{ current_leg.id }}/lock" style="margin:0;">
+                        <button type="submit" class="btn btn-primary" onclick="return confirm('Confirmer la clôture de cette escale ?')">
+                            <i data-lucide="lock"></i> Clôturer l'escale
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endif %}
 
 <style>
@@ -738,7 +815,7 @@
     .ob-leg-chip.in-port{border-left:3px solid #87BD2B}
     .ob-leg-live{font-size:9px;font-weight:700;color:#87BD2B}
     .ob-leg-chip.active .ob-leg-live{color:#d4ff88}
-    .ob-header{display:flex;justify-content:space-between;align-items:center;background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px}
+    .ob-header{display:flex;justify-content:space-between;align-items:center;background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px;flex-wrap:wrap;gap:12px}
     .ob-leg-info h2{margin:0;font-size:18px;color:var(--towt-blue);font-family:monospace}
     .ob-leg-info span{font-size:13px;color:#555;display:block;margin-top:2px}.ob-dates{font-size:11px !important;color:#888 !important}
     .ob-last-sof{text-align:right;font-size:12px;background:rgba(9,85,97,0.06);padding:10px 14px;border-radius:8px}
@@ -746,6 +823,18 @@
     .ob-last-sof strong{color:var(--towt-blue);display:block}
     .ob-escale-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;background:rgba(135,189,43,0.1);border:1px solid rgba(135,189,43,0.3);border-radius:8px;color:#5a8010;font-size:12px;font-weight:600;text-decoration:none}
     .ob-escale-btn:hover{background:rgba(135,189,43,0.2)}
+    /* Action buttons */
+    .ob-action-buttons{display:flex;gap:6px}
+    .ob-action-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid;text-decoration:none}
+    .ob-action-eta{background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);color:#D97706}
+    .ob-action-eta:hover{background:rgba(245,158,11,0.2)}
+    .ob-action-close{background:rgba(220,38,38,0.08);border-color:rgba(220,38,38,0.2);color:#DC2626}
+    .ob-action-close:hover{background:rgba(220,38,38,0.15)}
+    .ob-action-archive{background:rgba(9,85,97,0.08);border-color:rgba(9,85,97,0.2);color:var(--towt-blue)}
+    .ob-action-archive:hover{background:rgba(9,85,97,0.15)}
+    .ob-action-unlock{background:rgba(34,197,94,0.08);border-color:rgba(34,197,94,0.2);color:#16a34a;cursor:pointer}
+    .ob-action-unlock:hover{background:rgba(34,197,94,0.15)}
+    /* Notifications */
     .ob-notif-zone{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:12px 16px;margin-bottom:16px;border-left:4px solid #F59E0B}
     .ob-notif-header{font-size:13px;font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
     .ob-notif-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f5f5f5;font-size:12px;position:relative}
@@ -755,6 +844,7 @@
     .ob-notif-cargo .ob-notif-cat{background:rgba(34,197,94,0.1);color:#16a34a}
     .ob-notif-detail{color:#888;flex:1}.ob-notif-time{color:#aaa;font-size:10px;flex-shrink:0}
     .ob-notif-dismiss{background:none;border:none;cursor:pointer;color:#ccc;font-size:14px;padding:2px 6px}.ob-notif-dismiss:hover{color:#dc2626}
+    /* Grid */
     .ob-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
     @media(max-width:1100px){.ob-grid{grid-template-columns:1fr}}
     .ob-card{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px}
@@ -794,12 +884,23 @@
     .ob-section{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px}
     .ob-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
     .ob-section-header h3{margin:0;font-size:15px}
+    /* SOF */
     .sof-table td:first-child{font-weight:500}
     .sof-add-form{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0}
     .sof-add-grid{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .sof-add-grid select,.sof-add-grid input{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px}
     .sof-add-grid select{min-width:200px}.sof-add-grid input[type="text"]{flex:1;min-width:100px}
     .sof-add-grid input[type="date"],.sof-add-grid input[type="time"]{width:130px}
+    .sof-row-editable{cursor:pointer;transition:background 0.1s}
+    .sof-row-editable:hover{background:rgba(9,85,97,0.04)}
+    .sof-lock-badge{font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(107,114,128,0.1);color:#6B7280;font-weight:500;margin-left:8px}
+    .sof-edit-row td{background:#f8fafb;padding:10px !important}
+    .sof-inline-edit{margin:0}
+    .sof-edit-grid{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .sof-edit-fi{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:Poppins,system-ui,sans-serif}
+    .sof-edit-fi:first-child{flex:2;min-width:180px}
+    .sof-edit-fi:nth-child(4){flex:1;min-width:100px}
+    .sof-edit-actions{display:flex;gap:4px}
     /* Document categories */
     .doc-progress-badge{font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(220,38,38,0.08);color:#DC2626;font-weight:600;margin-left:8px}
     .doc-progress-badge.partial{background:rgba(245,158,11,0.1);color:#D97706}
@@ -818,6 +919,46 @@
     .doc-card-meta{font-size:10px;color:#888;margin-top:1px}
     .doc-card-meta.missing{color:#DC2626;font-weight:600}
     .doc-card-actions{color:#aaa;flex-shrink:0}.doc-card:hover .doc-card-actions{color:var(--towt-blue)}
+    .doc-gen-badge{font-size:10px;padding:3px 10px;border-radius:100px;background:rgba(9,85,97,0.08);color:var(--towt-blue);font-weight:600}
+    /* Hold plan — white theme */
+    .hold-visual-light{background:white;border:1px solid #eee;border-radius:10px;padding:20px}
+    .hold-grid-wrap{display:flex;align-items:center;gap:12px}
+    .hv-ship-label{font-size:10px;color:var(--towt-blue);font-weight:700;text-transform:uppercase;white-space:nowrap;opacity:0.5}
+    .hv-grid{display:grid;grid-template-columns:40px 1fr 1fr;gap:6px;flex:1}
+    .hv-col-hdr{text-align:center;font-size:11px;font-weight:700;color:var(--towt-blue);padding:2px 0}
+    .hv-row-label{display:flex;align-items:center;font-size:10px;font-weight:700;color:#888}
+    .hv-cell{background:#f8fafb;border:1px solid #eee;border-radius:6px;padding:10px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:2px;transition:all 0.15s}
+    .hv-cell:hover{border-color:var(--towt-blue);box-shadow:0 2px 8px rgba(9,85,97,0.1)}
+    .hv-cell.empty{opacity:0.5}
+    .hv-pct{font-size:18px;font-weight:800;color:#333}
+    .hv-cell.low .hv-pct{color:#D97706}.hv-cell.mid .hv-pct{color:#2563EB}.hv-cell.high .hv-pct{color:#16a34a}.hv-cell.full .hv-pct{color:#87BD2B}
+    .hv-count{font-size:10px;color:#888}
+    .hv-bar{width:100%;height:3px;background:#f0f0f0;border-radius:2px;margin-top:2px;overflow:hidden}
+    .hv-fill{height:100%;border-radius:2px}
+    .hv-cell.empty .hv-fill{background:#d1d5db}.hv-cell.low .hv-fill{background:#FBBF24}.hv-cell.mid .hv-fill{background:#60A5FA}.hv-cell.high .hv-fill{background:#34D399}.hv-cell.full .hv-fill{background:#87BD2B}
+    .hv-legend{display:flex;gap:14px;margin-top:12px;justify-content:center;font-size:10px;color:#888}
+    .hv-legend span{display:flex;align-items:center;gap:4px}
+    .hv-dot{width:8px;height:8px;border-radius:50%}
+    .hv-dot.empty{background:#d1d5db}.hv-dot.low{background:#FBBF24}.hv-dot.mid{background:#60A5FA}.hv-dot.high{background:#34D399}.hv-dot.full{background:#87BD2B}
+    .hold-confirmed-badge{font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(34,197,94,0.1);color:#16a34a;font-weight:600;margin-left:8px}
+    .hold-detail-panel{margin-top:10px;padding:12px;background:#f8fafb;border:1px solid #eee;border-radius:8px}
+    .hold-detail-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px}
+    .hold-detail-header strong{color:var(--towt-blue)}
+    .hold-detail-header span{font-size:11px;color:#888}
+    /* ETA Shift */
+    .eta-shift-current{font-size:13px;color:#555;margin:0 0 10px}
+    .eta-shift-current strong{color:var(--towt-blue);font-family:monospace}
+    .eta-shift-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .eta-shift-grid .fg-wide{grid-column:1/-1}
+    .eta-shift-grid .fg{display:flex;flex-direction:column;gap:3px}
+    .eta-shift-grid .fi{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:Poppins,system-ui,sans-serif}
+    .eta-shift-grid textarea.fi{resize:vertical;min-height:42px}
+    .eta-delay{border-left:3px solid #DC2626}
+    .eta-advance{border-left:3px solid #16a34a}
+    .eta-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:700;font-family:monospace}
+    .eta-badge-delay{background:rgba(220,38,38,0.1);color:#DC2626}
+    .eta-badge-advance{background:rgba(22,163,106,0.1);color:#16a34a}
+    .eta-cascade-badge{font-size:10px;padding:2px 6px;border-radius:100px;background:rgba(245,158,11,0.1);color:#D97706;font-weight:600}
     /* Closure */
     .closure-checklist{background:#f8fafb;border-radius:8px;padding:16px;border:1px solid #eee}
     .closure-title{font-size:12px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:10px}
@@ -825,40 +966,9 @@
     .closure-item{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0}
     .closure-item.done{color:#333}.closure-item.missing{color:#888}
     .closure-missing-tag{font-size:9px;padding:1px 6px;border-radius:100px;background:rgba(220,38,38,0.08);color:#DC2626;font-weight:600;margin-left:auto}
-    .closure-warning{display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 14px;border-radius:8px;background:#FFFBEB;color:#D97706;font-size:12px;border:1px solid #FDE68A}
-    .closure-ready{display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 14px;border-radius:8px;background:#ECFDF5;color:#16a34a;font-size:12px;border:1px solid #A7F3D0}
+    .closure-warning{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;background:#FFFBEB;color:#D97706;font-size:12px;border:1px solid #FDE68A}
+    .closure-ready{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;background:#ECFDF5;color:#16a34a;font-size:12px;border:1px solid #A7F3D0}
     .btn-icon{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px}.btn-icon:hover{background:#fee2e2}
-    /* SOF editable */
-    .sof-row-editable{cursor:pointer;transition:background 0.1s}
-    .sof-row-editable:hover{background:rgba(9,85,97,0.04)}
-    .sof-lock-badge{font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(107,114,128,0.1);color:#6B7280;font-weight:500;margin-left:8px}
-    .sof-edit-row td{background:#f8fafb;padding:10px !important}
-    .sof-inline-edit{margin:0}
-    .sof-edit-grid{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .sof-edit-fi{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:Poppins,system-ui,sans-serif}
-    .sof-edit-fi:first-child{flex:2;min-width:180px}
-    .sof-edit-fi:nth-child(4){flex:1;min-width:100px}
-    .sof-edit-actions{display:flex;gap:4px}
-    /* Hold plan visual */
-    .hold-visual-dark{background:linear-gradient(135deg,#0a1628 0%,#162a3e 100%);border-radius:10px;padding:20px;color:white}
-    .hold-grid-wrap{display:flex;align-items:center;gap:12px}
-    .hv-ship-label{font-size:10px;color:rgba(127,219,202,0.5);font-weight:700;text-transform:uppercase;white-space:nowrap}
-    .hv-grid{display:grid;grid-template-columns:40px 1fr 1fr;gap:6px;flex:1}
-    .hv-col-hdr{text-align:center;font-size:11px;font-weight:700;color:#7fdbca;padding:2px 0}
-    .hv-row-label{display:flex;align-items:center;font-size:10px;font-weight:700;color:rgba(127,219,202,0.6)}
-    .hv-cell{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:10px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:2px}
-    .hv-cell.empty{opacity:0.4}
-    .hv-pct{font-size:18px;font-weight:800;color:white}
-    .hv-cell.low .hv-pct{color:#FBBF24}.hv-cell.mid .hv-pct{color:#60A5FA}.hv-cell.high .hv-pct{color:#34D399}.hv-cell.full .hv-pct{color:#87BD2B}
-    .hv-count{font-size:10px;color:rgba(255,255,255,0.4)}
-    .hv-bar{width:100%;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;margin-top:2px;overflow:hidden}
-    .hv-fill{height:100%;border-radius:2px}
-    .hv-cell.empty .hv-fill{background:#6B7280}.hv-cell.low .hv-fill{background:#FBBF24}.hv-cell.mid .hv-fill{background:#60A5FA}.hv-cell.high .hv-fill{background:#34D399}.hv-cell.full .hv-fill{background:#87BD2B}
-    .hv-legend{display:flex;gap:14px;margin-top:12px;justify-content:center;font-size:10px;color:rgba(255,255,255,0.4)}
-    .hv-legend span{display:flex;align-items:center;gap:4px}
-    .hv-dot{width:8px;height:8px;border-radius:50%}
-    .hv-dot.empty{background:#6B7280}.hv-dot.low{background:#FBBF24}.hv-dot.mid{background:#60A5FA}.hv-dot.high{background:#34D399}.hv-dot.full{background:#87BD2B}
-
     /* Attachments */
     .att-grid{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
     .att-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f8fafb;border:1px solid #eee;border-radius:8px}
@@ -879,23 +989,16 @@
     @media(max-width:900px){.att-upload-grid{grid-template-columns:1fr 1fr}}
     .att-upload-grid .fg{display:flex;flex-direction:column;gap:3px}
     .att-upload-grid .fi{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:Poppins,system-ui,sans-serif}
-    /* ETA Shift */
-    .eta-shift-form-wrap{padding-bottom:12px;border-bottom:1px solid #f0f0f0;margin-bottom:12px}
-    .eta-shift-current{font-size:13px;color:#555;margin:0 0 10px}
-    .eta-shift-current strong{color:var(--towt-blue);font-family:monospace}
-    .eta-shift-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .eta-shift-grid .fg-wide{grid-column:1/-1}
-    .eta-shift-grid .fg{display:flex;flex-direction:column;gap:3px}
-    .eta-shift-grid .fi{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:Poppins,system-ui,sans-serif}
-    .eta-shift-grid textarea.fi{resize:vertical;min-height:42px}
-    .eta-shift-history{margin-top:12px}
-    .eta-shift-history h4{font-size:12px;color:#555;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.5px}
-    .eta-delay{border-left:3px solid #DC2626}
-    .eta-advance{border-left:3px solid #16a34a}
-    .eta-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:700;font-family:monospace}
-    .eta-badge-delay{background:rgba(220,38,38,0.1);color:#DC2626}
-    .eta-badge-advance{background:rgba(22,163,106,0.1);color:#16a34a}
-    .eta-cascade-badge{font-size:10px;padding:2px 6px;border-radius:100px;background:rgba(245,158,11,0.1);color:#D97706;font-weight:600}
+    /* Modal */
+    .ob-modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+    .ob-modal{background:white;border-radius:var(--radius-lg);box-shadow:0 20px 60px rgba(0,0,0,0.3);width:100%;max-width:560px;max-height:90vh;overflow-y:auto}
+    .ob-modal-lg{max-width:640px}
+    .ob-modal-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #f0f0f0}
+    .ob-modal-header h3{margin:0;font-size:15px}
+    .ob-modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:#888;padding:4px 8px;border-radius:4px}
+    .ob-modal-close:hover{background:#f0f0f0;color:#333}
+    .ob-modal-body{padding:20px}
+    @media(max-width:600px){.eta-shift-grid{grid-template-columns:1fr}.doc-cat-grid{grid-template-columns:1fr}}
 </style>
 <script>
 // Pre-fill SOF date and time with current values
@@ -912,7 +1015,6 @@ function sofToggleEdit(evtId) {
     var display = document.getElementById('sof-display-' + evtId);
     var edit = document.getElementById('sof-edit-' + evtId);
     if (!display || !edit) return;
-    // Close any other open edit rows
     document.querySelectorAll('.sof-edit-row').forEach(function(r) {
         if (r.id !== 'sof-edit-' + evtId) {
             r.style.display = 'none';
@@ -921,7 +1023,6 @@ function sofToggleEdit(evtId) {
             if (otherDisplay) otherDisplay.style.display = '';
         }
     });
-    // Toggle current
     if (edit.style.display === 'none') {
         display.style.display = 'none';
         edit.style.display = '';
@@ -930,6 +1031,16 @@ function sofToggleEdit(evtId) {
         edit.style.display = 'none';
         display.style.display = '';
     }
+}
+
+// Hold detail toggle
+function toggleHoldDetail(holdCode) {
+    var panels = document.querySelectorAll('.hold-detail-panel');
+    panels.forEach(function(p) {
+        if (p.id !== 'hold-detail-' + holdCode) p.style.display = 'none';
+    });
+    var panel = document.getElementById('hold-detail-' + holdCode);
+    if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
 }
 </script>
 {% endblock %}

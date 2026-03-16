@@ -410,14 +410,27 @@ async def update_port_status(
 # === LOCK / UNLOCK ===
 @router.post("/legs/{lid}/lock", response_class=HTMLResponse)
 async def lock_leg(lid: int, request: Request, user: User = Depends(require_permission("escale", "M")), db: AsyncSession = Depends(get_db)):
+    from datetime import date as date_cls, datetime as dt_cls
+    from app.models.onboard import SofEvent
     result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == lid))
     leg = result.scalar_one_or_none()
     if not leg:
         raise HTTPException(404)
     leg.status = "completed"
+    # Record closure in SOF
+    sof_evt = SofEvent(
+        leg_id=lid,
+        event_type="CUSTOM",
+        event_label="Escale clôturée / Port call closed",
+        event_date=date_cls.today(),
+        event_time=dt_cls.now().strftime("%H:%M"),
+        remarks=f"Clôturé par {user.full_name}",
+        created_by=user.full_name,
+    )
+    db.add(sof_evt)
     await db.flush()
     await log_activity(db, user, "escale", "lock", "Leg", lid, "Verrouillage escale")
-    url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={lid}"
+    url = f"/onboard?vessel={leg.vessel.code}&leg_id={lid}"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
     return RedirectResponse(url=url, status_code=303)
