@@ -152,6 +152,10 @@ async def order_create_submit(
     user: User = Depends(require_permission("commercial", "M")),
     db: AsyncSession = Depends(get_db),
 ):
+    form = await request.form()
+    preferred_holds_list = form.getlist("preferred_holds")
+    preferred_holds_str = ",".join(preferred_holds_list) if preferred_holds_list else None
+
     ref = await generate_reference(db)
     order = Order(
         reference=ref,
@@ -169,6 +173,7 @@ async def order_create_submit(
         departure_locode=departure_locode.strip().upper() if departure_locode and departure_locode.strip() else None,
         arrival_locode=arrival_locode.strip().upper() if arrival_locode and arrival_locode.strip() else None,
         description=description.strip() if description else None,
+        preferred_holds=preferred_holds_str,
     )
     order.compute_total()
     db.add(order)
@@ -257,6 +262,9 @@ async def order_edit_submit(
     result = await db.execute(select(Order).where(Order.id == oid))
     order = result.scalar_one_or_none()
     if not order: raise HTTPException(404)
+    form = await request.form()
+    preferred_holds_list = form.getlist("preferred_holds")
+    order.preferred_holds = ",".join(preferred_holds_list) if preferred_holds_list else None
     order.client_name = client_name.strip()
     order.client_contact = client_contact.strip() if client_contact else None
     order.quantity_palettes = pi(quantity_palettes, order.quantity_palettes)

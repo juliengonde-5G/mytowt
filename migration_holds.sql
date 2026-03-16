@@ -31,3 +31,6 @@ CREATE INDEX IF NOT EXISTS idx_hold_plan_confirmations_leg ON hold_plan_confirma
 
 -- 3. Add etd_manual column to legs if not exists
 ALTER TABLE legs ADD COLUMN IF NOT EXISTS etd_manual BOOLEAN DEFAULT false;
+
+-- 4. Add preferred_holds column to orders
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS preferred_holds VARCHAR(100);

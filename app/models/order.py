@@ -39,6 +39,7 @@ class Order(Base):
     unit_price = Column(Float, nullable=False)
     thc_included = Column(Boolean, default=False)
     description = Column(Text, nullable=True)
+    preferred_holds = Column(String(100), nullable=True)  # Comma-separated hold codes: "INF_AV,INF_AR"
 
     # Fees
     booking_fee = Column(Float, default=0)       # Frais de booking

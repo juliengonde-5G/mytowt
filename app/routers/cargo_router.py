@@ -611,6 +611,8 @@ def apply_batch_fields(batch, form_data):
     batch.height_cm = pf(form_data.get('height_cm'))
     batch.weight_kg = pf(form_data.get('weight_kg'))
     batch.cargo_value_usd = pf(form_data.get('cargo_value_usd'))
+    if 'stackable' in form_data:
+        batch.stackable = form_data.get('stackable') or None
     batch.compute_dimensions()
 
 
@@ -940,16 +942,23 @@ from app.models.hold import (
 )
 
 
-def suggest_hold_assignments(batches, existing_assignments, leg_id):
+def suggest_hold_assignments(batches, existing_assignments, leg_id, preferred_holds_str=None):
     """Auto-suggest hold assignments for batches based on pallet type and stackability.
 
-    Strategy: fill holds from top to bottom (SUP → INT → INF), forward first (AV → AR).
-    Distributes batches across holds to balance fill rates.
+    Strategy: fill holds from bottom to top (INF → INT → SUP), forward first (AV → AR).
+    If preferred_holds is set on the order, prioritize those holds first.
     """
-    hold_order = ["SUP_AV", "SUP_AR", "INT_AV", "INT_AR", "INF_AV", "INF_AR"]
+    default_order = ["INF_AV", "INF_AR", "INT_AV", "INT_AR", "SUP_AV", "SUP_AR"]
+
+    # Parse preferred holds — prioritize them at the front
+    preferred = []
+    if preferred_holds_str:
+        preferred = [h.strip() for h in preferred_holds_str.split(",") if h.strip() in dict(HOLD_CODES)]
+    # Build final hold order: preferred first, then the rest in default order
+    hold_order = preferred + [h for h in default_order if h not in preferred]
 
     # Track current usage per hold
-    usage = {h: 0 for h in hold_order}
+    usage = {h: 0 for h in default_order}
     for a in existing_assignments:
         usage[a.hold_code] = usage.get(a.hold_code, 0) + (a.pallet_quantity or 0)
 
@@ -1092,7 +1101,10 @@ async def suggest_holds(
     )
     existing = assign_result.scalars().all()
 
-    suggestions = suggest_hold_assignments(pl.batches, existing, leg_id)
+    suggestions = suggest_hold_assignments(
+        pl.batches, existing, leg_id,
+        preferred_holds_str=pl.order.preferred_holds,
+    )
     changed_by = user.full_name or user.username
 
     for s in suggestions:

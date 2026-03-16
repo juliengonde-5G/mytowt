@@ -16,6 +16,9 @@
         <div class="summary-item"><span class="summary-label">Client</span><span class="summary-value">{{ pl.order.client_name }}</span></div>
         <div class="summary-item"><span class="summary-label">Voyage</span><span class="summary-value">{{ leg.leg_code }} — {{ leg.vessel.name }}</span></div>
         <div class="summary-item"><span class="summary-label">Route</span><span class="summary-value">{{ leg.departure_port.country_code|flag }} {{ leg.departure_port.locode }} → {{ leg.arrival_port.country_code|flag }} {{ leg.arrival_port.locode }}</span></div>
+        {% if pl.order.preferred_holds %}
+        <div class="summary-item"><span class="summary-label">Cales souhaitées</span><span class="summary-value" style="color:#D97706;">{{ pl.order.preferred_holds.replace(',', ', ') }}</span></div>
+        {% endif %}
         {% if confirmation %}
         <div class="summary-item"><span class="summary-label">Confirmé</span><span class="summary-value" style="color:#16a34a;">✓ {{ confirmation.confirmed_by }} · {{ confirmation.confirmed_at.strftime('%d/%m %H:%M') }}</span></div>
         {% endif %}
