@@ -10,7 +10,7 @@ from app.database import init_db
 from app.auth import AuthRequired
 from app.routers.auth_router import router as auth_router
 from app.routers.dashboard_router import router as dashboard_router
-from app.routers.planning_router import router as planning_router
+from app.routers.planning_router import router as planning_router, share_router as planning_share_router
 from app.routers.api_ports import router as api_ports_router
 from app.routers.admin_router import router as admin_router
 from app.routers.kpi_router import router as kpi_router
@@ -143,3 +143,4 @@ app.include_router(mrv_router, dependencies=[Depends(require_permission("mrv", "
 app.include_router(claim_router, dependencies=[Depends(require_permission("captain", "C"))])
 app.include_router(pricing_router, dependencies=[Depends(require_permission("commercial", "C"))])
 app.include_router(tracking_router)  # API — no auth (called by Power Automate)
+app.include_router(planning_share_router)  # Public shared commercial support (no auth)

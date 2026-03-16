@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.utils.activity import log_activity, get_client_ip
@@ -7,6 +7,7 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, timedelta, timezone
+from itsdangerous import URLSafeSerializer, BadSignature
 import csv
 import io
 import math
@@ -14,12 +15,14 @@ import math
 from app.database import get_db
 from app.auth import get_current_user, AuthRequired
 from app.permissions import require_permission
+from app.config import get_settings
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg, LegStatus
 from app.models.port import Port
 
 router = APIRouter(prefix="/planning", tags=["planning"])
+share_router = APIRouter(prefix="/share", tags=["share"])
 
 # ─── DEFAULTS ─────────────────────────────────────────────────
 DEFAULT_SPEED = 8.0        # knots
@@ -889,4 +892,168 @@ async def pdf_commercial(
         "selected_origin": origin,
         "lang": lang or "fr",
         "now": datetime.now(tz.utc),
+        "is_shared": False,
+    })
+
+
+# ─── SHARE LINK GENERATION ─────────────────────────────────
+def _get_share_serializer():
+    settings = get_settings()
+    return URLSafeSerializer(settings.SECRET_KEY, salt="commercial-share")
+
+
+@router.post("/pdf/commercial/share")
+async def generate_share_link(
+    request: Request,
+    year: int = Form(...),
+    vessel: Optional[str] = Form(None),
+    origin: Optional[str] = Form(None),
+    destination: Optional[str] = Form(None),
+    legs_ids: Optional[str] = Form(None),
+    lang: str = Form("fr"),
+    user: User = Depends(require_permission("planning", "C")),
+):
+    """Generate a signed share token encoding the current filter parameters."""
+    s = _get_share_serializer()
+    payload = {"y": year, "l": lang}
+    if vessel and vessel.strip():
+        payload["v"] = vessel.strip()
+    if origin and origin.strip():
+        payload["o"] = origin.strip()
+    if destination and destination.strip():
+        payload["d"] = destination.strip()
+    if legs_ids and legs_ids.strip():
+        payload["ids"] = legs_ids.strip()
+
+    token = s.dumps(payload)
+    settings = get_settings()
+    share_url = f"{settings.SITE_URL}/share/commercial/{token}"
+
+    return JSONResponse({"url": share_url, "token": token})
+
+
+# ─── PUBLIC SHARED COMMERCIAL SUPPORT ───────────────────────
+@share_router.get("/commercial/{token}", response_class=HTMLResponse)
+async def shared_commercial(
+    token: str,
+    request: Request,
+    lang: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Public endpoint — no auth required. Renders the commercial support from a signed token."""
+    s = _get_share_serializer()
+    try:
+        payload = s.loads(token)
+    except BadSignature:
+        raise HTTPException(status_code=404, detail="Lien invalide ou expiré.")
+
+    from datetime import timezone as tz
+    current_year = payload.get("y", datetime.now().year)
+    effective_lang = lang or payload.get("l", "fr")
+    vessel = payload.get("v")
+    origin = payload.get("o")
+    destination = payload.get("d")
+    legs_ids_str = payload.get("ids")
+
+    vessel_code = int(vessel) if vessel and str(vessel).strip() else None
+
+    vessels_result = await db.execute(select(Vessel).where(Vessel.is_active == True).order_by(Vessel.code))
+    vessels = vessels_result.scalars().all()
+
+    query = (
+        select(Leg)
+        .options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
+        .where(Leg.year == current_year, Leg.status != "cancelled")
+    )
+
+    if vessel_code:
+        v_result = await db.execute(select(Vessel).where(Vessel.code == vessel_code))
+        v = v_result.scalar_one_or_none()
+        if v:
+            query = query.where(Leg.vessel_id == v.id)
+
+    if destination:
+        query = query.where(Leg.arrival_port_locode == destination.upper())
+    if origin:
+        query = query.where(Leg.departure_port_locode == origin.upper())
+
+    result = await db.execute(query.order_by(Leg.vessel_id, Leg.sequence))
+    legs = result.scalars().all()
+
+    selected_leg_ids = set()
+    if legs_ids_str:
+        selected_leg_ids = set(int(x) for x in legs_ids_str.split(",") if x.strip().isdigit())
+        legs = [l for l in legs if l.id in selected_leg_ids]
+
+    # Group by vessel
+    legs_by_vessel = {}
+    for leg in legs:
+        vname = leg.vessel.name
+        if vname not in legs_by_vessel:
+            legs_by_vessel[vname] = []
+        legs_by_vessel[vname].append(leg)
+
+    # Group by route
+    legs_by_route = {}
+    for leg in legs:
+        route = f"{leg.departure_port.name} → {leg.arrival_port.name}"
+        if route not in legs_by_route:
+            legs_by_route[route] = []
+        legs_by_route[route].append(leg)
+
+    # Group by destination
+    legs_by_dest = {}
+    for leg in legs:
+        dest = leg.arrival_port.name
+        if dest not in legs_by_dest:
+            legs_by_dest[dest] = []
+        legs_by_dest[dest].append(leg)
+
+    all_destinations = sorted(set(
+        (leg.arrival_port_locode, leg.arrival_port.name) for leg in legs
+    ), key=lambda x: x[1]) if legs else []
+
+    all_origins = sorted(set(
+        (leg.departure_port_locode, leg.departure_port.name) for leg in legs
+    ), key=lambda x: x[1]) if legs else []
+
+    # Build title
+    title_parts = []
+    if vessel_code:
+        vname = next((v.name for v in vessels if v.code == vessel_code), "")
+        if vname:
+            title_parts.append(vname)
+    if origin:
+        oname = next((o[1] for o in all_origins if o[0] == origin.upper()), origin)
+        title_parts.append(f"from {oname}" if effective_lang == "en" else f"au départ de {oname}")
+    if destination:
+        dname = next((d[1] for d in all_destinations if d[0] == destination.upper()), destination)
+        title_parts.append(f"to {dname}" if effective_lang == "en" else f"vers {dname}")
+
+    if title_parts:
+        prefix = "Commercial support" if effective_lang == "en" else "Support commercial"
+        title = f"{prefix} — {' · '.join(title_parts)}"
+    else:
+        title = "Commercial support — All departures" if effective_lang == "en" else "Support commercial — Tous les départs"
+
+    return templates.TemplateResponse("planning/pdf_commercial.html", {
+        "request": request,
+        "title": title,
+        "template_type": "all",
+        "legs": legs,
+        "legs_by_vessel": legs_by_vessel,
+        "legs_by_route": legs_by_route,
+        "legs_by_dest": legs_by_dest,
+        "vessels": vessels,
+        "all_destinations": all_destinations,
+        "all_origins": all_origins,
+        "all_legs_for_selector": [],
+        "selected_leg_ids": selected_leg_ids,
+        "current_year": current_year,
+        "selected_vessel": vessel_code,
+        "selected_destination": destination,
+        "selected_origin": origin,
+        "lang": effective_lang,
+        "now": datetime.now(tz.utc),
+        "is_shared": True,
     })
