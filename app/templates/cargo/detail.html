@@ -8,6 +8,9 @@
 <a href="/cargo/{{ pl.id }}/excel" class="btn btn-secondary btn-sm"><i data-lucide="file-spreadsheet"></i> Excel</a>
 <a href="/cargo/{{ pl.id }}/bol" class="btn btn-secondary btn-sm"><i data-lucide="file-text"></i> Bill of Lading</a>
 <a href="/cargo/{{ pl.id }}/arrival-notice" class="btn btn-secondary btn-sm"><i data-lucide="ship"></i> Arrival Notice</a>
+{% if pl.order.leg_id %}
+<a href="/cargo/{{ pl.id }}/holds" class="btn btn-secondary btn-sm"><i data-lucide="layout-grid"></i> Plan de cales</a>
+{% endif %}
 {% if not pl.is_locked %}
 <button class="btn btn-secondary btn-sm" onclick="toggleEditMode()" id="edit-toggle-btn"><i data-lucide="pencil"></i> Modifier</button>
 <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-modal').style.display='flex'"><i data-lucide="upload"></i> Import Excel</button>

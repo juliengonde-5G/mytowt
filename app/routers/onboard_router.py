@@ -22,6 +22,10 @@ from app.models.onboard import (
     SofEvent, OnboardNotification, CargoDocument, ETAShift, OnboardAttachment,
     SOF_EVENT_TYPES, CARGO_DOC_TYPES, ETA_SHIFT_REASONS, ATTACHMENT_CATEGORIES,
 )
+from app.models.hold import (
+    HoldAssignment, HoldPlanConfirmation,
+    HOLD_CODES, HOLD_SHORT_LABELS, HOLD_CAPACITIES, get_hold_capacity,
+)
 
 router = APIRouter(prefix="/onboard", tags=["onboard"])
 
@@ -63,6 +67,8 @@ async def onboard_home(
     notifications = []
     last_sof = None
     eta_shifts = []
+    hold_summary = {}
+    hold_confirmation = None
     attachments = []
 
     next_leg = None  # leg export (départ du port)
@@ -149,6 +155,35 @@ async def onboard_home(
                 "batches_count": len(batches),
             }
 
+            # ─── HOLD ASSIGNMENTS ───
+            hold_result = await db.execute(
+                select(HoldAssignment).where(HoldAssignment.leg_id == current_leg.id)
+            )
+            hold_assignments_raw = hold_result.scalars().all()
+
+            hold_summary = {}
+            for h_code, h_label in HOLD_CODES:
+                h_assigns = [a for a in hold_assignments_raw if a.hold_code == h_code]
+                total_qty = sum(a.pallet_quantity for a in h_assigns)
+                cap_normal = get_hold_capacity(h_code, "EPAL", False)
+                cap_stacked = get_hold_capacity(h_code, "EPAL", True)
+                cap = cap_stacked if any(a.is_stackable for a in h_assigns) else cap_normal
+                if cap <= 0:
+                    cap = cap_normal
+                hold_summary[h_code] = {
+                    "label": h_label,
+                    "short": HOLD_SHORT_LABELS[h_code],
+                    "total_palettes": total_qty,
+                    "capacity": cap,
+                    "fill_pct": round(total_qty / cap * 100) if cap > 0 else 0,
+                    "assignments": h_assigns,
+                }
+
+            confirm_result = await db.execute(
+                select(HoldPlanConfirmation).where(HoldPlanConfirmation.leg_id == current_leg.id)
+            )
+            hold_confirmation = confirm_result.scalar_one_or_none()
+
             # ─── SOF events ───
             sof_result = await db.execute(
                 select(SofEvent).where(SofEvent.leg_id == current_leg.id)
@@ -209,6 +244,9 @@ async def onboard_home(
         "attachment_categories": ATTACHMENT_CATEGORIES,
         "sof_event_types": SOF_EVENT_TYPES,
         "cargo_doc_types": CARGO_DOC_TYPES,
+        "hold_summary": hold_summary if current_leg else {},
+        "hold_codes": HOLD_CODES,
+        "hold_confirmation": hold_confirmation if current_leg else None,
         "current_year": current_year,
         "active_module": "captain",
         "lang": user.language or "fr",

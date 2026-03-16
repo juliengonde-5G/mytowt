@@ -14,12 +14,13 @@ class OrderStatus(str, enum.Enum):
 
 
 PALETTE_FORMATS = [
-    {"value": "EPAL", "label": "EPAL (Europe)", "coeff": 1.0},
-    {"value": "USPAL", "label": "USPAL (US)", "coeff": 1.2},
-    {"value": "PORTPAL", "label": "PORTPAL (Port)", "coeff": 1.2},
+    {"value": "EPAL", "label": "EPAL / EU (80×100)", "coeff": 1.0},
+    {"value": "USPAL", "label": "USPAL / US (100×120)", "coeff": 1.2},
+    {"value": "PORTPAL", "label": "PORTPAL / Portuaire (180×140)", "coeff": 1.2},
+    {"value": "BB", "label": "BB (100×110)", "coeff": 1.1},
 ]
 
-PALETTE_COEFF = {"EPAL": 1.0, "USPAL": 1.2, "PORTPAL": 1.2}
+PALETTE_COEFF = {"EPAL": 1.0, "USPAL": 1.2, "PORTPAL": 1.2, "BB": 1.1}
 
 
 class Order(Base):

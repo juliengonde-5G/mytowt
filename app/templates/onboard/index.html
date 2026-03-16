@@ -326,6 +326,56 @@
     </div>
 </div>
 
+<!-- HOLD PLAN VISUAL -->
+{% if hold_summary %}
+<div class="ob-section" id="hold-plan">
+    <div class="ob-section-header">
+        <h3>🚢 Plan de cales
+            {% if hold_confirmation %}<span style="font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(34,197,94,0.1);color:#16a34a;font-weight:600;margin-left:8px;">✓ Confirmé</span>{% endif %}
+        </h3>
+    </div>
+
+    <div class="hold-visual-dark">
+        <div class="hold-grid-wrap">
+            <div class="hv-ship-label left">← PROUE</div>
+            <div class="hv-grid">
+                <div class="hv-col-hdr"></div>
+                <div class="hv-col-hdr">CALE AVANT</div>
+                <div class="hv-col-hdr">CALE ARRIÈRE</div>
+
+                {% for level, holds in [("SUP.", ["SUP_AV","SUP_AR"]), ("INT.", ["INT_AV","INT_AR"]), ("INF.", ["INF_AV","INF_AR"])] %}
+                <div class="hv-row-label">{{ level }}</div>
+                {% for hc in holds %}
+                {% set hs = hold_summary.get(hc, {"total_palettes":0,"capacity":0,"fill_pct":0}) %}
+                <div class="hv-cell {{ 'empty' if hs.fill_pct == 0 else ('low' if hs.fill_pct < 30 else ('mid' if hs.fill_pct < 60 else ('high' if hs.fill_pct < 90 else 'full'))) }}">
+                    <div class="hv-pct">{{ hs.fill_pct }}%</div>
+                    <div class="hv-count">{{ hs.total_palettes }}/{{ hs.capacity }}</div>
+                    <div class="hv-bar"><div class="hv-fill" style="width:{{ hs.fill_pct }}%"></div></div>
+                </div>
+                {% endfor %}
+                {% endfor %}
+            </div>
+            <div class="hv-ship-label right">POUPE →</div>
+        </div>
+
+        <div class="hv-legend">
+            <span><span class="hv-dot empty"></span> Vide</span>
+            <span><span class="hv-dot low"></span> &lt;30%</span>
+            <span><span class="hv-dot mid"></span> 30–60%</span>
+            <span><span class="hv-dot high"></span> 60–90%</span>
+            <span><span class="hv-dot full"></span> Plein</span>
+        </div>
+
+        {% if hold_confirmation %}
+        <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.5);text-align:center;">
+            Confirmé par {{ hold_confirmation.confirmed_by }} le {{ hold_confirmation.confirmed_at.strftime('%d/%m/%Y %H:%M') }}
+            {% if hold_confirmation.notes %} — {{ hold_confirmation.notes }}{% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <!-- SOF -->
 {% set is_locked = current_leg.status == 'completed' %}
 <div class="ob-section" id="sof">
@@ -611,6 +661,26 @@
     .sof-edit-fi:first-child{flex:2;min-width:180px}
     .sof-edit-fi:nth-child(4){flex:1;min-width:100px}
     .sof-edit-actions{display:flex;gap:4px}
+    /* Hold plan visual */
+    .hold-visual-dark{background:linear-gradient(135deg,#0a1628 0%,#162a3e 100%);border-radius:10px;padding:20px;color:white}
+    .hold-grid-wrap{display:flex;align-items:center;gap:12px}
+    .hv-ship-label{font-size:10px;color:rgba(127,219,202,0.5);font-weight:700;text-transform:uppercase;white-space:nowrap}
+    .hv-grid{display:grid;grid-template-columns:40px 1fr 1fr;gap:6px;flex:1}
+    .hv-col-hdr{text-align:center;font-size:11px;font-weight:700;color:#7fdbca;padding:2px 0}
+    .hv-row-label{display:flex;align-items:center;font-size:10px;font-weight:700;color:rgba(127,219,202,0.6)}
+    .hv-cell{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:10px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:2px}
+    .hv-cell.empty{opacity:0.4}
+    .hv-pct{font-size:18px;font-weight:800;color:white}
+    .hv-cell.low .hv-pct{color:#FBBF24}.hv-cell.mid .hv-pct{color:#60A5FA}.hv-cell.high .hv-pct{color:#34D399}.hv-cell.full .hv-pct{color:#87BD2B}
+    .hv-count{font-size:10px;color:rgba(255,255,255,0.4)}
+    .hv-bar{width:100%;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;margin-top:2px;overflow:hidden}
+    .hv-fill{height:100%;border-radius:2px}
+    .hv-cell.empty .hv-fill{background:#6B7280}.hv-cell.low .hv-fill{background:#FBBF24}.hv-cell.mid .hv-fill{background:#60A5FA}.hv-cell.high .hv-fill{background:#34D399}.hv-cell.full .hv-fill{background:#87BD2B}
+    .hv-legend{display:flex;gap:14px;margin-top:12px;justify-content:center;font-size:10px;color:rgba(255,255,255,0.4)}
+    .hv-legend span{display:flex;align-items:center;gap:4px}
+    .hv-dot{width:8px;height:8px;border-radius:50%}
+    .hv-dot.empty{background:#6B7280}.hv-dot.low{background:#FBBF24}.hv-dot.mid{background:#60A5FA}.hv-dot.high{background:#34D399}.hv-dot.full{background:#87BD2B}
+
     /* Attachments */
     .att-grid{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
     .att-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f8fafb;border:1px solid #eee;border-radius:8px}

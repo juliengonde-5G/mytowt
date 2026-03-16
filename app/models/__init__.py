@@ -22,6 +22,7 @@ from app.models.commercial import Client, RateGrid, RateGridLine, RateOffer
 from app.models.notification import Notification
 from app.models.portal_message import PortalMessage
 from app.models.vessel_position import VesselPosition
+from app.models.hold import HoldAssignment, HoldPlanConfirmation
 
 __all__ = [
     "User", "Port", "Vessel", "Leg",
@@ -42,4 +43,5 @@ __all__ = [
     "Notification",
     "PortalMessage",
     "VesselPosition",
+    "HoldAssignment", "HoldPlanConfirmation",
 ]

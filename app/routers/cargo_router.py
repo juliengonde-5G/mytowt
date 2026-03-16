@@ -933,6 +933,403 @@ async def backoffice_cargo_mark_messages_read(
     return RedirectResponse(url=f"/cargo/{pl_id}#messaging", status_code=303)
 
 
+# ═══ HOLD ASSIGNMENT ═══════════════════════════════════════════
+from app.models.hold import (
+    HoldAssignment, HoldPlanConfirmation,
+    HOLD_CODES, HOLD_SHORT_LABELS, HOLD_CAPACITIES, get_hold_capacity,
+)
+
+
+def suggest_hold_assignments(batches, existing_assignments, leg_id):
+    """Auto-suggest hold assignments for batches based on pallet type and stackability.
+
+    Strategy: fill holds from top to bottom (SUP → INT → INF), forward first (AV → AR).
+    Distributes batches across holds to balance fill rates.
+    """
+    hold_order = ["SUP_AV", "SUP_AR", "INT_AV", "INT_AR", "INF_AV", "INF_AR"]
+
+    # Track current usage per hold
+    usage = {h: 0 for h in hold_order}
+    for a in existing_assignments:
+        usage[a.hold_code] = usage.get(a.hold_code, 0) + (a.pallet_quantity or 0)
+
+    suggestions = []
+    for batch in batches:
+        qty = batch.pallet_quantity or 0
+        if qty <= 0:
+            continue
+        # Already fully assigned?
+        already_assigned = sum(
+            a.pallet_quantity for a in existing_assignments if a.batch_id == batch.id
+        )
+        remaining = qty - already_assigned
+        if remaining <= 0:
+            continue
+
+        ptype = (batch.pallet_type or "EPAL").upper()
+        if ptype not in ("EPAL", "USPAL", "PORTPAL", "BB"):
+            ptype = "EPAL"
+        stackable = (batch.stackable or "").lower() in ("yes", "oui", "true", "1")
+
+        # Find best hold: lowest fill rate with enough remaining capacity
+        best_hold = None
+        best_fill = 2.0  # > 100%
+        for h in hold_order:
+            cap = get_hold_capacity(h, ptype, stackable)
+            if cap <= 0:
+                continue
+            current_fill = usage[h] / cap
+            if current_fill < best_fill and (cap - usage[h]) > 0:
+                best_hold = h
+                best_fill = current_fill
+
+        if best_hold:
+            cap = get_hold_capacity(best_hold, ptype, stackable)
+            assign_qty = min(remaining, cap - usage[best_hold])
+            if assign_qty > 0:
+                suggestions.append({
+                    "batch_id": batch.id,
+                    "hold_code": best_hold,
+                    "pallet_quantity": assign_qty,
+                    "pallet_type": ptype,
+                    "is_stackable": stackable,
+                })
+                usage[best_hold] += assign_qty
+
+    return suggestions
+
+
+@router.get("/{pl_id}/holds", response_class=HTMLResponse)
+async def cargo_holds(
+    pl_id: int, request: Request,
+    user: User = Depends(require_permission("cargo", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hold assignment page for a packing list."""
+    result = await db.execute(
+        select(PackingList).options(
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.vessel),
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.departure_port),
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.arrival_port),
+            selectinload(PackingList.batches),
+        ).where(PackingList.id == pl_id)
+    )
+    pl = result.scalar_one_or_none()
+    if not pl:
+        raise HTTPException(404)
+    if not pl.order.leg_id:
+        raise HTTPException(400, detail="Commande non affectée à un leg")
+
+    leg = pl.order.leg
+    leg_id = leg.id
+
+    # Load existing hold assignments for this leg
+    assign_result = await db.execute(
+        select(HoldAssignment).where(HoldAssignment.leg_id == leg_id)
+    )
+    assignments = assign_result.scalars().all()
+
+    # Load hold plan confirmation
+    confirm_result = await db.execute(
+        select(HoldPlanConfirmation).where(HoldPlanConfirmation.leg_id == leg_id)
+    )
+    confirmation = confirm_result.scalar_one_or_none()
+
+    # Build hold summary (all assignments for this leg, not just this PL)
+    hold_summary = {}
+    for h_code, h_label in HOLD_CODES:
+        h_assignments = [a for a in assignments if a.hold_code == h_code]
+        total_qty = sum(a.pallet_quantity for a in h_assignments)
+        # Use EPAL as default for capacity calculation
+        cap_normal = get_hold_capacity(h_code, "EPAL", False)
+        cap_stacked = get_hold_capacity(h_code, "EPAL", True)
+        cap = cap_stacked if any(a.is_stackable for a in h_assignments) else cap_normal
+        hold_summary[h_code] = {
+            "label": h_label,
+            "short": HOLD_SHORT_LABELS[h_code],
+            "assignments": h_assignments,
+            "total_palettes": total_qty,
+            "capacity": cap if cap > 0 else cap_normal,
+            "fill_pct": round(total_qty / cap * 100) if cap > 0 else 0,
+        }
+
+    # Current PL's batch assignments
+    batch_assignments = {a.batch_id: a for a in assignments if a.batch_id in [b.id for b in pl.batches]}
+
+    return templates.TemplateResponse("cargo/holds.html", {
+        "request": request, "user": user,
+        "pl": pl, "leg": leg,
+        "hold_codes": HOLD_CODES,
+        "hold_summary": hold_summary,
+        "hold_capacities": HOLD_CAPACITIES,
+        "assignments": assignments,
+        "batch_assignments": batch_assignments,
+        "confirmation": confirmation,
+        "active_module": "cargo",
+    })
+
+
+@router.post("/{pl_id}/holds/suggest", response_class=HTMLResponse)
+async def suggest_holds(
+    pl_id: int, request: Request,
+    user: User = Depends(require_permission("cargo", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Auto-suggest hold assignments for unassigned batches."""
+    result = await db.execute(
+        select(PackingList).options(
+            selectinload(PackingList.batches),
+            selectinload(PackingList.order),
+        ).where(PackingList.id == pl_id)
+    )
+    pl = result.scalar_one_or_none()
+    if not pl or not pl.order.leg_id:
+        raise HTTPException(404)
+
+    leg_id = pl.order.leg_id
+    assign_result = await db.execute(
+        select(HoldAssignment).where(HoldAssignment.leg_id == leg_id)
+    )
+    existing = assign_result.scalars().all()
+
+    suggestions = suggest_hold_assignments(pl.batches, existing, leg_id)
+    changed_by = user.full_name or user.username
+
+    for s in suggestions:
+        ha = HoldAssignment(
+            leg_id=leg_id,
+            batch_id=s["batch_id"],
+            hold_code=s["hold_code"],
+            pallet_quantity=s["pallet_quantity"],
+            pallet_type=s["pallet_type"],
+            is_stackable=s["is_stackable"],
+            assigned_by=changed_by,
+        )
+        db.add(ha)
+
+    await db.flush()
+    url = f"/cargo/{pl_id}/holds"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.post("/{pl_id}/holds/save", response_class=HTMLResponse)
+async def save_holds(
+    pl_id: int, request: Request,
+    user: User = Depends(require_permission("cargo", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save manual hold assignments from the form."""
+    result = await db.execute(
+        select(PackingList).options(
+            selectinload(PackingList.batches),
+            selectinload(PackingList.order),
+        ).where(PackingList.id == pl_id)
+    )
+    pl = result.scalar_one_or_none()
+    if not pl or not pl.order.leg_id:
+        raise HTTPException(404)
+
+    leg_id = pl.order.leg_id
+    form = await request.form()
+    changed_by = user.full_name or user.username
+
+    # Delete existing assignments for this PL's batches
+    batch_ids = [b.id for b in pl.batches]
+    if batch_ids:
+        existing_result = await db.execute(
+            select(HoldAssignment).where(
+                HoldAssignment.leg_id == leg_id,
+                HoldAssignment.batch_id.in_(batch_ids),
+            )
+        )
+        for old in existing_result.scalars().all():
+            await db.delete(old)
+
+    # Create new assignments from form data
+    for batch in pl.batches:
+        hold_code = form.get(f"hold_{batch.id}")
+        qty_str = form.get(f"qty_{batch.id}")
+        if hold_code and qty_str:
+            qty = pi(qty_str, 0)
+            if qty > 0:
+                ptype = (batch.pallet_type or "EPAL").upper()
+                if ptype not in ("EPAL", "USPAL", "PORTPAL", "BB"):
+                    ptype = "EPAL"
+                stackable = (batch.stackable or "").lower() in ("yes", "oui", "true", "1")
+                ha = HoldAssignment(
+                    leg_id=leg_id,
+                    batch_id=batch.id,
+                    hold_code=hold_code,
+                    pallet_quantity=qty,
+                    pallet_type=ptype,
+                    is_stackable=stackable,
+                    assigned_by=changed_by,
+                )
+                db.add(ha)
+
+    await db.flush()
+    url = f"/cargo/{pl_id}/holds"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.post("/{pl_id}/holds/confirm", response_class=HTMLResponse)
+async def confirm_hold_plan(
+    pl_id: int, request: Request,
+    user: User = Depends(require_permission("cargo", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Confirm the hold plan for a leg."""
+    result = await db.execute(
+        select(PackingList).options(selectinload(PackingList.order))
+        .where(PackingList.id == pl_id)
+    )
+    pl = result.scalar_one_or_none()
+    if not pl or not pl.order.leg_id:
+        raise HTTPException(404)
+
+    leg_id = pl.order.leg_id
+    form = await request.form()
+    notes = form.get("notes", "")
+
+    # Upsert confirmation
+    existing = await db.execute(
+        select(HoldPlanConfirmation).where(HoldPlanConfirmation.leg_id == leg_id)
+    )
+    conf = existing.scalar_one_or_none()
+    if conf:
+        conf.confirmed_by = user.full_name or user.username
+        conf.confirmed_at = datetime.now(timezone.utc)
+        conf.notes = notes
+    else:
+        conf = HoldPlanConfirmation(
+            leg_id=leg_id,
+            confirmed_by=user.full_name or user.username,
+            notes=notes,
+        )
+        db.add(conf)
+
+    await db.flush()
+    url = f"/cargo/{pl_id}/holds"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.get("/{pl_id}/holds/report", response_class=StreamingResponse)
+async def hold_plan_report(
+    pl_id: int, request: Request,
+    user: User = Depends(require_permission("cargo", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate PDF report of hold assignments for the leg."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    result = await db.execute(
+        select(PackingList).options(
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.vessel),
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.departure_port),
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.arrival_port),
+            selectinload(PackingList.batches),
+        ).where(PackingList.id == pl_id)
+    )
+    pl = result.scalar_one_or_none()
+    if not pl or not pl.order.leg_id:
+        raise HTTPException(404)
+
+    leg = pl.order.leg
+    assign_result = await db.execute(
+        select(HoldAssignment).where(HoldAssignment.leg_id == leg.id)
+    )
+    assignments = assign_result.scalars().all()
+
+    confirm_result = await db.execute(
+        select(HoldPlanConfirmation).where(HoldPlanConfirmation.leg_id == leg.id)
+    )
+    confirmation = confirm_result.scalar_one_or_none()
+
+    # Build PDF
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
+                            leftMargin=15*mm, rightMargin=15*mm,
+                            topMargin=15*mm, bottomMargin=15*mm)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("Title2", parent=styles["Title"], fontSize=16, spaceAfter=6)
+    subtitle_style = ParagraphStyle("Sub", parent=styles["Normal"], fontSize=10, textColor=colors.grey)
+    header_style = ParagraphStyle("Hdr", parent=styles["Normal"], fontSize=9, textColor=colors.white)
+    cell_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=8)
+
+    elements = []
+    elements.append(Paragraph(f"Plan de Cales — {leg.leg_code}", title_style))
+    elements.append(Paragraph(
+        f"{leg.vessel.name} · {leg.departure_port.name} → {leg.arrival_port.name} · "
+        f"ETD {leg.etd.strftime('%d/%m/%Y') if leg.etd else '—'}",
+        subtitle_style
+    ))
+    if confirmation:
+        elements.append(Paragraph(
+            f"Confirmé par {confirmation.confirmed_by} le {confirmation.confirmed_at.strftime('%d/%m/%Y %H:%M')}",
+            subtitle_style
+        ))
+    elements.append(Spacer(1, 10*mm))
+
+    # Table per hold
+    for h_code, h_label in HOLD_CODES:
+        h_assigns = [a for a in assignments if a.hold_code == h_code]
+        if not h_assigns:
+            continue
+        total_qty = sum(a.pallet_quantity for a in h_assigns)
+
+        elements.append(Paragraph(f"Cale {h_label} — {total_qty} palettes", styles["Heading3"]))
+
+        data = [["Batch", "Client", "Marchandise", "Type palette", "Palettes", "Stackable"]]
+        for a in h_assigns:
+            # Find batch info
+            batch = next((b for b in pl.batches if b.id == a.batch_id), None)
+            if batch:
+                data.append([
+                    f"#{batch.batch_number}",
+                    batch.customer_name or "—",
+                    batch.type_of_goods or "—",
+                    a.pallet_type or "—",
+                    str(a.pallet_quantity),
+                    "Oui" if a.is_stackable else "Non",
+                ])
+            else:
+                data.append(["—", "—", "—", a.pallet_type or "—", str(a.pallet_quantity), "Oui" if a.is_stackable else "Non"])
+
+        t = Table(data, repeatRows=1)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#095561')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#ddd')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafb')]),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 6*mm))
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    filename = f"plan_cales_{leg.leg_code}.pdf"
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # ═══ CLIENT EXTERNAL PORTAL ═══════════════════════════════════
 
 ext_router = APIRouter(prefix="/p", tags=["packing-external"])
