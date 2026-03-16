@@ -35,25 +35,39 @@ mytowt/
 │   │   ├── vessel.py         # Vessel (fleet: Anemos, Artemis, Atlantis, Atlas)
 │   │   ├── port.py           # Port (UN/LOCODE, coordinates)
 │   │   ├── leg.py            # Leg (voyage segment: ETD/ETA/ATD/ATA)
-│   │   ├── order.py          # Order + OrderAssignment
+│   │   ├── order.py          # Order (preferred_holds, rate_grid) + OrderAssignment
+│   │   ├── commercial.py     # Client (ClientType: FREIGHT_FORWARDER, SHIPPER)
+│   │   ├── hold.py           # Hold capacities + assignments (6 holds: 3 levels × 2 positions)
 │   │   ├── operation.py      # EscaleOperation + DockerShift
 │   │   ├── packing_list.py   # PackingList + PackingListBatch + PackingListAudit
 │   │   ├── onboard.py        # SofEvent, OnboardNotification, CargoDocument
 │   │   ├── passenger.py      # Booking, Passenger, Payment, Document, CabinPriceGrid
 │   │   ├── crew.py           # CrewMember + CrewAssignment
+│   │   ├── claim.py          # Claim (insurance: cargo, crew, hull — P&I / Hull / War Risk)
 │   │   ├── finance.py        # PortConfig, OpexParameter, LegFinance
-│   │   └── kpi.py            # LegKPI
+│   │   ├── kpi.py            # LegKPI
+│   │   ├── mrv.py            # MrvParameter (MRV fuel reporting, SOF→MRV event mapping)
+│   │   ├── co2_variable.py   # Co2Variable (decarbonation calculation with history)
+│   │   ├── emission_parameter.py # EmissionParameter (global CO2 emission params)
+│   │   ├── notification.py   # Notification (dashboard alerts: orders, messages, ETA shifts…)
+│   │   ├── activity_log.py   # ActivityLog (user action tracking per module)
+│   │   ├── portal_message.py # PortalMessage (threaded client/passenger ↔ company messaging)
+│   │   └── vessel_position.py # VesselPosition (GPS from satcom CSV: lat, lon, SOG, COG)
 │   ├── routers/              # One router per module
 │   │   ├── planning_router.py    # /planning
 │   │   ├── commercial_router.py  # /commercial
+│   │   ├── pricing_router.py     # /commercial/pricing (rate grids, clients, offers)
 │   │   ├── cargo_router.py       # /cargo + /p/{token} (client portal)
 │   │   ├── escale_router.py      # /escale
 │   │   ├── onboard_router.py     # /onboard
 │   │   ├── passenger_router.py   # /passengers
 │   │   ├── passenger_ext_router.py  # /boarding/{token} (external)
 │   │   ├── crew_router.py        # /crew
+│   │   ├── claim_router.py       # /claims (insurance declarations, timeline, PDF)
 │   │   ├── finance_router.py     # /finance
 │   │   ├── kpi_router.py         # /kpi
+│   │   ├── mrv_router.py         # /mrv (MRV fuel reporting)
+│   │   ├── tracking_router.py    # /api/tracking (satcom CSV vessel positions)
 │   │   ├── admin_router.py       # /admin
 │   │   ├── dashboard_router.py   # /
 │   │   ├── auth_router.py        # /login, /logout
@@ -66,7 +80,12 @@ mytowt/
 │   │   ├── img/              # Logos (SVG + PNG)
 │   │   └── BILL_OF_LADING_TEMPLATE.docx
 │   └── utils/
-│       └── crossing_book.py  # Passenger crossing book PDF
+│       ├── crossing_book.py  # Passenger crossing book PDF
+│       ├── activity.py       # Activity logging helper (log_activity from any router)
+│       ├── navigation.py     # Haversine distance calc (port-to-port in nautical miles)
+│       ├── pipedrive.py      # Pipedrive CRM integration (org search, deal create/update)
+│       ├── revolut.py        # Revolut Merchant API (passenger payment checkout + webhooks)
+│       └── notifications.py  # Centralized notification creation (OnboardNotification)
 ├── CLAUDE.md                 # This file
 ├── README.md
 ├── Dockerfile
@@ -123,6 +142,11 @@ mytowt/
 - `/p/{token}` — client cargo packing list portal
 - `/boarding/{token}` — passenger pre-boarding form
 
+### External Integrations
+- **Pipedrive CRM** (`utils/pipedrive.py`): org search, deal creation/update for commercial offers and transport orders
+- **Revolut Merchant** (`utils/revolut.py`): passenger payment via Hosted Checkout Page → webhook callback updates `PassengerPayment`
+- **Satcom CSV** (`tracking_router.py`): vessel position ingestion from satellite communication files
+
 ## Deployment
 
 ### Current (VPS OVH)
@@ -165,10 +189,16 @@ docker exec towt-app-v2 chmod -R 755 /app/app/static/
 | OPEX | Operating expenditure (daily vessel cost) |
 | Docker shift | Stevedore work shift |
 | Palette | Pallet: EPAL 120×80, USPAL 120×100 |
+| Hold / Cale | Cargo compartment (6 holds: SUP_AV, SUP_AR, MIL_AV, MIL_AR, INF_AV, INF_AR) |
+| MRV | Monitoring, Reporting and Verification (EU fuel emissions regulation) |
+| P&I | Protection & Indemnity (maritime insurance) |
+| Satcom | Satellite communication (vessel GPS tracking) |
+| SOG/COG | Speed Over Ground / Course Over Ground |
+| Rate Grid | Tariff grid per route (freight forwarder / shipper pricing) |
 
 ## Planned Enhancements (backlog)
 
-1. Global activity logging system (journal d'activité admin)
+1. ~~Global activity logging system~~ ✓ (implemented: `activity_log.py` + `utils/activity.py`)
 2. Cargo: structured addresses (shipper/notify/consignee split into name/address/postal/city/country)
 3. Cargo: description_of_goods field for Bill of Lading
 4. Cargo: mandatory dimensions with helptexts
