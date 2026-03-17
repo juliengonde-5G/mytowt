@@ -37,6 +37,16 @@ async def get_db():
 
 
 async def init_db():
-    """Create all tables."""
+    """Create all tables and run lightweight migrations."""
+    from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        # ── Lightweight column migrations (idempotent) ──
+        migrations = [
+            ("rate_grids", "palette_format", "VARCHAR(20) DEFAULT 'EPAL'"),
+        ]
+        for table, column, col_type in migrations:
+            await conn.execute(text(
+                f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}"
+            ))
