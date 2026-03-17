@@ -437,13 +437,14 @@ async def add_passenger(
     if not booking:
         raise HTTPException(404)
 
-    # Check capacity: max 2 passengers per cabin
+    # Check capacity: 2 per cabin + 1 extra per cabin when multiple cabins
     pax_count = await db.execute(
         select(func.count(Passenger.id)).where(Passenger.booking_id == booking_id)
     )
-    max_pax = len(booking.cabin_list) * 2
+    n_cabins = len(booking.cabin_list)
+    max_pax = n_cabins * 3 if n_cabins > 1 else 2
     if (pax_count.scalar() or 0) >= max_pax:
-        raise HTTPException(400, f"Capacité atteinte ({max_pax} passagers maximum pour {len(booking.cabin_list)} cabine(s))")
+        raise HTTPException(400, f"Capacité atteinte ({max_pax} passagers maximum pour {n_cabins} cabine(s))")
 
     pax = Passenger(
         booking_id=booking_id,

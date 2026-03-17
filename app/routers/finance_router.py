@@ -55,13 +55,12 @@ async def get_opex_daily(db: AsyncSession) -> float:
 
 async def compute_revenue_from_orders(db: AsyncSession, leg_id: int) -> float:
     result = await db.execute(
-        select(OrderAssignment).options(selectinload(OrderAssignment.order))
-        .where(OrderAssignment.leg_id == leg_id)
+        select(Order).where(Order.leg_id == leg_id, Order.status != "annule")
     )
     total = 0
-    for a in result.scalars().all():
-        if a.order and a.order.total_price and a.order.status != "annule":
-            total += a.order.total_price
+    for o in result.scalars().all():
+        if o.total_price:
+            total += o.total_price
     return round(total, 2)
 
 
@@ -83,13 +82,11 @@ async def compute_pax_revenue_for_leg(db: AsyncSession, leg_id: int) -> float:
 
 async def compute_palettes_for_leg(db: AsyncSession, leg_id: int) -> int:
     result = await db.execute(
-        select(OrderAssignment).options(selectinload(OrderAssignment.order))
-        .where(OrderAssignment.leg_id == leg_id)
+        select(Order).where(Order.leg_id == leg_id, Order.status != "annule")
     )
     total = 0
-    for a in result.scalars().all():
-        if a.order and a.order.status != "annule":
-            total += a.order.quantity_palettes or 0
+    for o in result.scalars().all():
+        total += o.quantity_palettes or 0
     return total
 
 
