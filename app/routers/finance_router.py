@@ -60,7 +60,7 @@ async def compute_revenue_from_orders(db: AsyncSession, leg_id: int) -> float:
     )
     total = 0
     for a in result.scalars().all():
-        if a.order and a.order.total_price:
+        if a.order and a.order.total_price and a.order.status != "annule":
             total += a.order.total_price
     return round(total, 2)
 
@@ -88,7 +88,7 @@ async def compute_palettes_for_leg(db: AsyncSession, leg_id: int) -> int:
     )
     total = 0
     for a in result.scalars().all():
-        if a.order:
+        if a.order and a.order.status != "annule":
             total += a.order.quantity_palettes or 0
     return total
 

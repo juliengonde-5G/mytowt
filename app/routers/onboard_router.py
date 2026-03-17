@@ -127,7 +127,7 @@ async def onboard_home(
 
             # ─── CARGO summary ───
             orders_result = await db.execute(
-                select(Order).where(Order.leg_id == current_leg.id)
+                select(Order).where(Order.leg_id == current_leg.id, Order.status != "annule")
             )
             orders = orders_result.scalars().all()
             order_ids = [o.id for o in orders]
@@ -1322,7 +1322,7 @@ async def generate_archive(
 
         # 6. Packing list summary
         orders_result = await db.execute(
-            select(Order).where(Order.leg_id == leg_id).order_by(Order.created_at.asc())
+            select(Order).where(Order.leg_id == leg_id, Order.status != "annule").order_by(Order.created_at.asc())
         )
         orders = orders_result.scalars().all()
         if orders:

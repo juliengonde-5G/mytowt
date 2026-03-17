@@ -820,7 +820,7 @@ async def export_voyage_excel(
 
     # Find all orders assigned to this leg, then their packing lists
     orders_result = await db.execute(
-        select(Order).where(Order.leg_id == leg_id)
+        select(Order).where(Order.leg_id == leg_id, Order.status != "annule")
     )
     orders = orders_result.scalars().all()
     order_ids = [o.id for o in orders]
