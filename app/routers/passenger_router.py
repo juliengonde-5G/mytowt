@@ -152,16 +152,6 @@ async def booking_create_submit(
     leg_id: int = Form(...),
     contact_email: str = Form(""),
     contact_phone: str = Form(""),
-    pax1_first: str = Form(...), pax1_last: str = Form(...),
-    pax1_email: str = Form(""), pax1_phone: str = Form(""),
-    pax1_dob: str = Form(""), pax1_nationality: str = Form(""),
-    pax1_passport: str = Form(""),
-    pax1_emergency_name: str = Form(""), pax1_emergency_phone: str = Form(""),
-    pax2_first: str = Form(""), pax2_last: str = Form(""),
-    pax2_email: str = Form(""), pax2_phone: str = Form(""),
-    pax2_dob: str = Form(""), pax2_nationality: str = Form(""),
-    pax2_passport: str = Form(""),
-    pax2_emergency_name: str = Form(""), pax2_emergency_phone: str = Form(""),
     notes: str = Form(""),
     user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
@@ -241,39 +231,41 @@ async def booking_create_submit(
                        entity_label=booking.reference,
                        ip_address=get_client_ip(request))
 
-    # Add passenger 1 (mandatory)
-    pax1 = Passenger(
-        booking_id=booking.id,
-        first_name=pax1_first.strip(), last_name=pax1_last.strip(),
-        email=pax1_email.strip() or None, phone=pax1_phone.strip() or None,
-        date_of_birth=datetime.strptime(pax1_dob, "%Y-%m-%d").date() if pax1_dob.strip() else None,
-        nationality=pax1_nationality.strip() or None,
-        passport_number=pax1_passport.strip() or None,
-        emergency_contact_name=pax1_emergency_name.strip() or None,
-        emergency_contact_phone=pax1_emergency_phone.strip() or None,
-    )
-    db.add(pax1)
-    await db.flush()
-    # Create docs for pax1
-    for doc_code, _ in DOCUMENT_TYPES:
-        db.add(PassengerDocument(passenger_id=pax1.id, doc_type=doc_code, status="missing"))
+    # Add passengers dynamically (one per cabin minimum)
+    pax_firsts = form.getlist("pax_first[]")
+    pax_lasts = form.getlist("pax_last[]")
+    pax_emails = form.getlist("pax_email[]")
+    pax_phones = form.getlist("pax_phone[]")
+    pax_dobs = form.getlist("pax_dob[]")
+    pax_nationalities = form.getlist("pax_nationality[]")
+    pax_passports = form.getlist("pax_passport[]")
+    pax_emergency_names = form.getlist("pax_emergency_name[]")
+    pax_emergency_phones = form.getlist("pax_emergency_phone[]")
 
-    # Add passenger 2 (optional)
-    if pax2_first.strip() and pax2_last.strip():
-        pax2 = Passenger(
+    if not pax_firsts or not pax_firsts[0].strip():
+        raise HTTPException(400, "Au moins un passager est requis.")
+
+    first_pax_name = f"{pax_firsts[0].strip()} {pax_lasts[0].strip()}"
+    for i in range(len(pax_firsts)):
+        fn = pax_firsts[i].strip() if i < len(pax_firsts) else ""
+        ln = pax_lasts[i].strip() if i < len(pax_lasts) else ""
+        if not fn or not ln:
+            continue
+        pax = Passenger(
             booking_id=booking.id,
-            first_name=pax2_first.strip(), last_name=pax2_last.strip(),
-            email=pax2_email.strip() or None, phone=pax2_phone.strip() or None,
-            date_of_birth=datetime.strptime(pax2_dob, "%Y-%m-%d").date() if pax2_dob.strip() else None,
-            nationality=pax2_nationality.strip() or None,
-            passport_number=pax2_passport.strip() or None,
-            emergency_contact_name=pax2_emergency_name.strip() or None,
-            emergency_contact_phone=pax2_emergency_phone.strip() or None,
+            first_name=fn, last_name=ln,
+            email=(pax_emails[i].strip() or None) if i < len(pax_emails) else None,
+            phone=(pax_phones[i].strip() or None) if i < len(pax_phones) else None,
+            date_of_birth=datetime.strptime(pax_dobs[i], "%Y-%m-%d").date() if i < len(pax_dobs) and pax_dobs[i].strip() else None,
+            nationality=(pax_nationalities[i].strip() or None) if i < len(pax_nationalities) else None,
+            passport_number=(pax_passports[i].strip() or None) if i < len(pax_passports) else None,
+            emergency_contact_name=(pax_emergency_names[i].strip() or None) if i < len(pax_emergency_names) else None,
+            emergency_contact_phone=(pax_emergency_phones[i].strip() or None) if i < len(pax_emergency_phones) else None,
         )
-        db.add(pax2)
+        db.add(pax)
         await db.flush()
         for doc_code, _ in DOCUMENT_TYPES:
-            db.add(PassengerDocument(passenger_id=pax2.id, doc_type=doc_code, status="missing"))
+            db.add(PassengerDocument(passenger_id=pax.id, doc_type=doc_code, status="missing"))
 
     await db.flush()
 
@@ -282,7 +274,7 @@ async def booking_create_submit(
     db.add(Notification(
         type="new_passenger_booking",
         title=f"Nouvelle réservation {booking.reference}",
-        detail=f"{pax1_first.strip()} {pax1_last.strip()} — Cabine(s) {cabin_numbers_str}",
+        detail=f"{first_pax_name} — Cabine(s) {cabin_numbers_str}",
         link=f"/passengers/{booking.id}",
         booking_id=booking.id,
     ))
@@ -445,12 +437,13 @@ async def add_passenger(
     if not booking:
         raise HTTPException(404)
 
-    # Check capacity
+    # Check capacity: max 2 passengers per cabin
     pax_count = await db.execute(
         select(func.count(Passenger.id)).where(Passenger.booking_id == booking_id)
     )
-    if (pax_count.scalar() or 0) >= 2:
-        raise HTTPException(400, "Cabine pleine (2 passagers maximum)")
+    max_pax = len(booking.cabin_list) * 2
+    if (pax_count.scalar() or 0) >= max_pax:
+        raise HTTPException(400, f"Capacité atteinte ({max_pax} passagers maximum pour {len(booking.cabin_list)} cabine(s))")
 
     pax = Passenger(
         booking_id=booking_id,

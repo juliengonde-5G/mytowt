@@ -48,17 +48,19 @@ table.sched tr.cur{background:rgba(9,85,97,.06);font-weight:600}
 </div>
 {% endif %}
 
-{# ── GPS Map (only when navigating + position available) ── #}
-{% if is_navigating and vessel_position %}
+{# ── Map (always shown if ports have coordinates) ── #}
+{% if (leg.departure_port.latitude and leg.arrival_port.latitude) %}
 <div class="card">
-    <h2>{% if lang == 'en' %}Live position{% elif lang == 'es' %}Posición en vivo{% elif lang == 'pt-br' %}Posição ao vivo{% elif lang == 'vi' %}Vị trí trực tiếp{% else %}Position en direct{% endif %}</h2>
+    <h2>{% if is_navigating %}{% if lang == 'en' %}Live position{% else %}Position en direct{% endif %}{% else %}{% if lang == 'en' %}Route map{% elif lang == 'es' %}Mapa de ruta{% elif lang == 'pt-br' %}Mapa da rota{% elif lang == 'vi' %}Bản đồ tuyến{% else %}Carte de la route{% endif %}{% endif %}</h2>
     <div id="voyage-map"></div>
+    {% if is_navigating and vessel_position %}
     <div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:#888;flex-wrap:wrap">
         <span>Lat: {{ '%.4f'|format(vessel_position.latitude) }}° · Lon: {{ '%.4f'|format(vessel_position.longitude) }}°</span>
         {% if vessel_position.sog is not none %}<span>SOG: {{ '%.1f'|format(vessel_position.sog) }} kn</span>{% endif %}
         {% if vessel_position.cog is not none %}<span>COG: {{ '%.0f'|format(vessel_position.cog) }}°</span>{% endif %}
         <span>{% if lang == 'en' %}Last update{% else %}Dernière mise à jour{% endif %}: {{ vessel_position.recorded_at.strftime('%d/%m/%Y %H:%M') }} UTC</span>
     </div>
+    {% endif %}
 </div>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -82,36 +84,51 @@ table.sched tr.cur{background:rgba(9,85,97,.06);font-weight:600}
 <script>
 window.addEventListener('load', function(){
     if(typeof L === 'undefined') return;
-    var lat = {{ vessel_position.latitude }};
-    var lon = {{ vessel_position.longitude }};
-    var map = L.map('voyage-map',{scrollWheelZoom:true}).setView([lat, lon], 6);
+
+    var depLat = {{ leg.departure_port.latitude }};
+    var depLon = {{ leg.departure_port.longitude }};
+    var arrLat = {{ leg.arrival_port.latitude }};
+    var arrLon = {{ leg.arrival_port.longitude }};
+
+    // Center map on midpoint between ports
+    var centerLat = (depLat + arrLat) / 2;
+    var centerLon = (depLon + arrLon) / 2;
+
+    var map = L.map('voyage-map',{scrollWheelZoom:true}).setView([centerLat, centerLon], 4);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
         attribution:'&copy; OpenStreetMap', maxZoom:18
     }).addTo(map);
-    setTimeout(function(){ map.invalidateSize(); }, 300);
 
-    // Vessel marker
-    var icon = L.divIcon({
+    // Departure port
+    L.circleMarker([depLat, depLon], {
+        radius:7, color:'#095561', fillColor:'#095561', fillOpacity:0.8, weight:2
+    }).addTo(map).bindPopup('<strong>{{ leg.departure_port.name }}</strong><br>{{ leg.departure_port.locode }}');
+
+    // Arrival port
+    L.circleMarker([arrLat, arrLon], {
+        radius:7, color:'#16a34a', fillColor:'#16a34a', fillOpacity:0.8, weight:2
+    }).addTo(map).bindPopup('<strong>{{ leg.arrival_port.name }}</strong><br>{{ leg.arrival_port.locode }}');
+
+    // Route line
+    L.polyline([[depLat, depLon], [arrLat, arrLon]], {
+        color:'#095561', weight:2, opacity:0.4, dashArray:'8,6'
+    }).addTo(map);
+
+    // Fit bounds to show both ports
+    map.fitBounds([[depLat, depLon], [arrLat, arrLon]], {padding: [40, 40]});
+
+    {% if is_navigating and vessel_position %}
+    // Vessel marker (only when navigating)
+    var vesselIcon = L.divIcon({
         className:'',
         html:'<div style="background:#2563eb;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,0.35);"></div>',
         iconSize:[22,22], iconAnchor:[11,11]
     });
-    L.marker([lat, lon], {icon: icon}).addTo(map)
+    L.marker([{{ vessel_position.latitude }}, {{ vessel_position.longitude }}], {icon: vesselIcon}).addTo(map)
         .bindPopup('<strong>{{ leg.vessel.name }}</strong><br>{{ leg.leg_code }}');
-
-    {% if leg.departure_port.latitude and leg.departure_port.longitude %}
-    // Departure port
-    L.circleMarker([{{ leg.departure_port.latitude }}, {{ leg.departure_port.longitude }}], {
-        radius:6, color:'#095561', fillColor:'#095561', fillOpacity:0.7, weight:2
-    }).addTo(map).bindPopup('{{ leg.departure_port.name }} ({{ leg.departure_port.locode }})');
     {% endif %}
 
-    {% if leg.arrival_port.latitude and leg.arrival_port.longitude %}
-    // Arrival port
-    L.circleMarker([{{ leg.arrival_port.latitude }}, {{ leg.arrival_port.longitude }}], {
-        radius:6, color:'#16a34a', fillColor:'#16a34a', fillOpacity:0.7, weight:2
-    }).addTo(map).bindPopup('{{ leg.arrival_port.name }} ({{ leg.arrival_port.locode }})');
-    {% endif %}
+    setTimeout(function(){ map.invalidateSize(); }, 300);
 });
 </script>
 {% endif %}

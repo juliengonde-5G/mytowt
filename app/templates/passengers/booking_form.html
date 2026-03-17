@@ -67,37 +67,23 @@
         </div>
     </div>
 
-    <!-- PASSENGER 1 (mandatory) -->
-    <div class="pf-section">
-        <h3>👤 Passager 1 <span style="font-size:11px;color:#dc2626;font-weight:400;">* obligatoire</span></h3>
-        <div class="pf-grid">
-            <div class="fg"><label>Prénom *</label><input type="text" name="pax1_first" class="fi" required></div>
-            <div class="fg"><label>Nom *</label><input type="text" name="pax1_last" class="fi" required></div>
-            <div class="fg"><label>Email</label><input type="email" name="pax1_email" class="fi"></div>
-            <div class="fg"><label>Téléphone</label><input type="text" name="pax1_phone" class="fi"></div>
-            <div class="fg"><label>Date de naissance</label><input type="date" name="pax1_dob" class="fi"></div>
-            <div class="fg"><label>Nationalité</label><input type="text" name="pax1_nationality" class="fi"></div>
-            <div class="fg"><label>N° Passeport</label><input type="text" name="pax1_passport" class="fi"></div>
-            <div class="fg"></div>
-            <div class="fg"><label>Contact urgence — Nom</label><input type="text" name="pax1_emergency_name" class="fi"></div>
-            <div class="fg"><label>Contact urgence — Tél.</label><input type="text" name="pax1_emergency_phone" class="fi"></div>
-        </div>
-    </div>
-
-    <!-- PASSENGER 2 (optional) -->
-    <div class="pf-section pf-pax2">
-        <h3>👤 Passager 2 <span style="font-size:11px;color:#888;font-weight:400;">optionnel</span></h3>
-        <div class="pf-grid">
-            <div class="fg"><label>Prénom</label><input type="text" name="pax2_first" class="fi"></div>
-            <div class="fg"><label>Nom</label><input type="text" name="pax2_last" class="fi"></div>
-            <div class="fg"><label>Email</label><input type="email" name="pax2_email" class="fi"></div>
-            <div class="fg"><label>Téléphone</label><input type="text" name="pax2_phone" class="fi"></div>
-            <div class="fg"><label>Date de naissance</label><input type="date" name="pax2_dob" class="fi"></div>
-            <div class="fg"><label>Nationalité</label><input type="text" name="pax2_nationality" class="fi"></div>
-            <div class="fg"><label>N° Passeport</label><input type="text" name="pax2_passport" class="fi"></div>
-            <div class="fg"></div>
-            <div class="fg"><label>Contact urgence — Nom</label><input type="text" name="pax2_emergency_name" class="fi"></div>
-            <div class="fg"><label>Contact urgence — Tél.</label><input type="text" name="pax2_emergency_phone" class="fi"></div>
+    <!-- Dynamic passenger sections (1 per selected cabin) -->
+    <div id="pax-sections">
+        <!-- Passenger 1 always visible -->
+        <div class="pf-section pax-block" id="pax-block-1">
+            <h3>👤 Passager 1 <span style="font-size:11px;color:#dc2626;font-weight:400;">* obligatoire</span></h3>
+            <div class="pf-grid">
+                <div class="fg"><label>Prénom *</label><input type="text" name="pax_first[]" class="fi pax-req" required></div>
+                <div class="fg"><label>Nom *</label><input type="text" name="pax_last[]" class="fi pax-req" required></div>
+                <div class="fg"><label>Email</label><input type="email" name="pax_email[]" class="fi"></div>
+                <div class="fg"><label>Téléphone</label><input type="text" name="pax_phone[]" class="fi"></div>
+                <div class="fg"><label>Date de naissance</label><input type="date" name="pax_dob[]" class="fi"></div>
+                <div class="fg"><label>Nationalité</label><input type="text" name="pax_nationality[]" class="fi"></div>
+                <div class="fg"><label>N° Passeport</label><input type="text" name="pax_passport[]" class="fi"></div>
+                <div class="fg"></div>
+                <div class="fg"><label>Contact urgence — Nom</label><input type="text" name="pax_emergency_name[]" class="fi"></div>
+                <div class="fg"><label>Contact urgence — Tél.</label><input type="text" name="pax_emergency_phone[]" class="fi"></div>
+            </div>
         </div>
     </div>
 
@@ -126,7 +112,7 @@
     .cabin-num{font-size:22px;font-weight:700;color:var(--towt-blue);display:block}
     .cabin-type{font-size:11px;color:#666;display:block;margin-top:2px}
     .cabin-cap{font-size:10px;color:#888;display:block}
-    .pf-pax2{opacity:0.7;border-left:3px solid #eee}
+    .pax-extra{border-left:3px solid var(--towt-blue);opacity:0.85}
 </style>
 <script>
 var PRICING = {{ pricing_json|tojson }};
@@ -165,12 +151,51 @@ function updateCabinAvailability() {
     });
 }
 
+function makePaxBlock(n) {
+    var div = document.createElement('div');
+    div.className = 'pf-section pax-block pax-extra';
+    div.id = 'pax-block-' + n;
+    div.innerHTML = '<h3>👤 Passager ' + n + ' <span style="font-size:11px;color:#dc2626;font-weight:400;">* obligatoire (cabine ' + n + ')</span></h3>' +
+        '<div class="pf-grid">' +
+        '<div class="fg"><label>Prénom *</label><input type="text" name="pax_first[]" class="fi pax-req" required></div>' +
+        '<div class="fg"><label>Nom *</label><input type="text" name="pax_last[]" class="fi pax-req" required></div>' +
+        '<div class="fg"><label>Email</label><input type="email" name="pax_email[]" class="fi"></div>' +
+        '<div class="fg"><label>Téléphone</label><input type="text" name="pax_phone[]" class="fi"></div>' +
+        '<div class="fg"><label>Date de naissance</label><input type="date" name="pax_dob[]" class="fi"></div>' +
+        '<div class="fg"><label>Nationalité</label><input type="text" name="pax_nationality[]" class="fi"></div>' +
+        '<div class="fg"><label>N° Passeport</label><input type="text" name="pax_passport[]" class="fi"></div>' +
+        '<div class="fg"></div>' +
+        '<div class="fg"><label>Contact urgence — Nom</label><input type="text" name="pax_emergency_name[]" class="fi"></div>' +
+        '<div class="fg"><label>Contact urgence — Tél.</label><input type="text" name="pax_emergency_phone[]" class="fi"></div>' +
+        '</div>';
+    return div;
+}
+
+function updatePaxSections() {
+    var checked = document.querySelectorAll('input[name="cabin_numbers"]:checked');
+    var needed = Math.max(1, checked.length);  // At least 1 passenger per cabin
+    var container = document.getElementById('pax-sections');
+    var blocks = container.querySelectorAll('.pax-block');
+    // Remove excess blocks
+    while (blocks.length > needed) {
+        container.removeChild(blocks[blocks.length - 1]);
+        blocks = container.querySelectorAll('.pax-block');
+    }
+    // Add missing blocks
+    while (blocks.length < needed) {
+        var n = blocks.length + 1;
+        container.appendChild(makePaxBlock(n));
+        blocks = container.querySelectorAll('.pax-block');
+    }
+}
+
 function autoPrice() {
     var sel = document.getElementById('sel-leg');
     var opt = sel.options[sel.selectedIndex];
     var checked = document.querySelectorAll('input[name="cabin_numbers"]:checked');
 
     updateCabinAvailability();
+    updatePaxSections();
     document.getElementById('price-box').style.display = 'none';
     document.getElementById('price-missing').style.display = 'none';
 

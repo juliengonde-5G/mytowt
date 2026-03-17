@@ -87,7 +87,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         csp = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https://*.tile.openstreetmap.org; "
             "connect-src 'self' https://unpkg.com https://nominatim.openstreetmap.org; "

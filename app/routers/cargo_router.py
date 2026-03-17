@@ -1425,14 +1425,18 @@ async def client_portal_voyage(token: str, request: Request, db: AsyncSession = 
     vessel_position = None
     is_navigating = False
     if leg:
-        # Upcoming legs across all vessels (not yet arrived)
+        # Upcoming legs with same departure/arrival ports (not yet arrived)
         from datetime import datetime, timezone as tz
         now = datetime.now(tz.utc)
         upcoming_result = await db.execute(
             select(Leg).options(
                 selectinload(Leg.departure_port), selectinload(Leg.arrival_port),
                 selectinload(Leg.vessel)
-            ).where(Leg.ata.is_(None))
+            ).where(
+                Leg.ata.is_(None),
+                Leg.departure_port_id == leg.departure_port_id,
+                Leg.arrival_port_id == leg.arrival_port_id,
+            )
             .order_by(Leg.etd)
         )
         upcoming_legs = upcoming_result.scalars().all()
