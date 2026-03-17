@@ -72,7 +72,7 @@
         <!-- ═══ GENERAL INFO ═════════════════════════════ -->
         <div style="background:#f8fafc;border-radius:8px;padding:16px;margin-bottom:20px;">
             <h4 style="margin:0 0 12px;color:var(--towt-blue);font-size:14px;">Paramètres</h4>
-            <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:12px;">
+            <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px;margin-bottom:12px;">
                 <div class="form-group" style="margin:0;">
                     <label class="form-label">Navire (OPEX)</label>
                     <select name="vessel_id" id="vesselSelect" class="form-select" onchange="computeRates()">
@@ -81,6 +81,14 @@
                         <option value="{{ v.id }}" {% if edit_grid and edit_grid.vessel_id == v.id %}selected{% endif %}>
                             {{ v.name }}{% if v.opex_daily_sea %} (€{{ "%.0f"|format(v.opex_daily_sea) }}/j){% endif %}
                         </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">Format palette</label>
+                    <select name="palette_format" class="form-select">
+                        {% for pf in palette_formats %}
+                        <option value="{{ pf.value }}" {% if edit_grid and edit_grid.palette_format == pf.value %}selected{% elif not edit_grid and pf.value == 'EPAL' %}selected{% endif %}>{{ pf.label }}</option>
                         {% endfor %}
                     </select>
                 </div>

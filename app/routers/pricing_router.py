@@ -18,7 +18,7 @@ from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.port import Port
 from app.models.leg import Leg
-from app.models.order import Order
+from app.models.order import Order, PALETTE_FORMATS
 from app.models.finance import OpexParameter
 from app.models.commercial import (
     Client, ClientType, RateGrid, RateGridStatus, RateGridLine,
@@ -596,6 +596,7 @@ async def grid_create_form(
         "default_bl_fee": bl_fee, "default_booking_fee": booking_fee,
         "default_brackets_shipper": json_mod.dumps(DEFAULT_BRACKETS_SHIPPER),
         "default_brackets_ff": json_mod.dumps(DEFAULT_BRACKETS_FF),
+        "palette_formats": PALETTE_FORMATS,
         "active_module": "commercial",
     })
 
@@ -605,6 +606,7 @@ async def grid_create_submit(
     request: Request,
     client_id: str = Form(...),
     vessel_id: Optional[str] = Form(None),
+    palette_format: Optional[str] = Form("EPAL"),
     valid_from: str = Form(...),
     valid_to: str = Form(...),
     adjustment_index: Optional[str] = Form(None),
@@ -629,6 +631,7 @@ async def grid_create_submit(
         reference=ref,
         client_id=cid,
         vessel_id=pi(vessel_id),
+        palette_format=palette_format or "EPAL",
         valid_from=pd(valid_from),
         valid_to=pd(valid_to),
         adjustment_index=pf(adjustment_index, 1.0),
@@ -777,6 +780,7 @@ async def grid_edit_form(
         "edit_grid": grid, "reference": grid.reference,
         "clients": clients, "vessels": vessels, "ports": ports,
         "default_bl_fee": grid.bl_fee, "default_booking_fee": grid.booking_fee,
+        "palette_formats": PALETTE_FORMATS,
         "active_module": "commercial",
     })
 
@@ -786,6 +790,7 @@ async def grid_edit_submit(
     gid: int, request: Request,
     client_id: str = Form(...),
     vessel_id: Optional[str] = Form(None),
+    palette_format: Optional[str] = Form("EPAL"),
     valid_from: str = Form(...),
     valid_to: str = Form(...),
     adjustment_index: Optional[str] = Form(None),
@@ -806,6 +811,7 @@ async def grid_edit_submit(
 
     grid.client_id = pi(client_id, grid.client_id)
     grid.vessel_id = pi(vessel_id)
+    grid.palette_format = palette_format or "EPAL"
     grid.valid_from = pd(valid_from) or grid.valid_from
     grid.valid_to = pd(valid_to) or grid.valid_to
     grid.adjustment_index = pf(adjustment_index, 1.0)

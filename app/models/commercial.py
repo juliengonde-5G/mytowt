@@ -92,6 +92,9 @@ class RateGrid(Base):
     valid_from = Column(Date, nullable=False)
     valid_to = Column(Date, nullable=False)
 
+    # Palette format
+    palette_format = Column(String(20), default="EPAL")  # EPAL, USPAL, PORTPAL, BB
+
     # Pricing parameters
     adjustment_index = Column(Float, default=1.0)  # Coefficient multiplicateur (1.0 = no change)
     bl_fee = Column(Float, default=0)  # BL fee (copied from company params at creation)

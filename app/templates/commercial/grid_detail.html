@@ -35,6 +35,8 @@
                     </span>
                     <span style="color:#888;font-weight:500;">Navire</span>
                     <span>{{ grid.vessel.name if grid.vessel else 'Tous navires' }}</span>
+                    <span style="color:#888;font-weight:500;">Format palette</span>
+                    <span><span class="badge" style="font-size:10px;background:rgba(9,85,97,0.1);color:var(--towt-blue);">{{ grid.palette_format or 'EPAL' }}</span></span>
                     <span style="color:#888;font-weight:500;">Validité</span>
                     <span>{{ grid.valid_from }} → {{ grid.valid_to }}</span>
                     <span style="color:#888;font-weight:500;">Statut</span>

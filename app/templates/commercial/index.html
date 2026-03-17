@@ -173,7 +173,7 @@
                 <tbody>
                     {% for offer in offers %}
                     <tr>
-                        <td><strong style="color:var(--towt-blue);font-family:'Poppins',sans-serif;">{{ offer.reference }}</strong></td>
+                        <td><a href="/commercial/pricing/grids/{{ offer.rate_grid_id }}" style="color:var(--towt-blue);font-weight:600;font-family:'Poppins',sans-serif;text-decoration:none;">{{ offer.reference }}</a></td>
                         <td>{{ offer.client.name if offer.client else '—' }}</td>
                         <td>
                             {% if offer.rate_grid %}

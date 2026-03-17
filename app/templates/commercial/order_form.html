@@ -127,7 +127,7 @@
                 <div class="form-row">
                     <div class="form-group" style="display:flex;align-items:center;gap:8px;margin-top:4px;">
                         <input type="checkbox" name="thc_included" id="thc_cb"
-                               {% if edit_order and edit_order.thc_included %}checked{% endif %}>
+                               {% if edit_order %}{% if edit_order.thc_included %}checked{% endif %}{% else %}checked{% endif %}>
                         <label for="thc_cb" class="form-label" style="margin:0;">THC inclus</label>
                     </div>
                     {% if edit_order %}
