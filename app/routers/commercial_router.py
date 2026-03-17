@@ -18,6 +18,10 @@ from app.models.order import Order, OrderAssignment, PALETTE_FORMATS, PALETTE_CO
 from app.models.kpi import LegKPI
 from app.models.co2_variable import Co2Variable, CO2_DEFAULTS
 from app.models.packing_list import PackingList, PackingListBatch
+from app.models.commercial import (
+    Client, RateGrid, RateGridStatus, RateGridLine,
+    RateOffer, RateOfferStatus,
+)
 from app.utils.activity import log_activity
 from app.utils.notifications import notify_order_confirmed, notify_cargo_doc_created
 from app.routers.kpi_router import compute_decarbonation, get_co2_variables
@@ -81,25 +85,30 @@ async def find_matching_leg(db: AsyncSession, order: Order):
 @router.get("/", response_class=HTMLResponse)
 async def commercial_home(
     request: Request,
+    tab: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     user: User = Depends(require_permission("commercial", "C")),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Order).options(
-        selectinload(Order.leg).selectinload(Leg.vessel),
-        selectinload(Order.leg).selectinload(Leg.arrival_port),
-    ).order_by(Order.created_at.desc())
-    if status:
-        query = query.where(Order.status == status)
-    result = await db.execute(query)
-    orders = result.scalars().all()
+    active_tab = tab if tab in ("dashboard", "grids", "offers", "orders") else "orders"
 
     statuses = {
         "non_affecte": "Non affecté", "reserve": "Réservé",
         "confirme": "Confirmé", "annule": "Annulé",
     }
 
-    # Compute decarbonation per order
+    # Always load orders (used by orders tab + dashboard KPIs)
+    query = select(Order).options(
+        selectinload(Order.leg).selectinload(Leg.vessel),
+        selectinload(Order.leg).selectinload(Leg.arrival_port),
+        selectinload(Order.rate_grid),
+    ).order_by(Order.created_at.desc())
+    if status and active_tab == "orders":
+        query = query.where(Order.status == status)
+    result = await db.execute(query)
+    orders = result.scalars().all()
+
+    # Decarbonation per order
     co2_vars = await get_co2_variables(db)
     order_decarb = {}
     for order in orders:
@@ -112,12 +121,60 @@ async def commercial_home(
         else:
             order_decarb[order.id] = {"decarb_t": 0, "decarb_kg": 0, "fill_rate_pct": 0}
 
+    # Load grids (for dashboard + grids tab)
+    grids = []
+    grid_kpis = {}
+    if active_tab in ("dashboard", "grids"):
+        grids_result = await db.execute(
+            select(RateGrid)
+            .options(selectinload(RateGrid.client), selectinload(RateGrid.vessel), selectinload(RateGrid.lines))
+            .order_by(RateGrid.created_at.desc())
+        )
+        grids = grids_result.scalars().all()
+
+    # Load offers (for dashboard + offers tab)
+    offers = []
+    if active_tab in ("dashboard", "offers"):
+        offers_result = await db.execute(
+            select(RateOffer)
+            .options(selectinload(RateOffer.client), selectinload(RateOffer.rate_grid))
+            .order_by(RateOffer.created_at.desc())
+        )
+        offers = offers_result.scalars().all()
+
+    # Dashboard KPIs
+    kpi = {}
+    if active_tab == "dashboard":
+        kpi = {
+            "total_grids_active": sum(1 for g in grids if g.status == "active"),
+            "total_offers": len(offers),
+            "total_offers_pending": sum(1 for o in offers if o.status == "sent"),
+            "total_offers_accepted": sum(1 for o in offers if o.status == "accepted"),
+            "total_orders": len(orders),
+            "total_ca": sum(o.total_price or 0 for o in orders),
+        }
+        # Grid-level KPIs
+        for grid in grids:
+            g_offers = [o for o in offers if o.rate_grid_id == grid.id]
+            g_orders = [o for o in orders if o.rate_grid_id == grid.id]
+            grid_kpis[grid.id] = {
+                "nb_offers": len(g_offers),
+                "nb_offers_accepted": sum(1 for o in g_offers if o.status == "accepted"),
+                "nb_orders": len(g_orders),
+                "ca": sum(o.total_price or 0 for o in g_orders),
+            }
+
     return templates.TemplateResponse("commercial/index.html", {
         "request": request, "user": user,
+        "active_tab": active_tab,
         "orders": orders, "statuses": statuses,
         "selected_status": status,
         "order_decarb": order_decarb,
         "co2_vars": co2_vars,
+        "grids": grids,
+        "grid_kpis": grid_kpis,
+        "offers": offers,
+        "kpi": kpi,
         "active_module": "commercial",
     })
 

@@ -61,7 +61,7 @@ body{font-family:'Poppins',sans-serif;background:#f4f7f8;color:#333;min-height:1
 <div class="ph">
   <div class="plogo">
     <button class="mbt" onclick="tSB()">☰</button>
-    <img src="/static/img/logo_towt.png" alt="TOWT">
+    <img src="/static/img/logo_towt_white.png" alt="TOWT">
     <div><div class="plogo-t">TOWT</div><div class="plogo-s">Transoceanic Wind Transport</div></div>
   </div>
   <div class="ph-r">
@@ -84,7 +84,13 @@ body{font-family:'Poppins',sans-serif;background:#f4f7f8;color:#333;min-height:1
       <a href="/p/{{ pl.token }}/documents?lang={{ lang }}" class="{% if active_page=='docs' %}active{% endif %}"><span class="ni">📄</span>{{ t('cp_documents', lang) }}</a>
       <a href="/p/{{ pl.token }}/messages?lang={{ lang }}" class="{% if active_page=='messages' %}active{% endif %}"><span class="ni">💬</span>{{ t('cp_messages', lang) }}{% if unread_messages %}<span class="nbdg">{{ unread_messages }}</span>{% endif %}</a>
     </nav>
-    <div class="psf">TOWT — Les Docks, 52 quai Frissard<br>76600 Le Havre</div>
+    <div class="psf">
+      TOWT — Les Docks, 52 quai Frissard<br>76600 Le Havre
+      <div style="margin-top:6px;font-size:9px;color:#bbb;line-height:1.4">
+        {% if lang == 'en' %}Personal data processed in accordance with GDPR. Contact: <a href="mailto:operation@towt.eu" style="color:#999">operation@towt.eu</a>
+        {% else %}Données traitées conformément au RGPD. Contact : <a href="mailto:operation@towt.eu" style="color:#999">operation@towt.eu</a>{% endif %}
+      </div>
+    </div>
   </div>
   <div class="pmain">{% block portal_content %}{% endblock %}</div>
 </div>

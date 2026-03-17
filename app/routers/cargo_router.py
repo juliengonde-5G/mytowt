@@ -1410,7 +1410,9 @@ async def client_portal_voyage(token: str, request: Request, db: AsyncSession = 
     lang = _lang(request)
     leg = pl.order.leg
     itinerary = []
-    crew = []
+    eta_shifts = []
+    vessel_position = None
+    is_navigating = False
     if leg:
         # Full itinerary for same vessel/year
         yr = leg.etd.year if leg.etd else None
@@ -1422,20 +1424,35 @@ async def client_portal_voyage(token: str, request: Request, db: AsyncSession = 
                 .order_by(Leg.etd)
             )
             itinerary = it_result.scalars().all()
-        # Crew on board
-        from datetime import date
-        crew_result = await db.execute(
-            select(CrewAssignment).options(selectinload(CrewAssignment.member))
-            .where(
-                CrewAssignment.vessel_id == leg.vessel_id,
-                CrewAssignment.embark_date <= (leg.etd.date() if leg.etd else date.today()),
-                (CrewAssignment.disembark_date == None) | (CrewAssignment.disembark_date >= (leg.etd.date() if leg.etd else date.today())),
-            )
+
+        # ETA/ETD shift history for this leg
+        from app.models.onboard import ETAShift
+        shifts_result = await db.execute(
+            select(ETAShift).where(ETAShift.leg_id == leg.id)
+            .order_by(ETAShift.created_at.asc())
         )
-        crew = crew_result.scalars().all()
+        eta_shifts = shifts_result.scalars().all()
+
+        # Check if vessel is currently navigating (ATD set, no ATA yet)
+        is_navigating = bool(leg.atd and not leg.ata)
+
+        # Latest vessel position (only if navigating)
+        if is_navigating:
+            from app.models.vessel_position import VesselPosition
+            pos_result = await db.execute(
+                select(VesselPosition)
+                .where(VesselPosition.vessel_id == leg.vessel_id)
+                .order_by(VesselPosition.recorded_at.desc())
+                .limit(1)
+            )
+            vessel_position = pos_result.scalar_one_or_none()
+
     return templates.TemplateResponse("cargo/portal_voyage.html", {
         "request": request, "pl": pl, "leg": leg,
-        "itinerary": itinerary, "crew": crew,
+        "itinerary": itinerary,
+        "eta_shifts": eta_shifts,
+        "vessel_position": vessel_position,
+        "is_navigating": is_navigating,
         "lang": lang, "active_page": "voyage", "page_suffix": "/voyage",
         "unread_messages": await _unread_count(pl.id, db),
     })

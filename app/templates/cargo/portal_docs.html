@@ -5,7 +5,7 @@
 <h1>📄 {{ t('cp_documents', lang) }}</h1>
 
 <div class="card">
-  <h2>{{ t('cp_contractual_docs', lang) }}</h2>
+  <h2>{% if lang == 'en' %}Shipping documents{% elif lang == 'es' %}Documentos de envío{% elif lang == 'pt-br' %}Documentos de embarque{% elif lang == 'vi' %}Tài liệu vận chuyển{% else %}Documents d'expédition{% endif %}</h2>
   <div class="igrid">
     <a href="/cargo/{{ pl.id }}/bol?lang=fr" target="_blank" style="text-decoration:none">
       <div class="ibox" style="cursor:pointer;border:1px solid #e5e7eb;text-align:center">
@@ -28,86 +28,15 @@
         <div class="il">Excel</div>
       </div>
     </a>
+    {% if pl.order.leg and pl.order.leg.arrival_port %}
+    <a href="/cargo/{{ pl.id }}/arrival-notice" target="_blank" style="text-decoration:none">
+      <div class="ibox" style="cursor:pointer;border:1px solid #e5e7eb;text-align:center">
+        <div style="font-size:28px;margin-bottom:6px">🚢</div>
+        <div class="iv">Arrival Notice</div>
+        <div class="il">PDF</div>
+      </div>
+    </a>
+    {% endif %}
   </div>
-</div>
-
-<div class="card csec">
-  <h2>{{ t('cp_terms_title', lang) }}</h2>
-  {% if lang == 'en' %}
-  <h3>Nature of transport</h3>
-  <p>TOWT offers maritime freight transport by sail. Voyages are subject to weather conditions and may experience delays or route changes. TOWT commits to transporting your goods safely to the agreed destination.</p>
-  <h3>Pricing and payment</h3>
-  <p>Freight rates are indicated per pallet and per leg. A deposit of 30% is required upon booking confirmation, with the balance due 30 days before the estimated departure date. Invoices are sent by email.</p>
-  <h3>Cancellation policy</h3>
-  <ul>
-    <li>More than 60 days before departure: full refund minus 50 € administrative fee</li>
-    <li>30 to 60 days: 50% of the freight amount retained</li>
-    <li>Less than 30 days: no refund</li>
-  </ul>
-  <h3>Insurance</h3>
-  <p>TOWT carries professional liability insurance. Shippers are strongly advised to take out their own cargo insurance (Ad Valorem) covering the full value of goods during transport.</p>
-  <h3>Liability</h3>
-  <p>TOWT's liability is limited in accordance with the Hague-Visby Rules. For any claim, the shipper must notify TOWT in writing within 3 days of delivery.</p>
-  {% elif lang == 'es' %}
-  <h3>Naturaleza del transporte</h3>
-  <p>TOWT ofrece transporte marítimo de mercancías a vela. Los viajes están sujetos a condiciones meteorológicas y pueden experimentar retrasos o cambios de ruta. TOWT se compromete a transportar sus mercancías de forma segura al destino acordado.</p>
-  <h3>Precios y pago</h3>
-  <p>Las tarifas de flete se indican por paleta y por tramo. Se requiere un depósito del 30% a la confirmación de la reserva, con el saldo pendiente 30 días antes de la fecha de salida estimada.</p>
-  <h3>Política de cancelación</h3>
-  <ul>
-    <li>Más de 60 días antes de la salida: reembolso total menos 50 € de gastos administrativos</li>
-    <li>30 a 60 días: retención del 50% del flete</li>
-    <li>Menos de 30 días: sin reembolso</li>
-  </ul>
-  <h3>Seguro</h3>
-  <p>TOWT dispone de seguro de responsabilidad profesional. Se recomienda encarecidamente a los expedidores contratar su propio seguro de carga (Ad Valorem).</p>
-  <h3>Responsabilidad</h3>
-  <p>La responsabilidad de TOWT se limita según las Reglas de La Haya-Visby. Para cualquier reclamación, el expedidor debe notificar a TOWT por escrito dentro de los 3 días posteriores a la entrega.</p>
-  {% elif lang == 'pt-br' %}
-  <h3>Natureza do transporte</h3>
-  <p>A TOWT oferece transporte marítimo de carga à vela. As viagens estão sujeitas às condições climáticas e podem sofrer atrasos ou alterações de rota. A TOWT compromete-se a transportar suas mercadorias com segurança ao destino acordado.</p>
-  <h3>Preços e pagamento</h3>
-  <p>As tarifas de frete são indicadas por palete e por trecho. Um depósito de 30% é exigido na confirmação da reserva, com o saldo devendo ser pago 30 dias antes da data estimada de partida.</p>
-  <h3>Política de cancelamento</h3>
-  <ul>
-    <li>Mais de 60 dias antes da partida: reembolso total menos 50 € de taxa administrativa</li>
-    <li>30 a 60 dias: retenção de 50% do frete</li>
-    <li>Menos de 30 dias: sem reembolso</li>
-  </ul>
-  <h3>Seguro</h3>
-  <p>A TOWT possui seguro de responsabilidade profissional. Recomenda-se que os embarcadores contratem seu próprio seguro de carga (Ad Valorem).</p>
-  <h3>Responsabilidade</h3>
-  <p>A responsabilidade da TOWT é limitada de acordo com as Regras de Haia-Visby. Para qualquer reclamação, o embarcador deve notificar a TOWT por escrito dentro de 3 dias após a entrega.</p>
-  {% elif lang == 'vi' %}
-  <h3>Hình thức vận chuyển</h3>
-  <p>TOWT cung cấp dịch vụ vận chuyển hàng hóa bằng thuyền buồm. Các chuyến đi phụ thuộc vào điều kiện thời tiết và có thể bị chậm trễ hoặc thay đổi tuyến đường. TOWT cam kết vận chuyển hàng hóa an toàn đến điểm đến đã thỏa thuận.</p>
-  <h3>Giá và thanh toán</h3>
-  <p>Cước vận chuyển được tính theo pallet và theo chặng. Đặt cọc 30% khi xác nhận đặt chỗ, số còn lại thanh toán trước 30 ngày so với ngày khởi hành dự kiến.</p>
-  <h3>Chính sách hủy</h3>
-  <ul>
-    <li>Trước ngày khởi hành hơn 60 ngày: hoàn tiền đầy đủ trừ 50 € phí hành chính</li>
-    <li>30 đến 60 ngày: giữ lại 50% cước vận chuyển</li>
-    <li>Dưới 30 ngày: không hoàn tiền</li>
-  </ul>
-  <h3>Bảo hiểm</h3>
-  <p>TOWT có bảo hiểm trách nhiệm nghề nghiệp. Người gửi hàng nên mua bảo hiểm hàng hóa riêng (Ad Valorem) cho toàn bộ giá trị hàng hóa.</p>
-  <h3>Trách nhiệm</h3>
-  <p>Trách nhiệm của TOWT được giới hạn theo Quy tắc Hague-Visby. Mọi khiếu nại phải được thông báo bằng văn bản trong vòng 3 ngày sau khi giao hàng.</p>
-  {% else %}
-  <h3>Nature du transport</h3>
-  <p>TOWT propose le transport maritime de fret à la voile. Les voyages sont soumis aux conditions météorologiques et peuvent connaître des retards ou changements d'itinéraire. TOWT s'engage à transporter vos marchandises en sécurité jusqu'à la destination convenue.</p>
-  <h3>Tarification et paiement</h3>
-  <p>Les tarifs de fret sont indiqués par palette et par leg. Un acompte de 30 % est requis à la confirmation de la réservation, le solde étant dû 30 jours avant la date de départ estimée. Les factures sont envoyées par email.</p>
-  <h3>Politique d'annulation</h3>
-  <ul>
-    <li>Plus de 60 jours avant le départ : remboursement intégral moins 50 € de frais administratifs</li>
-    <li>30 à 60 jours : 50 % du montant du fret retenu</li>
-    <li>Moins de 30 jours : aucun remboursement</li>
-  </ul>
-  <h3>Assurance</h3>
-  <p>TOWT dispose d'une assurance responsabilité professionnelle. Il est vivement conseillé aux chargeurs de souscrire leur propre assurance cargo (Ad Valorem) couvrant la valeur totale des marchandises pendant le transport.</p>
-  <h3>Responsabilité</h3>
-  <p>La responsabilité de TOWT est limitée conformément aux Règles de La Haye-Visby. Pour toute réclamation, le chargeur doit notifier TOWT par écrit dans les 3 jours suivant la livraison.</p>
-  {% endif %}
 </div>
 {% endblock %}
