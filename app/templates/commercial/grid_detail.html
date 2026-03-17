@@ -163,6 +163,9 @@
                                         <button type="submit" class="btn btn-sm" style="font-size:11px;background:#e74c3c;color:#fff;">Refusée</button>
                                     </form>
                                     {% endif %}
+                                    {% if offer.status in ('accepted', 'sent') %}
+                                    <a href="/commercial/pricing/offers/{{ offer.id }}/create-order" class="btn btn-sm" style="font-size:11px;background:var(--towt-blue);color:#fff;"><i data-lucide="package" style="width:12px;height:12px;"></i> Générer ordre</a>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>

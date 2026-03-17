@@ -13,7 +13,7 @@
 
     <!-- ═══ TABS ═══════════════════════════════════════════ -->
     <div class="status-tabs" style="margin-bottom:20px;display:flex;gap:6px;flex-wrap:wrap;">
-        <a href="/commercial" class="status-tab {% if active_tab == 'dashboard' %}active{% endif %}">📊 Tableau de bord</a>
+        <a href="/commercial?tab=dashboard" class="status-tab {% if active_tab == 'dashboard' %}active{% endif %}">📊 Tableau de bord</a>
         <a href="/commercial?tab=grids" class="status-tab {% if active_tab == 'grids' %}active{% endif %}">📋 Grilles tarifaires</a>
         <a href="/commercial?tab=offers" class="status-tab {% if active_tab == 'offers' %}active{% endif %}">📄 Offres</a>
         <a href="/commercial?tab=orders" class="status-tab {% if active_tab == 'orders' %}active{% endif %}">🚢 Ordres de transport</a>
@@ -203,6 +203,9 @@
                                 <form method="post" action="/commercial/pricing/offers/{{ offer.id }}/status" style="margin:0;"><input type="hidden" name="status" value="accepted"><button type="submit" class="btn btn-sm" style="font-size:10px;background:#27ae60;color:#fff;">Validée</button></form>
                                 <form method="post" action="/commercial/pricing/offers/{{ offer.id }}/status" style="margin:0;"><input type="hidden" name="status" value="rejected"><button type="submit" class="btn btn-sm" style="font-size:10px;background:#e74c3c;color:#fff;">Refusée</button></form>
                                 <form method="post" action="/commercial/pricing/offers/{{ offer.id }}/status" style="margin:0;"><input type="hidden" name="status" value="expired"><button type="submit" class="btn btn-sm" style="font-size:10px;background:#95a5a6;color:#fff;">Échue</button></form>
+                                {% endif %}
+                                {% if offer.status in ('accepted', 'sent') %}
+                                <a href="/commercial/pricing/offers/{{ offer.id }}/create-order" class="btn btn-sm" style="font-size:10px;background:var(--towt-blue);color:#fff;" title="Générer ordre de transport"><i data-lucide="package" style="width:11px;height:11px;"></i> Ordre</a>
                                 {% endif %}
                             </div>
                         </td>

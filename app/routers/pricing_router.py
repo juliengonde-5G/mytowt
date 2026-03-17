@@ -10,7 +10,7 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, date
-import os, json, subprocess
+import os, json
 
 from app.database import get_db
 from app.auth import get_current_user
@@ -32,6 +32,104 @@ router = APIRouter(prefix="/commercial/pricing", tags=["pricing"])
 
 OFFER_DIR = "app/static/uploads/rate_offers"
 OPEX_DAILY_DEFAULT = 11600
+
+
+def _generate_offer_docx(path, reference, client_name, client_contact,
+                          valid_from, valid_to, validity_date,
+                          bl_fee, booking_fee, notes, lines):
+    """Generate a DOCX rate offer document using python-docx."""
+    from docx import Document
+    from docx.shared import Inches, Pt, Cm, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+
+    doc = Document()
+    style = doc.styles["Normal"]
+    style.font.name = "Calibri"
+    style.font.size = Pt(10)
+
+    # Header
+    h = doc.add_heading("TOWT — Offre tarifaire", level=1)
+    h.runs[0].font.color.rgb = RGBColor(0x09, 0x55, 0x61)
+
+    doc.add_paragraph(f"Référence : {reference}")
+    doc.add_paragraph(f"Client : {client_name}")
+    if client_contact:
+        doc.add_paragraph(f"Contact : {client_contact}")
+    doc.add_paragraph(f"Période de validité : {valid_from} → {valid_to}")
+    doc.add_paragraph(f"Date limite de l'offre : {validity_date}")
+    doc.add_paragraph("")
+
+    # Fees
+    doc.add_heading("Frais", level=2)
+    doc.add_paragraph(f"BL Fee : {bl_fee:.2f} €")
+    doc.add_paragraph(f"Booking Fee : {booking_fee:.2f} €")
+    doc.add_paragraph("")
+
+    # Rate table
+    doc.add_heading("Tarifs par route (€ / palette)", level=2)
+
+    if lines:
+        headers = ["POL", "POD", "Dist. (NM)", "Jours nav.",
+                    "< 10 pal.", "10-50 pal.", "51-100 pal.", "> 100 pal."]
+        table = doc.add_table(rows=1, cols=len(headers))
+        table.style = "Table Grid"
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+        # Header row
+        hdr = table.rows[0]
+        for i, text in enumerate(headers):
+            cell = hdr.cells[i]
+            cell.text = text
+            for p in cell.paragraphs:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for run in p.runs:
+                    run.bold = True
+                    run.font.size = Pt(9)
+                    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            from docx.oxml.ns import qn
+            shading = cell._tc.get_or_add_tcPr()
+            bg = shading.makeelement(qn("w:shd"), {
+                qn("w:fill"): "095561", qn("w:val"): "clear",
+            })
+            shading.append(bg)
+
+        # Data rows
+        for line in lines:
+            row = table.add_row()
+            vals = [
+                f"{line['pol_name']} ({line['pol_locode']})",
+                f"{line['pod_name']} ({line['pod_locode']})",
+                f"{line['distance_nm']:.0f}" if line.get("distance_nm") else "—",
+                f"{line['nav_days']:.1f}" if line.get("nav_days") else "—",
+                f"{line['rate_lt10']:.2f}" if line.get("rate_lt10") else "—",
+                f"{line['rate_10to50']:.2f}" if line.get("rate_10to50") else "—",
+                f"{line['rate_51to100']:.2f}" if line.get("rate_51to100") else "—",
+                f"{line['rate_gt100']:.2f}" if line.get("rate_gt100") else "—",
+            ]
+            for i, val in enumerate(vals):
+                cell = row.cells[i]
+                cell.text = val
+                for p in cell.paragraphs:
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    for run in p.runs:
+                        run.font.size = Pt(9)
+
+    if notes:
+        doc.add_paragraph("")
+        doc.add_heading("Notes", level=2)
+        doc.add_paragraph(notes)
+
+    # Footer
+    doc.add_paragraph("")
+    p = doc.add_paragraph("TOWT — Transport à la Voile")
+    p.runs[0].font.size = Pt(8)
+    p.runs[0].font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+    p = doc.add_paragraph("Les Docks, 52 quai Frissard — 76600 Le Havre")
+    p.runs[0].font.size = Pt(8)
+    p.runs[0].font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+
+    doc.save(path)
 
 
 # ─── Helpers ────────────────────────────────────────────────
@@ -941,55 +1039,41 @@ async def offer_create_submit(
     db.add(offer)
     await db.flush()
 
-    # Generate DOCX
-    doc_data = {
-        "reference": ref,
-        "client_name": grid.client.name if grid.client else "",
-        "client_contact": grid.client.contact_name if grid.client else "",
-        "valid_from": str(grid.valid_from) if grid.valid_from else "",
-        "valid_to": str(grid.valid_to) if grid.valid_to else "",
-        "validity_date": str(offer.validity_date) if offer.validity_date else "",
-        "bl_fee": grid.bl_fee,
-        "booking_fee": grid.booking_fee,
-        "notes": offer.notes or "",
-        "lines": [{
-            "pol_locode": l.pol_locode,
-            "pod_locode": l.pod_locode,
-            "pol_name": l.pol.name if l.pol else l.pol_locode,
-            "pod_name": l.pod.name if l.pod else l.pod_locode,
-            "distance_nm": l.distance_nm,
-            "nav_days": l.nav_days,
-            "rate_lt10": l.rate_lt10,
-            "rate_10to50": l.rate_10to50,
-            "rate_51to100": l.rate_51to100,
-            "rate_gt100": l.rate_gt100,
-        } for l in grid.lines]
-    }
-
+    # Generate DOCX using python-docx
     os.makedirs(OFFER_DIR, exist_ok=True)
-    json_path = f"/tmp/rate_offer_{offer.id}.json"
     docx_filename = f"rate_offer_{ref.replace('-', '_')}.docx"
     docx_path = os.path.join(OFFER_DIR, docx_filename)
 
-    with open(json_path, "w") as f:
-        json.dump(doc_data, f)
-
     try:
-        result_proc = subprocess.run(
-            ["node", "app/utils/generate_rate_offer.js", json_path, docx_path],
-            capture_output=True, text=True, timeout=30
+        _generate_offer_docx(
+            path=docx_path,
+            reference=ref,
+            client_name=grid.client.name if grid.client else "",
+            client_contact=grid.client.contact_name if grid.client else "",
+            valid_from=str(grid.valid_from) if grid.valid_from else "",
+            valid_to=str(grid.valid_to) if grid.valid_to else "",
+            validity_date=str(offer.validity_date) if offer.validity_date else "",
+            bl_fee=grid.bl_fee or 0,
+            booking_fee=grid.booking_fee or 0,
+            notes=offer.notes or "",
+            lines=[{
+                "pol_name": l.pol.name if l.pol else l.pol_locode,
+                "pod_name": l.pod.name if l.pod else l.pod_locode,
+                "pol_locode": l.pol_locode,
+                "pod_locode": l.pod_locode,
+                "distance_nm": l.distance_nm,
+                "nav_days": l.nav_days,
+                "rate_lt10": l.rate_lt10,
+                "rate_10to50": l.rate_10to50,
+                "rate_51to100": l.rate_51to100,
+                "rate_gt100": l.rate_gt100,
+            } for l in grid.lines],
         )
-        if result_proc.returncode == 0 and os.path.exists(docx_path):
+        if os.path.exists(docx_path):
             offer.document_filename = docx_filename
             offer.document_path = docx_path
-        else:
-            # Log error but don't fail
-            print(f"DOCX generation error: {result_proc.stderr}")
     except Exception as e:
         print(f"DOCX generation exception: {e}")
-    finally:
-        if os.path.exists(json_path):
-            os.remove(json_path)
 
     await log_activity(db, user=user, action="create", module="commercial",
                        entity_type="rate_offer", entity_id=offer.id,
@@ -1058,6 +1142,126 @@ async def offer_update_status(
         offer.sent_at = datetime.utcnow()
 
     url = f"/commercial/pricing/grids/{offer.rate_grid_id}"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# ─── GENERATE ORDER FROM OFFER ────────────────────────────
+@router.get("/offers/{oid}/create-order", response_class=HTMLResponse)
+async def offer_create_order_form(
+    oid: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Show form to create a transport order from an accepted offer."""
+    result = await db.execute(
+        select(RateOffer).options(
+            selectinload(RateOffer.client),
+            selectinload(RateOffer.rate_grid).selectinload(RateGrid.lines).selectinload(RateGridLine.pol),
+            selectinload(RateOffer.rate_grid).selectinload(RateGrid.lines).selectinload(RateGridLine.pod),
+        ).where(RateOffer.id == oid)
+    )
+    offer = result.scalar_one_or_none()
+    if not offer:
+        raise HTTPException(404)
+
+    # Generate next OT reference
+    year = datetime.now().year
+    prefix = f"OT-{year}-"
+    count_r = await db.execute(
+        select(func.count(Order.id)).where(Order.reference.like(f"{prefix}%"))
+    )
+    next_ref = f"{prefix}{(count_r.scalar() or 0) + 1:04d}"
+
+    return templates.TemplateResponse("commercial/order_from_offer.html", {
+        "request": request, "user": user,
+        "offer": offer, "grid": offer.rate_grid,
+        "reference": next_ref,
+        "active_module": "commercial",
+    })
+
+
+@router.post("/offers/{oid}/create-order", response_class=HTMLResponse)
+async def offer_create_order_submit(
+    oid: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a transport order from an offer."""
+    result = await db.execute(
+        select(RateOffer).options(
+            selectinload(RateOffer.client),
+            selectinload(RateOffer.rate_grid).selectinload(RateGrid.lines).selectinload(RateGridLine.pol),
+            selectinload(RateOffer.rate_grid).selectinload(RateGrid.lines).selectinload(RateGridLine.pod),
+        ).where(RateOffer.id == oid)
+    )
+    offer = result.scalar_one_or_none()
+    if not offer:
+        raise HTTPException(404)
+
+    form = await request.form()
+    line_id = pi(form.get("line_id"))
+    quantity = pi(form.get("quantity_palettes"), 1)
+    palette_format = form.get("palette_format", "EPAL")
+
+    # Find the selected rate grid line
+    grid = offer.rate_grid
+    selected_line = None
+    if line_id:
+        selected_line = next((l for l in grid.lines if l.id == line_id), None)
+
+    # Determine unit price based on quantity bracket
+    unit_price = 0
+    if selected_line:
+        if quantity > 100:
+            unit_price = selected_line.rate_gt100 or 0
+        elif quantity > 50:
+            unit_price = selected_line.rate_51to100 or 0
+        elif quantity >= 10:
+            unit_price = selected_line.rate_10to50 or 0
+        else:
+            unit_price = selected_line.rate_lt10 or 0
+
+    # Override with manual price if provided
+    manual_price = pf(form.get("unit_price"))
+    if manual_price is not None:
+        unit_price = manual_price
+
+    # Generate reference
+    year = datetime.now().year
+    prefix = f"OT-{year}-"
+    count_r = await db.execute(
+        select(func.count(Order.id)).where(Order.reference.like(f"{prefix}%"))
+    )
+    ref = f"{prefix}{(count_r.scalar() or 0) + 1:04d}"
+
+    order = Order(
+        reference=ref,
+        client_name=offer.client.name if offer.client else "",
+        client_contact=offer.client.contact_name if offer.client else None,
+        quantity_palettes=quantity,
+        palette_format=palette_format,
+        weight_per_palette=pf(form.get("weight_per_palette"), 0.8),
+        unit_price=unit_price,
+        booking_fee=grid.booking_fee or 0,
+        documentation_fee=grid.bl_fee or 0,
+        departure_locode=selected_line.pol_locode if selected_line else None,
+        arrival_locode=selected_line.pod_locode if selected_line else None,
+        description=form.get("description", "").strip() or None,
+        rate_grid_id=grid.id,
+        rate_grid_line_id=selected_line.id if selected_line else None,
+    )
+    order.compute_total()
+    db.add(order)
+    await db.flush()
+
+    await log_activity(db, user=user, action="create", module="commercial",
+                       entity_type="order", entity_id=order.id,
+                       entity_label=f"Ordre {ref} depuis offre {offer.reference}",
+                       ip_address=get_client_ip(request))
+
+    url = "/commercial?tab=orders"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
     return RedirectResponse(url=url, status_code=303)
