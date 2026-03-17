@@ -8,8 +8,8 @@
     <h2>{% if lang == 'en' %}Crossing book{% else %}Book de traversée{% endif %}</h2>
     <p style="font-size:13px;color:#666;margin-bottom:12px;">{% if lang == 'en' %}Your complete crossing book with vessel information, safety procedures, and voyage details.{% else %}Votre book de traversée complet avec les informations du navire, les procédures de sécurité et les détails du voyage.{% endif %}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <a href="/passenger/{{ token }}/book" class="btn btn-primary">📖 Book FR (PDF)</a>
-        <a href="/passenger/{{ token }}/book/en" class="btn btn-primary" style="background:#0a6b7a;">📖 Book EN (PDF)</a>
+        <a href="/boarding/{{ token }}/book" class="btn btn-primary">📖 Book FR (PDF)</a>
+        <a href="/boarding/{{ token }}/book/en" class="btn btn-primary" style="background:#0a6b7a;">📖 Book EN (PDF)</a>
     </div>
 </div>
 

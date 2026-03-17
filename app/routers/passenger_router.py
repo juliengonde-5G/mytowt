@@ -118,7 +118,7 @@ async def booking_create_form(
 
     # Build booked cabins per leg (for disabling already-taken cabins)
     booked_result = await db.execute(
-        select(PassengerBooking.leg_id, PassengerBooking.cabin_number)
+        select(PassengerBooking.leg_id, PassengerBooking.cabin_number, PassengerBooking.cabin_numbers)
         .where(PassengerBooking.status != "cancelled")
     )
     booked_cabins = {}  # { "leg_id": [cabin_number, ...] }
@@ -126,7 +126,13 @@ async def booking_create_form(
         lid = str(row[0])
         if lid not in booked_cabins:
             booked_cabins[lid] = []
-        booked_cabins[lid].append(row[1])
+        if row[2]:  # cabin_numbers (comma-separated)
+            for cn in row[2].split(","):
+                cn = cn.strip()
+                if cn:
+                    booked_cabins[lid].append(int(cn))
+        elif row[1]:  # legacy cabin_number
+            booked_cabins[lid].append(row[1])
 
     return templates.TemplateResponse("passengers/booking_form.html", {
         "request": request, "user": user,
@@ -144,7 +150,6 @@ async def booking_create_form(
 async def booking_create_submit(
     request: Request,
     leg_id: int = Form(...),
-    cabin_number: int = Form(...),
     contact_email: str = Form(""),
     contact_phone: str = Form(""),
     pax1_first: str = Form(...), pax1_last: str = Form(...),
@@ -161,47 +166,68 @@ async def booking_create_submit(
     user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
+    # Get cabin_numbers from form (checkboxes)
+    form = await request.form()
+    cabin_nums = form.getlist("cabin_numbers")
+    if not cabin_nums:
+        raise HTTPException(400, "Veuillez sélectionner au moins une cabine.")
+    cabin_nums_int = [int(c) for c in cabin_nums]
+    cabin_numbers_str = ",".join(str(c) for c in cabin_nums_int)
+
     # Get leg and vessel
     leg = await db.get(Leg, leg_id)
     if not leg:
         raise HTTPException(400, "Leg introuvable")
 
-    # Check cabin not already booked on this leg
-    existing_cabin = await db.execute(
+    # Check cabins not already booked on this leg
+    existing_result = await db.execute(
         select(PassengerBooking).where(
             PassengerBooking.leg_id == leg_id,
-            PassengerBooking.cabin_number == cabin_number,
             PassengerBooking.status != "cancelled",
         )
     )
-    if existing_cabin.scalar_one_or_none():
-        raise HTTPException(400, f"La cabine {cabin_number} est déjà réservée sur ce leg.")
+    existing_bookings = existing_result.scalars().all()
+    already_booked = set()
+    for eb in existing_bookings:
+        already_booked.update(eb.cabin_list)
+    conflicts = [c for c in cabin_nums_int if c in already_booked]
+    if conflicts:
+        raise HTTPException(400, f"Cabine(s) {', '.join(str(c) for c in conflicts)} déjà réservée(s) sur ce leg.")
 
-    # Auto-price from grid
-    cabin_type = "double" if cabin_number <= 2 else "twin"
-    price_result = await db.execute(
-        select(CabinPriceGrid).where(
-            CabinPriceGrid.origin_locode == leg.departure_port_locode,
-            CabinPriceGrid.destination_locode == leg.arrival_port_locode,
-            CabinPriceGrid.cabin_type == cabin_type,
-            CabinPriceGrid.is_active == True,
+    # Auto-price from grid (sum per cabin type)
+    price_total = 0.0
+    deposit_total = 0.0
+    has_price = False
+    for cn in cabin_nums_int:
+        cabin_type = "double" if cn <= 2 else "twin"
+        price_result = await db.execute(
+            select(CabinPriceGrid).where(
+                CabinPriceGrid.origin_locode == leg.departure_port_locode,
+                CabinPriceGrid.destination_locode == leg.arrival_port_locode,
+                CabinPriceGrid.cabin_type == cabin_type,
+                CabinPriceGrid.is_active == True,
+            )
         )
-    )
-    price_entry = price_result.scalar_one_or_none()
+        price_entry = price_result.scalar_one_or_none()
+        if price_entry:
+            has_price = True
+            p = float(price_entry.price)
+            price_total += p
+            deposit_total += round(p * price_entry.deposit_pct / 100, 2)
 
-    price_total = float(price_entry.price) if price_entry else None
-    deposit_pct = price_entry.deposit_pct if price_entry else 30
-    price_deposit = round(price_total * deposit_pct / 100, 2) if price_total else None
-    price_balance = round(price_total - price_deposit, 2) if price_total and price_deposit else None
+    price_deposit = round(deposit_total, 2) if has_price else None
+    price_balance = round(price_total - deposit_total, 2) if has_price else None
+    price_total_final = round(price_total, 2) if has_price else None
 
     booking = PassengerBooking(
         leg_id=leg_id,
         vessel_id=leg.vessel_id,
-        cabin_number=cabin_number,
+        cabin_number=cabin_nums_int[0],  # legacy compat
+        cabin_numbers=cabin_numbers_str,
         reference=_gen_ref(),
         status="draft",
         booking_date=date.today(),
-        price_total=price_total,
+        price_total=price_total_final,
         price_deposit=price_deposit,
         price_balance=price_balance,
         contact_email=contact_email.strip() or None,
@@ -256,7 +282,7 @@ async def booking_create_submit(
     db.add(Notification(
         type="new_passenger_booking",
         title=f"Nouvelle réservation {booking.reference}",
-        detail=f"{pax1_first.strip()} {pax1_last.strip()} — Cabine {cabin_number}",
+        detail=f"{pax1_first.strip()} {pax1_last.strip()} — Cabine(s) {cabin_numbers_str}",
         link=f"/passengers/{booking.id}",
         booking_id=booking.id,
     ))
@@ -297,9 +323,10 @@ async def booking_detail(
         )
         pax_forms[pax.id] = form_result.scalar_one_or_none()
 
-    # Get real cabin label
+    # Get real cabin label(s)
     vessel_code = booking.vessel.code if booking.vessel else None
-    cabin_full_label = get_cabin_label(vessel_code, booking.cabin_number)
+    cabin_labels_list = [get_cabin_label(vessel_code, cn) for cn in booking.cabin_list]
+    cabin_full_label = " / ".join(cabin_labels_list) if cabin_labels_list else "—"
 
     # Load portal messages
     msg_result = await db.execute(

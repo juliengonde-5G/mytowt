@@ -42,7 +42,7 @@
             · ETD {{ booking.leg.etd.strftime('%d/%m/%Y') if booking.leg.etd else '?' }}
         </div>
         <div style="margin-top:8px;display:flex;gap:12px;align-items:center;">
-            <span class="cabin-badge cabin-{{ booking.cabin_number }}">Cabine {{ booking.cabin_number }} · {{ booking.cabin_label }}</span>
+            <span class="cabin-badge cabin-{{ booking.cabin_list[0] if booking.cabin_list else 1 }}">Cabine(s) {{ booking.cabin_numbers or booking.cabin_number }} · {{ booking.cabin_label }}</span>
             <span style="font-size:12px;color:#888;">{{ booking.passengers|length }} / 2 passagers</span>
         </div>
     </div>
@@ -165,7 +165,21 @@
             <tr>
                 <td><strong>{{ p.payment_type|capitalize }}</strong></td>
                 <td>{% if p.payment_method == 'virement' %}🏦 Virement{% elif p.payment_method == 'revolut' %}💳 CB Revolut{% else %}{{ p.payment_method or '—' }}{% endif %}</td>
-                <td style="font-weight:600;">{{ "%.2f"|format(p.amount) }} €</td>
+                <td style="font-weight:600;">
+                    {% if p.payment_method != 'revolut' %}
+                    <form method="POST" action="/passengers/payment/{{ p.id }}/edit" style="display:inline-flex;gap:4px;align-items:center;">
+                        <input type="hidden" name="payment_type" value="{{ p.payment_type }}">
+                        <input type="hidden" name="payment_method" value="{{ p.payment_method }}">
+                        <input type="hidden" name="due_date" value="{{ p.due_date.strftime('%Y-%m-%d') if p.due_date else '' }}">
+                        <input type="hidden" name="notes" value="{{ p.notes or '' }}">
+                        <input type="number" name="amount" value="{{ "%.2f"|format(p.amount) }}" step="0.01" min="0" class="fi-sm" style="width:90px;font-weight:600;">
+                        <span>€</span>
+                        <button type="submit" class="btn btn-sm btn-secondary" style="padding:3px 6px;font-size:9px;">✓</button>
+                    </form>
+                    {% else %}
+                    {{ "%.2f"|format(p.amount) }} €
+                    {% endif %}
+                </td>
                 <td>{{ p.due_date.strftime('%d/%m/%Y') if p.due_date else '—' }}</td>
                 <td>
                     <form method="POST" action="/passengers/payment/{{ p.id }}/status" style="display:inline-flex;gap:4px;">
@@ -233,7 +247,7 @@
         <h3>📋 Réservation</h3>
         <div class="bd-info-row"><span>Référence</span><strong>{{ booking.reference }}</strong></div>
         <div class="bd-info-row"><span>Date</span><strong>{{ booking.booking_date.strftime('%d/%m/%Y') if booking.booking_date else '—' }}</strong></div>
-        <div class="bd-info-row"><span>Cabine</span><strong>{{ booking.cabin_number }} · {{ booking.cabin_label }}</strong></div>
+        <div class="bd-info-row"><span>Cabine(s)</span><strong>{{ booking.cabin_numbers or booking.cabin_number }} · {{ booking.cabin_label }}</strong></div>
         <div class="bd-info-row"><span>Prix</span><strong>{{ "%.2f"|format(booking.price_total or 0) }} €</strong></div>
         <div class="bd-info-row"><span>Acompte</span><strong>{{ "%.2f"|format(booking.price_deposit or 0) }} €</strong></div>
         <div class="bd-info-row"><span>Solde</span><strong>{{ "%.2f"|format(booking.price_balance or 0) }} €</strong></div>

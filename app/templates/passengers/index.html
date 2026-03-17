@@ -45,7 +45,7 @@
                 <span style="font-size:10px;color:#888;">{{ b.leg.departure_port.name }} → {{ b.leg.arrival_port.name }}</span>
                 {% endif %}
             </td>
-            <td><span class="cabin-badge cabin-{{ b.cabin_number }}">Cab. {{ b.cabin_number }} · {{ b.cabin_label }}</span></td>
+            <td><span class="cabin-badge cabin-{{ b.cabin_list[0] if b.cabin_list else 1 }}">Cab. {{ b.cabin_numbers or b.cabin_number }} · {{ b.cabin_label }}</span></td>
             <td><span class="status-pill st-{{ b.status }}">{{ b.status }}</span></td>
             <td>{{ "%.0f"|format(b.price_total|float or 0) }} €</td>
             <td>

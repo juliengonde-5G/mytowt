@@ -67,7 +67,6 @@
         <div class="ti"><span class="tl">POL</span><span class="tv">{{ batch.pol_code or '—' }}</span></div>
         <div class="ti"><span class="tl">POD</span><span class="tv">{{ batch.pod_code or '—' }}</span></div>
         <div class="ti"><span class="tl">{{ t('f_booking_ref', lang) }}</span><span class="tv">{{ batch.booking_confirmation or '—' }}</span></div>
-        <div class="ti"><span class="tl">{{ t('f_freight_rate', lang) }}</span><span class="tv">{{ batch.freight_rate or '—' }} €</span></div>
       </div>
     </div>
 
@@ -88,7 +87,7 @@
     <div class="st">📦 {{ t('pl_goods_section', lang) }}</div>
     <div class="fg">
       <div class="fgi"><label class="fl">{{ t('f_pallet_type', lang) }}</label>
-        <select name="{{ p }}pallet_type" class="fs">
+        <select name="{{ p }}pallet_type" class="fs" onchange="autoPalletDims(this, '{{ p }}')">
           <option value="">—</option>
           <option value="EPAL" {% if batch.pallet_type=='EPAL' %}selected{% endif %}>EPAL (80×120)</option>
           <option value="USPAL" {% if batch.pallet_type=='USPAL' %}selected{% endif %}>USPAL (100×120)</option>
@@ -114,6 +113,17 @@
         </select>
       </div>
       <div class="fgi"><label class="fl">{{ t('f_cargo_value', lang) }}</label><input type="text" name="{{ p }}cargo_value_usd" class="fi" value="{{ batch.cargo_value_usd or '' }}"></div>
+      <div class="fgi"><label class="fl">{% if lang == 'en' %}Hold preference{% elif lang == 'es' %}Preferencia de bodega{% elif lang == 'pt-br' %}Preferência de porão{% elif lang == 'vi' %}Ưu tiên hầm{% else %}Préférence de cale{% endif %}</label>
+        <select name="{{ p }}hold_preference" class="fs">
+          <option value="">—</option>
+          <option value="SUP_AV" {% if batch.hold_preference=='SUP_AV' %}selected{% endif %}>Sup. AV</option>
+          <option value="SUP_AR" {% if batch.hold_preference=='SUP_AR' %}selected{% endif %}>Sup. AR</option>
+          <option value="MIL_AV" {% if batch.hold_preference=='MIL_AV' %}selected{% endif %}>Mil. AV</option>
+          <option value="MIL_AR" {% if batch.hold_preference=='MIL_AR' %}selected{% endif %}>Mil. AR</option>
+          <option value="INF_AV" {% if batch.hold_preference=='INF_AV' %}selected{% endif %}>Inf. AV</option>
+          <option value="INF_AR" {% if batch.hold_preference=='INF_AR' %}selected{% endif %}>Inf. AR</option>
+        </select>
+      </div>
     </div>
 
     <div class="st">📐 {{ t('pl_dimensions_section', lang) }}</div>
@@ -135,4 +145,16 @@
 </div>
 {% endif %}
 </form>
+<script>
+function autoPalletDims(sel, prefix) {
+    var dims = {EPAL: {l: 120, w: 80}, USPAL: {l: 120, w: 100}};
+    var d = dims[sel.value];
+    if (d) {
+        var lf = document.querySelector('[name="' + prefix + 'length_cm"]');
+        var wf = document.querySelector('[name="' + prefix + 'width_cm"]');
+        if (lf) lf.value = d.l;
+        if (wf) wf.value = d.w;
+    }
+}
+</script>
 {% endblock %}

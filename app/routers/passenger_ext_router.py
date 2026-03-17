@@ -17,7 +17,7 @@ from app.models.passenger import (
 )
 from app.models.portal_message import PortalMessage
 
-ext_router = APIRouter(prefix="/passenger", tags=["passenger-external"])
+ext_router = APIRouter(prefix="/boarding", tags=["passenger-external"])
 
 UPLOAD_DIR = "/app/uploads/passenger_docs"
 
@@ -237,7 +237,7 @@ async def send_message(token: str, request: Request, message: str = Form(...), l
         booking_id=booking.id,
     ))
     await db.flush()
-    return RedirectResponse(url=f"/passenger/{token}/messages?lang={lang}", status_code=303)
+    return RedirectResponse(url=f"/boarding/{token}/messages?lang={lang}", status_code=303)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -310,7 +310,7 @@ async def upload_document(token: str, doc_id: int, request: Request, file: Uploa
     with open(file_path, "wb") as f: f.write(content)
     doc.filename = file.filename; doc.file_path = file_path; doc.status = "uploaded"
     await db.flush()
-    return RedirectResponse(url=f"/passenger/{token}#docs", status_code=303)
+    return RedirectResponse(url=f"/boarding/{token}#docs", status_code=303)
 
 
 @ext_router.post("/{token}/pax/{pax_id}/update", response_class=HTMLResponse)
@@ -331,7 +331,7 @@ async def external_pax_update(token: str, pax_id: int, request: Request,
     pax.emergency_contact_name = emergency_contact_name.strip() or None
     pax.emergency_contact_phone = emergency_contact_phone.strip() or None
     await db.flush()
-    return RedirectResponse(url=f"/passenger/{token}", status_code=303)
+    return RedirectResponse(url=f"/boarding/{token}", status_code=303)
 
 
 @ext_router.get("/{token}/book")
@@ -401,4 +401,4 @@ async def submit_questionnaire(token: str, pax_id: int, request: Request,
     else:
         db.add(PreBoardingForm(passenger_id=pax_id, **kwargs))
     await db.flush()
-    return RedirectResponse(url=f"/passenger/{token}#questionnaire", status_code=303)
+    return RedirectResponse(url=f"/boarding/{token}#questionnaire", status_code=303)

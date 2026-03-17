@@ -200,23 +200,21 @@ window.addEventListener('load', function(){
 </div>
 {% endif %}
 
-{# ── Full Itinerary ── #}
-{% if itinerary %}
+{# ── Upcoming routes (all vessels) ── #}
+{% if upcoming_legs %}
 <div class="card">
-    <h2>{% if lang == 'en' %}Full itinerary{% elif lang == 'es' %}Itinerario completo{% elif lang == 'pt-br' %}Itinerário completo{% elif lang == 'vi' %}Lịch trình đầy đủ{% else %}Itinéraire complet{% endif %}</h2>
+    <h2>{% if lang == 'en' %}Upcoming routes{% elif lang == 'es' %}Próximas rutas{% elif lang == 'pt-br' %}Próximas rotas{% elif lang == 'vi' %}Các tuyến sắp tới{% else %}Prochaines routes{% endif %}</h2>
     <div style="overflow-x:auto">
     <table class="sched">
         <thead><tr>
-            <th>{{ t('cp_leg_code', lang) }}</th>
             <th>{% if lang == 'en' %}Route{% else %}Route{% endif %}</th>
             <th>{{ t('cp_etd', lang) }}</th>
             <th>{{ t('cp_eta', lang) }}</th>
             <th>{% if lang == 'en' %}Status{% else %}Statut{% endif %}</th>
         </tr></thead>
         <tbody>
-        {% for l in itinerary %}
+        {% for l in upcoming_legs %}
         <tr {% if l.id == leg.id %}class="cur"{% endif %}>
-            <td>{{ l.leg_code }}</td>
             <td style="font-size:12px">{{ l.departure_port.name }} → {{ l.arrival_port.name }}</td>
             <td>
                 {% if l.atd %}<span class="actual">{{ l.atd.strftime('%d/%m/%Y') }}</span>
@@ -229,8 +227,7 @@ window.addEventListener('load', function(){
                 {% else %}—{% endif %}
             </td>
             <td>
-                {% if l.ata %}<span class="status-chip status-arrived" style="font-size:10px">✓</span>
-                {% elif l.atd %}<span class="status-chip status-nav" style="font-size:10px">⛵</span>
+                {% if l.atd %}<span class="status-chip status-nav" style="font-size:10px">⛵</span>
                 {% else %}<span class="status-chip status-planned" style="font-size:10px">—</span>
                 {% endif %}
             </td>

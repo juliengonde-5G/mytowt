@@ -98,7 +98,7 @@
     {% endfor %}
 
     <div class="home-progress-grid">
-        <a href="/passenger/{{ token }}/admin?lang={{ lang }}" class="home-progress-item">
+        <a href="/boarding/{{ token }}/admin?lang={{ lang }}" class="home-progress-item">
             <div class="home-progress-icon">👤</div>
             <div class="home-progress-body">
                 <div class="home-progress-title">{% if lang == 'en' %}Personal info{% else %}Infos personnelles{% endif %}</div>
@@ -106,7 +106,7 @@
             </div>
             <div class="home-progress-status">{% if booking.passengers and booking.passengers[0].passport_number %}✅{% else %}⚠️{% endif %}</div>
         </a>
-        <a href="/passenger/{{ token }}/passenger-docs?lang={{ lang }}" class="home-progress-item">
+        <a href="/boarding/{{ token }}/passenger-docs?lang={{ lang }}" class="home-progress-item">
             <div class="home-progress-icon">📄</div>
             <div class="home-progress-body">
                 <div class="home-progress-title">{% if lang == 'en' %}Documents{% else %}Documents{% endif %}</div>
@@ -115,7 +115,7 @@
             </div>
             <div class="home-progress-status">{% if total_docs.done == total_docs.count and total_docs.count > 0 %}✅{% else %}⚠️{% endif %}</div>
         </a>
-        <a href="/passenger/{{ token }}/questionnaire?lang={{ lang }}" class="home-progress-item">
+        <a href="/boarding/{{ token }}/questionnaire?lang={{ lang }}" class="home-progress-item">
             <div class="home-progress-icon">📝</div>
             <div class="home-progress-body">
                 <div class="home-progress-title">{% if lang == 'en' %}Questionnaire{% else %}Questionnaire{% endif %}</div>
@@ -124,7 +124,7 @@
             </div>
             <div class="home-progress-status">{% if total_quest.done == total_quest.count and total_quest.count > 0 %}✅{% else %}⚠️{% endif %}</div>
         </a>
-        <a href="/passenger/{{ token }}/admin?lang={{ lang }}#payments" class="home-progress-item">
+        <a href="/boarding/{{ token }}/admin?lang={{ lang }}#payments" class="home-progress-item">
             <div class="home-progress-icon">💶</div>
             <div class="home-progress-body">
                 <div class="home-progress-title">{% if lang == 'en' %}Payment{% else %}Paiement{% endif %}</div>
@@ -137,27 +137,27 @@
 
 <!-- QUICK LINKS -->
 <div class="home-quick-grid">
-    <a href="/passenger/{{ token }}/vessel?lang={{ lang }}" class="home-quick-card">
+    <a href="/boarding/{{ token }}/vessel?lang={{ lang }}" class="home-quick-card">
         <span class="home-quick-icon">🚢</span>
         <span class="home-quick-label">{% if lang == 'en' %}The Vessel{% else %}Le Navire{% endif %}</span>
     </a>
-    <a href="/passenger/{{ token }}/voyage?lang={{ lang }}" class="home-quick-card">
+    <a href="/boarding/{{ token }}/voyage?lang={{ lang }}" class="home-quick-card">
         <span class="home-quick-icon">🗺️</span>
         <span class="home-quick-label">{% if lang == 'en' %}The Voyage{% else %}Le Voyage{% endif %}</span>
     </a>
-    <a href="/passenger/{{ token }}/life?lang={{ lang }}" class="home-quick-card">
+    <a href="/boarding/{{ token }}/life?lang={{ lang }}" class="home-quick-card">
         <span class="home-quick-icon">⚓</span>
         <span class="home-quick-label">{% if lang == 'en' %}Life on Board{% else %}La Vie à bord{% endif %}</span>
     </a>
-    <a href="/passenger/{{ token }}/destination?lang={{ lang }}" class="home-quick-card">
+    <a href="/boarding/{{ token }}/destination?lang={{ lang }}" class="home-quick-card">
         <span class="home-quick-icon">🌍</span>
         <span class="home-quick-label">{% if lang == 'en' %}Your Destination{% else %}Votre Destination{% endif %}</span>
     </a>
-    <a href="/passenger/{{ token }}/safety?lang={{ lang }}" class="home-quick-card">
+    <a href="/boarding/{{ token }}/safety?lang={{ lang }}" class="home-quick-card">
         <span class="home-quick-icon">🛟</span>
         <span class="home-quick-label">{% if lang == 'en' %}Safety{% else %}Sécurité{% endif %}</span>
     </a>
-    <a href="/passenger/{{ token }}/messages?lang={{ lang }}" class="home-quick-card">
+    <a href="/boarding/{{ token }}/messages?lang={{ lang }}" class="home-quick-card">
         <span class="home-quick-icon">💬</span>
         <span class="home-quick-label">{% if lang == 'en' %}Talk to us{% else %}Parlez avec nous{% endif %}</span>
     </a>
@@ -168,8 +168,8 @@
     <h2>📖 {% if lang == 'en' %}Crossing Book{% else %}Book de traversée{% endif %}</h2>
     <p style="font-size:13px;color:#666;margin-bottom:12px;">{% if lang == 'en' %}Download your crossing book with all voyage details.{% else %}Téléchargez votre book de traversée avec tous les détails du voyage.{% endif %}</p>
     <div style="display:flex;gap:10px;justify-content:center;">
-        <a href="/passenger/{{ token }}/book" class="btn btn-primary">📖 Book FR</a>
-        <a href="/passenger/{{ token }}/book/en" class="btn btn-primary" style="background:#0a6b7a;">📖 Book EN</a>
+        <a href="/boarding/{{ token }}/book" class="btn btn-primary">📖 Book FR</a>
+        <a href="/boarding/{{ token }}/book/en" class="btn btn-primary" style="background:#0a6b7a;">📖 Book EN</a>
     </div>
 </div>
 

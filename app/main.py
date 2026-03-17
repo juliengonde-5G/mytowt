@@ -91,6 +91,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https://*.tile.openstreetmap.org; "
             "connect-src 'self' https://unpkg.com https://nominatim.openstreetmap.org; "
+            "frame-src https://www.youtube-nocookie.com https://www.youtube.com; "
         )
         response.headers["Content-Security-Policy"] = csp
         response.headers["X-Content-Type-Options"] = "nosniff"

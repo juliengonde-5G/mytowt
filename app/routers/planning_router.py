@@ -214,7 +214,7 @@ async def planning_home(
                 leg.status = "in_progress"
                 status_changed = True
         else:
-            if leg.status not in ("planned", "in_progress"):
+            if leg.status != "planned":
                 leg.status = "planned"
                 status_changed = True
     if status_changed:

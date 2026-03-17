@@ -24,7 +24,7 @@
     </div>
     {% endif %}
 
-    <form method="POST" action="/passenger/{{ token }}/messages/send?lang={{ lang }}">
+    <form method="POST" action="/boarding/{{ token }}/messages/send?lang={{ lang }}">
         <div class="msg-input-bar">
             <textarea name="message" placeholder="{% if lang == 'en' %}Write your message…{% else %}Écrivez votre message…{% endif %}" required rows="2"></textarea>
             <button type="submit">{% if lang == 'en' %}Send{% else %}Envoyer{% endif %}</button>

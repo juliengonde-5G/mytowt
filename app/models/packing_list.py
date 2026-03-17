@@ -127,6 +127,7 @@ class PackingListBatch(Base):
     height_cm = Column(Float, nullable=True)
     weight_kg = Column(Float, nullable=True)
     cargo_value_usd = Column(Float, nullable=True)
+    hold_preference = Column(String(20), nullable=True)  # SUP_AV, SUP_AR, MIL_AV, MIL_AR, INF_AV, INF_AR
 
     # === Computed by system ===
     surface_m2 = Column(Float, nullable=True)

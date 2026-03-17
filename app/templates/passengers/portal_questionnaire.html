@@ -22,7 +22,7 @@
         </div>
     </div>
     {% else %}
-    <form method="POST" action="/passenger/{{ token }}/pax/{{ pax.id }}/questionnaire">
+    <form method="POST" action="/boarding/{{ token }}/pax/{{ pax.id }}/questionnaire">
         <h3 style="font-size:12px;">{% if lang == 'en' %}Maritime experience{% else %}Expérience maritime{% endif %}</h3>
         <div class="fg"><label>{% if lang == 'en' %}Have you sailed before?{% else %}Avez-vous déjà voyagé en voilier/bateau ?{% endif %}</label>
             <div class="q-radio"><label><input type="radio" name="sailed_before" value="yes"> {% if lang == 'en' %}Yes{% else %}Oui{% endif %}</label><label><input type="radio" name="sailed_before" value="no"> {% if lang == 'en' %}No{% else %}Non{% endif %}</label></div>

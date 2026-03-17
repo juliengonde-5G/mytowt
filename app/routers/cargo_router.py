@@ -611,6 +611,8 @@ def apply_batch_fields(batch, form_data):
     batch.height_cm = pf(form_data.get('height_cm'))
     batch.weight_kg = pf(form_data.get('weight_kg'))
     batch.cargo_value_usd = pf(form_data.get('cargo_value_usd'))
+    if 'hold_preference' in form_data:
+        batch.hold_preference = form_data.get('hold_preference') or None
     if 'stackable' in form_data:
         batch.stackable = form_data.get('stackable') or None
     batch.compute_dimensions()
@@ -1409,21 +1411,22 @@ async def client_portal_voyage(token: str, request: Request, db: AsyncSession = 
     pl = await _get_pl(token, db)
     lang = _lang(request)
     leg = pl.order.leg
-    itinerary = []
+    upcoming_legs = []
     eta_shifts = []
     vessel_position = None
     is_navigating = False
     if leg:
-        # Full itinerary for same vessel/year
-        yr = leg.etd.year if leg.etd else None
-        if yr:
-            it_result = await db.execute(
-                select(Leg).options(
-                    selectinload(Leg.departure_port), selectinload(Leg.arrival_port)
-                ).where(Leg.vessel_id == leg.vessel_id)
-                .order_by(Leg.etd)
-            )
-            itinerary = it_result.scalars().all()
+        # Upcoming legs across all vessels (not yet arrived)
+        from datetime import datetime, timezone as tz
+        now = datetime.now(tz.utc)
+        upcoming_result = await db.execute(
+            select(Leg).options(
+                selectinload(Leg.departure_port), selectinload(Leg.arrival_port),
+                selectinload(Leg.vessel)
+            ).where(Leg.ata.is_(None))
+            .order_by(Leg.etd)
+        )
+        upcoming_legs = upcoming_result.scalars().all()
 
         # ETA/ETD shift history for this leg
         from app.models.onboard import ETAShift
@@ -1449,7 +1452,7 @@ async def client_portal_voyage(token: str, request: Request, db: AsyncSession = 
 
     return templates.TemplateResponse("cargo/portal_voyage.html", {
         "request": request, "pl": pl, "leg": leg,
-        "itinerary": itinerary,
+        "upcoming_legs": upcoming_legs,
         "eta_shifts": eta_shifts,
         "vessel_position": vessel_position,
         "is_navigating": is_navigating,
