@@ -160,7 +160,7 @@
         {% if booking.price_total %}
         <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;">
             <div style="flex:1;height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden;">
-                <div style="height:100%;background:#87BD2B;border-radius:4px;width:{{ ((paid_total / (booking.price_total|float)) * 100)|int }}%;"></div>
+                <div style="height:100%;background:#87BD2B;border-radius:4px;width:{{ ((paid_total|float / (booking.price_total|float)) * 100)|int }}%;"></div>
             </div>
             <span style="font-size:12px;font-weight:600;color:#555;">{{ "%.0f"|format(paid_total) }} / {{ "%.0f"|format(booking.price_total) }} €</span>
         </div>
