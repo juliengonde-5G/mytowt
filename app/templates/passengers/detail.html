@@ -19,12 +19,16 @@
     <div class="bd-status-bar">
         <div class="bd-status-steps">
             {% set steps = ['draft','confirmed','paid','embarked','completed'] %}
+            {% set current_idx = steps.index(booking.status) if booking.status in steps else -1 %}
             {% for s in steps %}
-            <div class="bd-step {% if s == booking.status %}current{% endif %} {% if steps.index(s) < steps.index(booking.status) %}done{% endif %}">
+            <div class="bd-step {% if s == booking.status %}current{% endif %} {% if current_idx >= 0 and steps.index(s) < current_idx %}done{% endif %} {% if booking.status == 'cancelled' %}cancelled{% endif %}">
                 <span class="bd-step-dot"></span><span>{{ s|capitalize }}</span>
             </div>
-            {% if not loop.last %}<div class="bd-step-line {% if steps.index(s) < steps.index(booking.status) %}done{% endif %}"></div>{% endif %}
+            {% if not loop.last %}<div class="bd-step-line {% if current_idx >= 0 and steps.index(s) < current_idx %}done{% endif %}"></div>{% endif %}
             {% endfor %}
+            {% if booking.status == 'cancelled' %}
+            <div class="bd-step current cancelled"><span class="bd-step-dot"></span><span>Annulée</span></div>
+            {% endif %}
         </div>
         <form method="POST" action="/passengers/{{ booking.id }}/status" style="display:flex;gap:6px;align-items:center;">
             <select name="status" class="fi-sm">
@@ -36,11 +40,15 @@
 
     <!-- VOYAGE -->
     <div class="bd-card">
+        {% if booking.leg %}
         <h3>🚢 {{ booking.leg.leg_code }} — {{ booking.leg.vessel.name }}</h3>
         <div style="font-size:13px;color:#555;">
             {{ booking.leg.departure_port.name }} → {{ booking.leg.arrival_port.name }}
             · ETD {{ booking.leg.etd.strftime('%d/%m/%Y') if booking.leg.etd else '?' }}
         </div>
+        {% else %}
+        <h3>🚢 Voyage non assigné</h3>
+        {% endif %}
         <div style="margin-top:8px;display:flex;gap:12px;align-items:center;">
             <span class="cabin-badge cabin-{{ booking.cabin_list[0] if booking.cabin_list else 1 }}">Cabine(s) {{ booking.cabin_numbers or booking.cabin_number }} · {{ booking.cabin_label }}</span>
             <span style="font-size:12px;color:#888;">{% set max_pax = (booking.cabin_list|length * 3) if booking.cabin_list|length > 1 else 2 %}{{ booking.passengers|length }} / {{ max_pax }} passagers</span>
