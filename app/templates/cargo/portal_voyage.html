@@ -95,8 +95,8 @@ window.addEventListener('load', function(){
     var centerLon = (depLon + arrLon) / 2;
 
     var map = L.map('voyage-map',{scrollWheelZoom:true}).setView([centerLat, centerLon], 4);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-        attribution:'&copy; OpenStreetMap', maxZoom:18
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+        attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:18
     }).addTo(map);
 
     // Departure port
