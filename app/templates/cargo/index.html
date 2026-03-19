@@ -4,11 +4,21 @@
 
 {% block content %}
 <div class="cargo-page">
-    <div class="status-tabs" style="margin-bottom:16px;display:flex;gap:6px;flex-wrap:wrap;">
-        <a href="/cargo" class="status-tab {% if not selected_status %}active{% endif %}">Toutes</a>
-        <a href="/cargo?status=draft" class="status-tab {% if selected_status == 'draft' %}active{% endif %}">🔵 Brouillon</a>
-        <a href="/cargo?status=submitted" class="status-tab {% if selected_status == 'submitted' %}active{% endif %}">🟡 Soumis</a>
-        <a href="/cargo?status=locked" class="status-tab {% if selected_status == 'locked' %}active{% endif %}">🟢 Verrouillé</a>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+        <div class="status-tabs" style="display:flex;gap:6px;flex-wrap:wrap;">
+            <a href="/cargo{% if selected_leg_id %}?leg_id={{ selected_leg_id }}{% endif %}" class="status-tab {% if not selected_status %}active{% endif %}">Toutes</a>
+            <a href="/cargo?status=draft{% if selected_leg_id %}&leg_id={{ selected_leg_id }}{% endif %}" class="status-tab {% if selected_status == 'draft' %}active{% endif %}">🔵 Brouillon</a>
+            <a href="/cargo?status=submitted{% if selected_leg_id %}&leg_id={{ selected_leg_id }}{% endif %}" class="status-tab {% if selected_status == 'submitted' %}active{% endif %}">🟡 Soumis</a>
+            <a href="/cargo?status=locked{% if selected_leg_id %}&leg_id={{ selected_leg_id }}{% endif %}" class="status-tab {% if selected_status == 'locked' %}active{% endif %}">🟢 Verrouillé</a>
+        </div>
+        <select class="form-input" style="width:auto;min-width:200px;font-size:12px;padding:6px 10px;" onchange="window.location.href=this.value">
+            <option value="/cargo{% if selected_status %}?status={{ selected_status }}{% endif %}" {% if not selected_leg_id %}selected{% endif %}>Toutes les traversées</option>
+            {% for leg in legs %}
+            <option value="/cargo?leg_id={{ leg.id }}{% if selected_status %}&status={{ selected_status }}{% endif %}" {% if selected_leg_id == leg.id %}selected{% endif %}>
+                {{ leg.leg_code }} — {{ leg.vessel.name }} · {{ leg.departure_port.locode }} → {{ leg.arrival_port.locode }}
+            </option>
+            {% endfor %}
+        </select>
     </div>
 
     {% if packing_lists %}

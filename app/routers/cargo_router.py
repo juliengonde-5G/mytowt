@@ -68,11 +68,13 @@ def pi(val, default=None):
 async def cargo_home(
     request: Request,
     status: Optional[str] = Query(None),
+    leg_id: Optional[int] = Query(None),
     user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     query = (
         select(PackingList)
+        .join(Order, PackingList.order_id == Order.id)
         .options(
             selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.vessel),
             selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.departure_port),
@@ -83,13 +85,27 @@ async def cargo_home(
     )
     if status:
         query = query.where(PackingList.status == status)
+    if leg_id:
+        query = query.where(Order.leg_id == leg_id)
     result = await db.execute(query)
     packing_lists = result.scalars().all()
+
+    # Legs for filter dropdown
+    legs_result = await db.execute(
+        select(Leg).options(
+            selectinload(Leg.vessel),
+            selectinload(Leg.departure_port),
+            selectinload(Leg.arrival_port),
+        ).order_by(Leg.etd.desc().nulls_last())
+    )
+    legs = legs_result.scalars().all()
 
     return templates.TemplateResponse("cargo/index.html", {
         "request": request, "user": user,
         "packing_lists": packing_lists,
         "selected_status": status,
+        "selected_leg_id": leg_id,
+        "legs": legs,
         "active_module": "cargo",
     })
 

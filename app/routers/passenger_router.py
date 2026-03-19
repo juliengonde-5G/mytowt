@@ -42,6 +42,7 @@ def _gen_ref():
 async def passenger_list(
     request: Request,
     status: Optional[str] = Query(None),
+    leg_id: Optional[int] = Query(None),
     user: User = Depends(require_permission("passengers", "C")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -60,6 +61,8 @@ async def passenger_list(
     )
     if status:
         query = query.where(PassengerBooking.status == status)
+    if leg_id:
+        query = query.where(PassengerBooking.leg_id == leg_id)
 
     result = await db.execute(query)
     bookings = result.scalars().all()
@@ -75,11 +78,23 @@ async def passenger_list(
         vc = b.vessel.code if b.vessel else None
         cabin_labels[b.id] = get_cabin_label(vc, b.cabin_number)
 
+    # Legs for filter dropdown
+    legs_result = await db.execute(
+        select(Leg).options(
+            selectinload(Leg.vessel),
+            selectinload(Leg.departure_port),
+            selectinload(Leg.arrival_port),
+        ).order_by(Leg.etd.desc().nulls_last())
+    )
+    legs = legs_result.scalars().all()
+
     return templates.TemplateResponse("passengers/index.html", {
         "request": request, "user": user,
         "bookings": bookings, "stats": stats,
         "cabin_labels": cabin_labels,
         "selected_status": status,
+        "selected_leg_id": leg_id,
+        "legs": legs,
         "booking_statuses": BOOKING_STATUSES,
         "active_module": "passengers",
     })

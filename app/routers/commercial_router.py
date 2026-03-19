@@ -87,6 +87,7 @@ async def commercial_home(
     request: Request,
     tab: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    leg_id: Optional[int] = Query(None),
     user: User = Depends(require_permission("commercial", "C")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -105,6 +106,8 @@ async def commercial_home(
     ).order_by(Order.created_at.desc())
     if status and active_tab == "orders":
         query = query.where(Order.status == status)
+    if leg_id and active_tab == "orders":
+        query = query.where(Order.leg_id == leg_id)
     result = await db.execute(query)
     orders = result.scalars().all()
 
@@ -164,11 +167,25 @@ async def commercial_home(
                 "ca": sum(o.total_price or 0 for o in g_orders),
             }
 
+    # Legs for filter dropdown (orders tab)
+    legs = []
+    if active_tab == "orders":
+        legs_result = await db.execute(
+            select(Leg).options(
+                selectinload(Leg.vessel),
+                selectinload(Leg.departure_port),
+                selectinload(Leg.arrival_port),
+            ).order_by(Leg.etd.desc().nulls_last())
+        )
+        legs = legs_result.scalars().all()
+
     return templates.TemplateResponse("commercial/index.html", {
         "request": request, "user": user,
         "active_tab": active_tab,
         "orders": orders, "statuses": statuses,
         "selected_status": status,
+        "selected_leg_id": leg_id,
+        "legs": legs,
         "order_decarb": order_decarb,
         "co2_vars": co2_vars,
         "grids": grids,

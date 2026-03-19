@@ -226,12 +226,22 @@
     <!-- ═══ ORDERS TAB ═════════════════════════════════════ -->
     {% elif active_tab == 'orders' %}
     <div class="orders-tab">
-        <!-- Order status filter -->
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
-            <a href="/commercial?tab=orders" class="status-tab {% if not selected_status %}active{% endif %}" style="font-size:11px;">Tous</a>
-            {% for k, v in statuses.items() %}
-            <a href="/commercial?tab=orders&status={{ k }}" class="status-tab {% if selected_status == k %}active{% endif %}" style="font-size:11px;">{{ v }}</a>
-            {% endfor %}
+        <!-- Order status filter + leg filter -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <a href="/commercial?tab=orders{% if selected_leg_id %}&leg_id={{ selected_leg_id }}{% endif %}" class="status-tab {% if not selected_status %}active{% endif %}" style="font-size:11px;">Tous</a>
+                {% for k, v in statuses.items() %}
+                <a href="/commercial?tab=orders&status={{ k }}{% if selected_leg_id %}&leg_id={{ selected_leg_id }}{% endif %}" class="status-tab {% if selected_status == k %}active{% endif %}" style="font-size:11px;">{{ v }}</a>
+                {% endfor %}
+            </div>
+            <select class="form-input" style="width:auto;min-width:200px;font-size:11px;padding:5px 8px;" onchange="window.location.href=this.value">
+                <option value="/commercial?tab=orders{% if selected_status %}&status={{ selected_status }}{% endif %}" {% if not selected_leg_id %}selected{% endif %}>Toutes les traversées</option>
+                {% for leg in legs %}
+                <option value="/commercial?tab=orders&leg_id={{ leg.id }}{% if selected_status %}&status={{ selected_status }}{% endif %}" {% if selected_leg_id == leg.id %}selected{% endif %}>
+                    {{ leg.leg_code }} — {{ leg.vessel.name }} · {{ leg.departure_port.locode }} → {{ leg.arrival_port.locode }}
+                </option>
+                {% endfor %}
+            </select>
         </div>
 
         {% if orders %}
