@@ -87,6 +87,8 @@ async def commercial_home(
     request: Request,
     tab: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    vessel: Optional[int] = Query(None),
+    year: Optional[int] = Query(None),
     leg_id: Optional[int] = Query(None),
     user: User = Depends(require_permission("commercial", "C")),
     db: AsyncSession = Depends(get_db),
@@ -98,6 +100,27 @@ async def commercial_home(
         "confirme": "Confirmé", "annule": "Annulé",
     }
 
+    current_year = year or datetime.now().year
+    years = list(range(2025, datetime.now().year + 2))
+
+    vessels_result = await db.execute(select(Vessel).where(Vessel.is_active == True).order_by(Vessel.code))
+    vessels = vessels_result.scalars().all()
+    selected_vessel = vessel or (vessels[0].code if vessels else None)
+
+    vessel_obj = None
+    if selected_vessel:
+        v_result = await db.execute(select(Vessel).where(Vessel.code == selected_vessel))
+        vessel_obj = v_result.scalar_one_or_none()
+
+    filter_legs = []
+    if vessel_obj and active_tab == "orders":
+        fl_result = await db.execute(
+            select(Leg).options(selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
+            .where(Leg.vessel_id == vessel_obj.id, Leg.year == current_year)
+            .order_by(Leg.sequence)
+        )
+        filter_legs = fl_result.scalars().all()
+
     # Always load orders (used by orders tab + dashboard KPIs)
     query = select(Order).options(
         selectinload(Order.leg).selectinload(Leg.vessel),
@@ -108,6 +131,10 @@ async def commercial_home(
         query = query.where(Order.status == status)
     if leg_id and active_tab == "orders":
         query = query.where(Order.leg_id == leg_id)
+    elif vessel_obj and active_tab == "orders":
+        fl_ids = [l.id for l in filter_legs]
+        if fl_ids:
+            query = query.where(Order.leg_id.in_(fl_ids))
     result = await db.execute(query)
     orders = result.scalars().all()
 
@@ -167,25 +194,14 @@ async def commercial_home(
                 "ca": sum(o.total_price or 0 for o in g_orders),
             }
 
-    # Legs for filter dropdown (orders tab)
-    legs = []
-    if active_tab == "orders":
-        legs_result = await db.execute(
-            select(Leg).options(
-                selectinload(Leg.vessel),
-                selectinload(Leg.departure_port),
-                selectinload(Leg.arrival_port),
-            ).order_by(Leg.etd.desc().nulls_last())
-        )
-        legs = legs_result.scalars().all()
-
     return templates.TemplateResponse("commercial/index.html", {
         "request": request, "user": user,
         "active_tab": active_tab,
         "orders": orders, "statuses": statuses,
         "selected_status": status,
-        "selected_leg_id": leg_id,
-        "legs": legs,
+        "vessels": vessels, "selected_vessel": selected_vessel,
+        "current_year": current_year, "years": years,
+        "legs": filter_legs, "leg_id": leg_id,
         "order_decarb": order_decarb,
         "co2_vars": co2_vars,
         "grids": grids,

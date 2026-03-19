@@ -226,22 +226,48 @@
     <!-- ═══ ORDERS TAB ═════════════════════════════════════ -->
     {% elif active_tab == 'orders' %}
     <div class="orders-tab">
-        <!-- Order status filter + leg filter -->
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
-            <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                <a href="/commercial?tab=orders{% if selected_leg_id %}&leg_id={{ selected_leg_id }}{% endif %}" class="status-tab {% if not selected_status %}active{% endif %}" style="font-size:11px;">Tous</a>
-                {% for k, v in statuses.items() %}
-                <a href="/commercial?tab=orders&status={{ k }}{% if selected_leg_id %}&leg_id={{ selected_leg_id }}{% endif %}" class="status-tab {% if selected_status == k %}active{% endif %}" style="font-size:11px;">{{ v }}</a>
+        {% set base_params = "tab=orders&vessel=" ~ selected_vessel ~ "&year=" ~ current_year %}
+        <!-- Vessel / Year / Leg filter -->
+        <div class="planning-filters">
+            <div class="vessel-tabs">
+                {% for v in vessels %}
+                <a href="/commercial?tab=orders&vessel={{ v.code }}&year={{ current_year }}" class="vessel-tab {% if selected_vessel == v.code %}active{% endif %}">
+                    <i data-lucide="ship"></i> {{ v.name }}
+                </a>
                 {% endfor %}
             </div>
-            <select class="form-input" style="width:auto;min-width:200px;font-size:11px;padding:5px 8px;" onchange="window.location.href=this.value">
-                <option value="/commercial?tab=orders{% if selected_status %}&status={{ selected_status }}{% endif %}" {% if not selected_leg_id %}selected{% endif %}>Toutes les traversées</option>
-                {% for leg in legs %}
-                <option value="/commercial?tab=orders&leg_id={{ leg.id }}{% if selected_status %}&status={{ selected_status }}{% endif %}" {% if selected_leg_id == leg.id %}selected{% endif %}>
-                    {{ leg.leg_code }} — {{ leg.vessel.name }} · {{ leg.departure_port.locode }} → {{ leg.arrival_port.locode }}
-                </option>
+            <div class="year-selector">
+                {% for y in years %}
+                <a href="/commercial?tab=orders&vessel={{ selected_vessel }}&year={{ y }}" class="year-btn {% if current_year == y %}active{% endif %}">{{ y }}</a>
                 {% endfor %}
-            </select>
+            </div>
+        </div>
+
+        <div class="leg-selector">
+            <a href="/commercial?{{ base_params }}{% if selected_status %}&status={{ selected_status }}{% endif %}" class="leg-chip {% if not leg_id %}active{% endif %}">
+                <strong>Tous</strong>
+            </a>
+            {% for leg in legs %}
+            {% set terminated = leg.atd is not none %}
+            {% set locked = leg.status == 'completed' %}
+            <a href="/commercial?{{ base_params }}&leg_id={{ leg.id }}{% if selected_status %}&status={{ selected_status }}{% endif %}"
+               class="leg-chip {% if leg_id == leg.id %}active{% endif %} {% if terminated %}terminated{% endif %} {% if locked %}locked{% endif %}">
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <strong>{{ leg.leg_code }}</strong>
+                    {% if locked %}<i data-lucide="lock" style="width:10px;height:10px;color:#aaa;"></i>{% endif %}
+                </div>
+                <span>{{ leg.departure_port.country_code|flag }} {{ leg.departure_port.locode }} → {{ leg.arrival_port.country_code|flag }} {{ leg.arrival_port.locode }}</span>
+            </a>
+            {% endfor %}
+            {% if not legs %}<span style="color:#888;font-size:13px;">Aucune traversée</span>{% endif %}
+        </div>
+
+        <!-- Order status filter -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
+            <a href="/commercial?{{ base_params }}{% if leg_id %}&leg_id={{ leg_id }}{% endif %}" class="status-tab {% if not selected_status %}active{% endif %}" style="font-size:11px;">Tous</a>
+            {% for k, v in statuses.items() %}
+            <a href="/commercial?{{ base_params }}&status={{ k }}{% if leg_id %}&leg_id={{ leg_id }}{% endif %}" class="status-tab {% if selected_status == k %}active{% endif %}" style="font-size:11px;">{{ v }}</a>
+            {% endfor %}
         </div>
 
         {% if orders %}

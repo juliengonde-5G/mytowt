@@ -68,10 +68,33 @@ def pi(val, default=None):
 async def cargo_home(
     request: Request,
     status: Optional[str] = Query(None),
+    vessel: Optional[int] = Query(None),
+    year: Optional[int] = Query(None),
     leg_id: Optional[int] = Query(None),
     user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
+    current_year = year or datetime.now().year
+    years = list(range(2025, datetime.now().year + 2))
+
+    vessels_result = await db.execute(select(Vessel).where(Vessel.is_active == True).order_by(Vessel.code))
+    vessels = vessels_result.scalars().all()
+    selected_vessel = vessel or (vessels[0].code if vessels else None)
+
+    vessel_obj = None
+    if selected_vessel:
+        v_result = await db.execute(select(Vessel).where(Vessel.code == selected_vessel))
+        vessel_obj = v_result.scalar_one_or_none()
+
+    legs = []
+    if vessel_obj:
+        legs_result = await db.execute(
+            select(Leg).options(selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
+            .where(Leg.vessel_id == vessel_obj.id, Leg.year == current_year)
+            .order_by(Leg.sequence)
+        )
+        legs = legs_result.scalars().all()
+
     query = (
         select(PackingList)
         .join(Order, PackingList.order_id == Order.id)
@@ -87,25 +110,20 @@ async def cargo_home(
         query = query.where(PackingList.status == status)
     if leg_id:
         query = query.where(Order.leg_id == leg_id)
+    elif vessel_obj:
+        leg_ids = [l.id for l in legs]
+        if leg_ids:
+            query = query.where(Order.leg_id.in_(leg_ids))
     result = await db.execute(query)
     packing_lists = result.scalars().all()
-
-    # Legs for filter dropdown
-    legs_result = await db.execute(
-        select(Leg).options(
-            selectinload(Leg.vessel),
-            selectinload(Leg.departure_port),
-            selectinload(Leg.arrival_port),
-        ).order_by(Leg.etd.desc().nulls_last())
-    )
-    legs = legs_result.scalars().all()
 
     return templates.TemplateResponse("cargo/index.html", {
         "request": request, "user": user,
         "packing_lists": packing_lists,
         "selected_status": status,
-        "selected_leg_id": leg_id,
-        "legs": legs,
+        "vessels": vessels, "selected_vessel": selected_vessel,
+        "current_year": current_year, "years": years,
+        "legs": legs, "leg_id": leg_id,
         "active_module": "cargo",
     })
 

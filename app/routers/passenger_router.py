@@ -42,10 +42,33 @@ def _gen_ref():
 async def passenger_list(
     request: Request,
     status: Optional[str] = Query(None),
+    vessel: Optional[int] = Query(None),
+    year: Optional[int] = Query(None),
     leg_id: Optional[int] = Query(None),
     user: User = Depends(require_permission("passengers", "C")),
     db: AsyncSession = Depends(get_db),
 ):
+    current_year = year or datetime.now().year
+    years = list(range(2025, datetime.now().year + 2))
+
+    vessels_result = await db.execute(select(Vessel).where(Vessel.is_active == True).order_by(Vessel.code))
+    vessels = vessels_result.scalars().all()
+    selected_vessel = vessel or (vessels[0].code if vessels else None)
+
+    vessel_obj = None
+    if selected_vessel:
+        v_result = await db.execute(select(Vessel).where(Vessel.code == selected_vessel))
+        vessel_obj = v_result.scalar_one_or_none()
+
+    filter_legs = []
+    if vessel_obj:
+        fl_result = await db.execute(
+            select(Leg).options(selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
+            .where(Leg.vessel_id == vessel_obj.id, Leg.year == current_year)
+            .order_by(Leg.sequence)
+        )
+        filter_legs = fl_result.scalars().all()
+
     query = (
         select(PassengerBooking)
         .join(Leg, PassengerBooking.leg_id == Leg.id)
@@ -63,6 +86,10 @@ async def passenger_list(
         query = query.where(PassengerBooking.status == status)
     if leg_id:
         query = query.where(PassengerBooking.leg_id == leg_id)
+    elif vessel_obj:
+        fl_ids = [l.id for l in filter_legs]
+        if fl_ids:
+            query = query.where(PassengerBooking.leg_id.in_(fl_ids))
 
     result = await db.execute(query)
     bookings = result.scalars().all()
@@ -78,23 +105,14 @@ async def passenger_list(
         vc = b.vessel.code if b.vessel else None
         cabin_labels[b.id] = get_cabin_label(vc, b.cabin_number)
 
-    # Legs for filter dropdown
-    legs_result = await db.execute(
-        select(Leg).options(
-            selectinload(Leg.vessel),
-            selectinload(Leg.departure_port),
-            selectinload(Leg.arrival_port),
-        ).order_by(Leg.etd.desc().nulls_last())
-    )
-    legs = legs_result.scalars().all()
-
     return templates.TemplateResponse("passengers/index.html", {
         "request": request, "user": user,
         "bookings": bookings, "stats": stats,
         "cabin_labels": cabin_labels,
         "selected_status": status,
-        "selected_leg_id": leg_id,
-        "legs": legs,
+        "vessels": vessels, "selected_vessel": selected_vessel,
+        "current_year": current_year, "years": years,
+        "legs": filter_legs, "leg_id": leg_id,
         "booking_statuses": BOOKING_STATUSES,
         "active_module": "passengers",
     })
