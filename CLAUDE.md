@@ -52,7 +52,8 @@ mytowt/
 │   │   ├── notification.py   # Notification (dashboard alerts: orders, messages, ETA shifts…)
 │   │   ├── activity_log.py   # ActivityLog (user action tracking per module)
 │   │   ├── portal_message.py # PortalMessage (threaded client/passenger ↔ company messaging)
-│   │   └── vessel_position.py # VesselPosition (GPS from satcom CSV: lat, lon, SOG, COG)
+│   │   ├── vessel_position.py # VesselPosition (GPS from satcom CSV: lat, lon, SOG, COG)
+│   │   └── shared_link.py    # SharedLink (planning shared links with view tracking)
 │   ├── routers/              # One router per module
 │   │   ├── planning_router.py    # /planning
 │   │   ├── commercial_router.py  # /commercial
@@ -92,6 +93,7 @@ mytowt/
 ├── docker-compose.yml
 ├── requirements.txt
 ├── presentation_mytowt.html  # Seminar slideshow (14 slides, HTML/CSS)
+├── purge_commercial.py       # One-shot script to purge commercial data (grids + offers)
 ├── .env.example
 └── .gitignore
 ```
@@ -132,6 +134,7 @@ mytowt/
 - Font: **Poppins** everywhere (templates, PDF exports, popups)
 - CSS variables: `--towt-blue`, `--towt-green`, `--towt-sky`, `--towt-sky-dark`, `--warning`, etc.
 - Utility classes in `app.css`: `.card`, `.card-title`, `.alert`, `.alert-success`, `.alert-error`, `.field-label`, `.field-value`, `.btn-outline`, `.leg-code`, `.account-grid`
+- Shared filter classes in `app.css`: `.planning-filters`, `.vessel-tabs`, `.vessel-tab`, `.year-selector`, `.year-btn`, `.leg-selector`, `.leg-chip` — reused across escale, cargo, commercial, passengers pages
 - Prefer CSS classes over inline styles for consistency
 
 ### Forms
@@ -141,6 +144,13 @@ mytowt/
 ### External (no-auth) routes
 - `/p/{token}` — client cargo packing list portal
 - `/boarding/{token}` — passenger pre-boarding form
+
+### List Filtering Pattern
+- Escale, cargo, commercial (orders tab), and passengers pages share the same cascading filter: **vessel tabs → year selector → leg chips**
+- CSS classes: `.planning-filters`, `.vessel-tabs`, `.vessel-tab`, `.year-selector`, `.year-btn`, `.leg-selector`, `.leg-chip` (all in `app.css`)
+- Router pattern: query params `vessel`, `year`, `leg_id` — default to first active vessel + current year
+- When no specific leg is selected, all legs for the vessel+year are shown
+- Map tiles use CARTO (not OSM) to avoid 403 referer blocks: `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png`
 
 ### External Integrations
 - **Pipedrive CRM** (`utils/pipedrive.py`): org search, deal creation/update for commercial offers and transport orders
@@ -206,6 +216,12 @@ docker exec towt-app-v2 chmod -R 755 /app/app/static/
 6. Arrival Notice generation from packing list
 7. Packing List Excel template system (download/upload/auto-import)
 8. Escale timeline split into 2 flows (operational + parallel activities)
+9. ~~Shared links with view tracking~~ ✓ (implemented: `shared_link.py` + `planning/shared_links.html`)
+10. ~~Escale-style vessel/year/leg filter across modules~~ ✓ (cargo, commercial, passengers)
+11. ~~Client portal improvements~~ ✓ (YouTube videos, document upload, map fixes, favicon)
+12. ~~Multi-cabin passenger bookings~~ ✓ (multiple cabins per booking)
+13. ~~Commercial offer → order generation~~ ✓ (`order_from_offer.html`)
+14. ~~Rate grid palette format (EPAL/USPAL)~~ ✓ (`palette_format` column on RateGrid)
 
 ## Do / Don't
 
