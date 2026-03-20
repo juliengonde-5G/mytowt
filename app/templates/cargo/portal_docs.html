@@ -26,43 +26,6 @@
 {% endif %}
 
 <div class="card">
-  <h2>{% if lang == 'en' %}Shipping documents{% elif lang == 'es' %}Documentos de envío{% elif lang == 'pt-br' %}Documentos de embarque{% elif lang == 'vi' %}Tài liệu vận chuyển{% else %}Documents d'expédition{% endif %}</h2>
-  <div class="igrid">
-    <a href="/cargo/{{ pl.id }}/bol?lang=fr" target="_blank" style="text-decoration:none">
-      <div class="ibox" style="cursor:pointer;border:1px solid #e5e7eb;text-align:center">
-        <div style="font-size:28px;margin-bottom:6px">📄</div>
-        <div class="iv">Bill of Lading</div>
-        <div class="il">Français (PDF)</div>
-      </div>
-    </a>
-    <a href="/cargo/{{ pl.id }}/bol?lang=en" target="_blank" style="text-decoration:none">
-      <div class="ibox" style="cursor:pointer;border:1px solid #e5e7eb;text-align:center">
-        <div style="font-size:28px;margin-bottom:6px">📄</div>
-        <div class="iv">Bill of Lading</div>
-        <div class="il">English (PDF)</div>
-      </div>
-    </a>
-    <a href="/cargo/{{ pl.id }}/excel" target="_blank" style="text-decoration:none">
-      <div class="ibox" style="cursor:pointer;border:1px solid #e5e7eb;text-align:center">
-        <div style="font-size:28px;margin-bottom:6px">📊</div>
-        <div class="iv">Packing List</div>
-        <div class="il">Excel</div>
-      </div>
-    </a>
-    {% if pl.order.leg and pl.order.leg.arrival_port %}
-    <a href="/cargo/{{ pl.id }}/arrival-notice" target="_blank" style="text-decoration:none">
-      <div class="ibox" style="cursor:pointer;border:1px solid #e5e7eb;text-align:center">
-        <div style="font-size:28px;margin-bottom:6px">🚢</div>
-        <div class="iv">Arrival Notice</div>
-        <div class="il">PDF</div>
-      </div>
-    </a>
-    {% endif %}
-  </div>
-</div>
-
-{# ── Upload zone ── #}
-<div class="card">
   <h2>{% if lang == 'en' %}Upload documents{% elif lang == 'es' %}Subir documentos{% elif lang == 'pt-br' %}Enviar documentos{% elif lang == 'vi' %}Tải lên tài liệu{% else %}Déposer des documents{% endif %}</h2>
   <form method="POST" action="/p/{{ pl.token }}/documents/upload" enctype="multipart/form-data" id="upload-form">
     <label class="upload-zone" id="drop-zone" for="file-input">
