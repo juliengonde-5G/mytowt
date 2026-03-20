@@ -1468,8 +1468,8 @@ async def client_portal_voyage(token: str, request: Request, db: AsyncSession = 
                 selectinload(Leg.vessel)
             ).where(
                 Leg.ata.is_(None),
-                Leg.departure_port_id == leg.departure_port_id,
-                Leg.arrival_port_id == leg.arrival_port_id,
+                Leg.departure_port_locode == leg.departure_port_locode,
+                Leg.arrival_port_locode == leg.arrival_port_locode,
             )
             .order_by(Leg.etd)
         )
