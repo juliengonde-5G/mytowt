@@ -20,6 +20,7 @@ from app.models.vessel import Vessel
 from app.models.leg import Leg, LegStatus
 from app.models.port import Port
 from app.models.shared_link import SharedLink
+from app.models.notification import Notification
 
 router = APIRouter(prefix="/planning", tags=["planning"])
 share_router = APIRouter(prefix="/share", tags=["share"])
@@ -447,6 +448,16 @@ async def leg_create_submit(
                        detail=f"{leg.departure_port_locode} → {leg.arrival_port_locode}",
                        ip_address=get_client_ip(request))
 
+    # Notification
+    db.add(Notification(
+        type="planning_create",
+        title=f"Nouvelle traversée — {leg.leg_code}",
+        detail=f"{vessel_obj.name} · {dep_port.locode} → {arr_port.locode} · {_year}",
+        link=f"/planning?vessel={vessel_obj.code}&year={_year}",
+        leg_id=leg.id,
+    ))
+    await db.flush()
+
     # Resequence all legs
     await resequence_and_recalc(db, _vessel_id, _year)
 
@@ -574,6 +585,16 @@ async def leg_edit_submit(
 
     await db.flush()
 
+    # Notification
+    db.add(Notification(
+        type="planning_update",
+        title=f"Traversée modifiée — {leg.leg_code}",
+        detail=f"{vessel_obj.name} · {dep_port.locode} → {arr_port.locode} · {_year}",
+        link=f"/planning?vessel={vessel_obj.code}&year={_year}",
+        leg_id=leg.id,
+    ))
+    await db.flush()
+
     # Resequence and recalculate chain
     await resequence_and_recalc(db, _vessel_id, _year)
     if old_vessel_id != _vessel_id or old_year != _year:
@@ -598,13 +619,24 @@ async def leg_delete(
         raise HTTPException(status_code=404)
 
     vessel_code = leg.vessel.code
+    vessel_name = leg.vessel.name
     vessel_id = leg.vessel_id
     year = leg.year
     leg_code = leg.leg_code
+    dep = leg.departure_port_locode
+    arr = leg.arrival_port_locode
 
     await log_activity(db, user=user, action="delete", module="planning",
                        entity_type="leg", entity_id=leg_id, entity_label=leg_code,
                        ip_address=get_client_ip(request))
+
+    # Notification (before delete, no leg_id FK since leg is being removed)
+    db.add(Notification(
+        type="planning_delete",
+        title=f"Traversée supprimée — {leg_code}",
+        detail=f"{vessel_name} · {dep} → {arr} · {year}",
+        link=f"/planning?vessel={vessel_code}&year={year}",
+    ))
 
     await db.delete(leg)
     await db.flush()
