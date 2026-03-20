@@ -78,8 +78,8 @@
             </div>
         </div>
 
-        <!-- ═══ HOLDS_CERT ═══ -->
-        {% elif doc_type == 'HOLDS_CERT' %}
+        <!-- ═══ HOLDS_CERT / HOLD_READINESS ═══ -->
+        {% elif doc_type in ('HOLDS_CERT', 'HOLD_READINESS') %}
         <div class="doc-section">
             <h3>HOLDS READINESS PRIOR LOADING</h3>
             <div class="doc-grid-2">
@@ -191,29 +191,20 @@
             </div>
         </div>
 
-        <!-- ═══ SOF document ═══ -->
-        {% elif doc_type == 'SOF' %}
+        <!-- ═══ AGENT_OTHER — Autres documents agent ═══ -->
+        {% elif doc_type == 'AGENT_OTHER' %}
         <div class="doc-section">
-            <h3>STATEMENT OF FACTS</h3>
-            <p class="doc-hint">Les événements SOF sont gérés depuis la page On Board. Utilisez les boutons d'export Excel/PDF.</p>
-            {% if sof_events %}
-            <table class="ob-table" style="margin-top:12px;">
-                <thead><tr><th>Événement</th><th>Date</th><th>Heure</th><th>Remarques</th></tr></thead>
-                <tbody>
-                {% for evt in sof_events %}
-                <tr>
-                    <td>{{ evt.event_label }}</td>
-                    <td>{{ evt.event_date.strftime('%d/%m/%Y') if evt.event_date else '' }}</td>
-                    <td>{{ evt.event_time or '' }}</td>
-                    <td>{{ evt.remarks or '' }}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-            {% endif %}
-            <div style="margin-top:12px;">
-                <a href="/onboard/sof/{{ leg.id }}/excel" class="btn btn-primary btn-sm">📥 Export Excel</a>
+            <h3>AUTRES DOCUMENTS AGENT / OTHER AGENT DOCUMENTS</h3>
+            <div class="doc-grid-2">
+                <div class="fg"><label>Vessel</label><input type="text" name="vessel_name" value="{{ doc_data.get('vessel_name', prefill.vessel_name) }}" class="fi" readonly></div>
+                <div class="fg"><label>Voyage No</label><input type="text" name="voyage_no" value="{{ doc_data.get('voyage_no', prefill.voyage_no) }}" class="fi" readonly></div>
+                <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.port) }}" class="fi"></div>
+                <div class="fg"><label>Date</label><input type="date" name="doc_date" value="{{ doc_data.get('doc_date', prefill.date_today) }}" class="fi"></div>
             </div>
+            <div class="fg full"><label>Type de document</label><input type="text" name="document_type" value="{{ doc_data.get('document_type', '') }}" class="fi" placeholder="Ex : Certificat sanitaire, Autorisation portuaire..."></div>
+            <div class="fg full"><label>Émetteur / Issued by</label><input type="text" name="issued_by" value="{{ doc_data.get('issued_by', '') }}" class="fi" placeholder="Nom de l'agent ou de l'organisme"></div>
+            <div class="fg full"><label>Contenu / Content</label><textarea name="content" class="fi ta" rows="10" placeholder="Détails du document...">{{ doc_data.get('content', '') }}</textarea></div>
+            <div class="fg full"><label>Remarques / Remarks</label><textarea name="remarks" class="fi ta" rows="3">{{ doc_data.get('remarks', '') }}</textarea></div>
         </div>
 
         <!-- ═══ FALLBACK ═══ -->

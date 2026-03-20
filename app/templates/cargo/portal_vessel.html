@@ -1,83 +1,128 @@
 {% extends "cargo/portal_base.html" %}
 {% block portal_title %}{{ t('cp_vessel', lang) }}{% endblock %}
+{% block extra_css %}
+.vessel-hero{background:linear-gradient(135deg,#095561,#0a6b7a);color:#fff;border-radius:12px;padding:32px;text-align:center;margin-bottom:16px}
+.vessel-hero h2{font-size:28px;font-weight:700;margin:0 0 6px}
+.vessel-hero .vh-sub{font-size:13px;opacity:.7}
+.specs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.spec-card{background:white;border:1px solid #e5e7eb;border-radius:10px;padding:16px;text-align:center}
+.spec-card .sc-val{font-size:22px;font-weight:700;color:#095561}
+.spec-card .sc-lbl{font-size:10px;text-transform:uppercase;color:#888;font-weight:600;margin-top:4px}
+.spec-card .sc-ico{font-size:24px;margin-bottom:6px}
+.env-card{background:linear-gradient(135deg,#f0f7e6,#e8f5db);border:1px solid #c5e1a5;border-radius:12px;padding:20px}
+.env-card h3{color:#33691e;font-size:15px;margin:0 0 10px}
+.env-card p{color:#555;font-size:13px;line-height:1.6;margin:0}
+{% endblock %}
 
 {% block portal_content %}
-<h1>🚢 {{ t('cp_vessel', lang) }}</h1>
-
 {% if vessel %}
-<div class="card">
-  <h2>{{ t('cp_about_vessel', lang) }} {{ vessel.name }}</h2>
-  <div class="igrid">
-    <div class="ibox"><div class="il">IMO</div><div class="iv">{{ vessel.imo or '—' }}</div></div>
-    <div class="ibox"><div class="il">{{ t('cp_flag', lang) }}</div><div class="iv">{{ vessel.flag or '—' }}</div></div>
-    <div class="ibox"><div class="il">{{ t('cp_deadweight', lang) }}</div><div class="iv">{{ vessel.deadweight or '—' }} T</div></div>
-    <div class="ibox"><div class="il">{{ t('cp_capacity', lang) }}</div><div class="iv">{{ vessel.pallet_capacity or '—' }}</div></div>
-    <div class="ibox"><div class="il">{{ t('cp_speed', lang) }}</div><div class="iv">{{ vessel.cruising_speed or '—' }} {{ t('cp_knots', lang) }}</div></div>
-  </div>
+
+<div class="vessel-hero">
+    <div style="margin-bottom:12px">
+        <svg viewBox="0 0 200 80" width="180" height="72" style="opacity:.85">
+            <!-- Hull -->
+            <path d="M20 55 L40 65 L160 65 L180 55 L170 55 Q165 62 155 62 L45 62 Q35 62 30 55 Z" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.5)" stroke-width="1"/>
+            <!-- Mast -->
+            <line x1="80" y1="15" x2="80" y2="55" stroke="rgba(255,255,255,0.6)" stroke-width="2"/>
+            <line x1="130" y1="20" x2="130" y2="55" stroke="rgba(255,255,255,0.6)" stroke-width="2"/>
+            <!-- Sails -->
+            <path d="M82 18 Q110 30 82 52" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+            <path d="M78 18 Q55 30 78 52" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+            <path d="M132 22 Q155 35 132 52" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+            <path d="M128 22 Q108 35 128 52" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+            <!-- Waves -->
+            <path d="M10 68 Q30 63 50 68 Q70 73 90 68 Q110 63 130 68 Q150 73 170 68 Q190 63 200 68" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+        </svg>
+    </div>
+    <h2>{{ vessel.name }}</h2>
+    <div class="vh-sub">
+        {% if vessel.flag %}{{ vessel.flag }} · {% endif %}IMO {{ vessel.imo_number or '—' }}
+    </div>
 </div>
 
-<div class="card csec">
-  {% if lang == 'en' %}
-  <h3>About {{ vessel.name }}</h3>
-  <p>{{ vessel.name }} {{ t('cp_vessel_desc_en', 'en') }}</p>
-  <h3>Key features</h3>
-  <ul>
-    <li>Modern cargo sailing vessel with state-of-the-art navigation</li>
-    <li>Wind-powered propulsion reducing CO₂ emissions by up to 90%</li>
-    <li>Cargo hold designed for palletized goods</li>
-    <li>Experienced crew specialized in sail cargo operations</li>
-  </ul>
-  <h3>Your cargo on board</h3>
-  <p>Your goods are stored in a ventilated cargo hold, protected from the elements. The vessel is equipped with modern handling equipment for safe loading and unloading. Each shipment is tracked and documented throughout the voyage.</p>
-  {% elif lang == 'es' %}
-  <h3>Sobre {{ vessel.name }}</h3>
-  <p>{{ vessel.name }} {{ t('cp_vessel_desc_es', 'es') }}</p>
-  <h3>Características principales</h3>
-  <ul>
-    <li>Velero de carga moderno con navegación de última generación</li>
-    <li>Propulsión eólica que reduce las emisiones de CO₂ hasta un 90%</li>
-    <li>Bodega diseñada para mercancías paletizadas</li>
-    <li>Tripulación experimentada en operaciones de carga a vela</li>
-  </ul>
-  <h3>Su carga a bordo</h3>
-  <p>Sus mercancías se almacenan en una bodega ventilada, protegidas de las intemperies. El buque está equipado con equipos modernos para una carga y descarga seguras. Cada envío es rastreado y documentado durante todo el viaje.</p>
-  {% elif lang == 'pt-br' %}
-  <h3>Sobre o {{ vessel.name }}</h3>
-  <p>{{ vessel.name }} {{ t('cp_vessel_desc_ptbr', 'pt-br') }}</p>
-  <h3>Características principais</h3>
-  <ul>
-    <li>Veleiro de carga moderno com navegação de última geração</li>
-    <li>Propulsão eólica reduzindo emissões de CO₂ em até 90%</li>
-    <li>Porão projetado para mercadorias paletizadas</li>
-    <li>Tripulação experiente em operações de carga à vela</li>
-  </ul>
-  <h3>Sua carga a bordo</h3>
-  <p>Suas mercadorias são armazenadas em um porão ventilado, protegidas das intempéries. O navio é equipado com equipamentos modernos para carga e descarga seguras. Cada embarque é rastreado e documentado durante toda a viagem.</p>
-  {% elif lang == 'vi' %}
-  <h3>Giới thiệu {{ vessel.name }}</h3>
-  <p>{{ vessel.name }} {{ t('cp_vessel_desc_vi', 'vi') }}</p>
-  <h3>Đặc điểm chính</h3>
-  <ul>
-    <li>Tàu buồm chở hàng hiện đại với hệ thống điều hướng tiên tiến</li>
-    <li>Động lực gió giảm phát thải CO₂ lên đến 90%</li>
-    <li>Hầm hàng thiết kế cho hàng hóa đóng pallet</li>
-    <li>Thủy thủ đoàn giàu kinh nghiệm trong vận tải hàng bằng buồm</li>
-  </ul>
-  <h3>Hàng hóa của bạn trên tàu</h3>
-  <p>Hàng hóa được lưu trữ trong hầm hàng thông gió, được bảo vệ khỏi thời tiết. Tàu được trang bị thiết bị xếp dỡ hiện đại. Mỗi lô hàng được theo dõi và ghi chép trong suốt hành trình.</p>
-  {% else %}
-  <h3>À propos du {{ vessel.name }}</h3>
-  <p>{{ vessel.name }} {{ t('cp_vessel_desc_fr', 'fr') }}</p>
-  <h3>Caractéristiques principales</h3>
-  <ul>
-    <li>Voilier-cargo moderne doté d'une navigation de pointe</li>
-    <li>Propulsion vélique réduisant les émissions de CO₂ jusqu'à 90 %</li>
-    <li>Cale conçue pour les marchandises palettisées</li>
-    <li>Équipage expérimenté spécialisé dans le transport à la voile</li>
-  </ul>
-  <h3>Votre cargo à bord</h3>
-  <p>Vos marchandises sont stockées dans une cale ventilée, protégées des intempéries. Le navire est équipé de matériel de manutention moderne pour un chargement et déchargement en toute sécurité. Chaque expédition est suivie et documentée tout au long du voyage.</p>
-  {% endif %}
+<div class="card">
+    <h2>{% if lang == 'en' %}Technical specifications{% elif lang == 'es' %}Especificaciones técnicas{% elif lang == 'pt-br' %}Especificações técnicas{% elif lang == 'vi' %}Thông số kỹ thuật{% else %}Caractéristiques techniques{% endif %}</h2>
+    <div class="specs-grid">
+        {% if vessel.imo_number %}
+        <div class="spec-card">
+            <div class="sc-ico">🏷️</div>
+            <div class="sc-val">{{ vessel.imo_number }}</div>
+            <div class="sc-lbl">IMO</div>
+        </div>
+        {% endif %}
+        {% if vessel.flag %}
+        <div class="spec-card">
+            <div class="sc-ico">🏴</div>
+            <div class="sc-val">{{ vessel.flag }}</div>
+            <div class="sc-lbl">{% if lang == 'en' %}Flag{% elif lang == 'es' %}Bandera{% elif lang == 'pt-br' %}Bandeira{% elif lang == 'vi' %}Cờ{% else %}Pavillon{% endif %}</div>
+        </div>
+        {% endif %}
+        {% if vessel.dwt %}
+        <div class="spec-card">
+            <div class="sc-ico">⚓</div>
+            <div class="sc-val">{{ vessel.dwt|int }} T</div>
+            <div class="sc-lbl">{% if lang == 'en' %}Deadweight{% elif lang == 'es' %}Peso muerto{% elif lang == 'pt-br' %}Porte bruto{% elif lang == 'vi' %}Trọng tải{% else %}Port en lourd{% endif %}</div>
+        </div>
+        {% endif %}
+        {% if vessel.capacity_palettes %}
+        <div class="spec-card">
+            <div class="sc-ico">📦</div>
+            <div class="sc-val">{{ vessel.capacity_palettes }}</div>
+            <div class="sc-lbl">{% if lang == 'en' %}Pallet capacity{% elif lang == 'es' %}Capacidad paletas{% elif lang == 'pt-br' %}Capacidade paletes{% elif lang == 'vi' %}Sức chứa pallet{% else %}Capacité palettes{% endif %}</div>
+        </div>
+        {% endif %}
+        {% if vessel.max_palettes %}
+        <div class="spec-card">
+            <div class="sc-ico">📏</div>
+            <div class="sc-val">{{ vessel.max_palettes }}</div>
+            <div class="sc-lbl">{% if lang == 'en' %}Max pallets{% elif lang == 'es' %}Paletas máx.{% elif lang == 'pt-br' %}Paletes máx.{% elif lang == 'vi' %}Pallet tối đa{% else %}Palettes max{% endif %}</div>
+        </div>
+        {% endif %}
+        {% if vessel.default_speed %}
+        <div class="spec-card">
+            <div class="sc-ico">💨</div>
+            <div class="sc-val">{{ vessel.default_speed }} kn</div>
+            <div class="sc-lbl">{% if lang == 'en' %}Cruising speed{% elif lang == 'es' %}Velocidad crucero{% elif lang == 'pt-br' %}Velocidade cruzeiro{% elif lang == 'vi' %}Tốc độ hành trình{% else %}Vitesse de croisière{% endif %}</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="env-card">
+    <h3>🌿 {% if lang == 'en' %}Wind-powered transport{% elif lang == 'es' %}Transporte a vela{% elif lang == 'pt-br' %}Transporte à vela{% elif lang == 'vi' %}Vận tải bằng gió{% else %}Transport à la voile{% endif %}</h3>
+    <p>
+        {% if lang == 'en' %}
+        {{ vessel.name }} is a cargo sailing vessel operated by TOWT. By using wind as the primary means of propulsion, each voyage significantly reduces CO₂ emissions compared to conventional shipping — up to 90% less carbon per tonne transported.
+        {% elif lang == 'es' %}
+        {{ vessel.name }} es un velero de carga operado por TOWT. Al usar el viento como medio principal de propulsión, cada viaje reduce significativamente las emisiones de CO₂ — hasta un 90% menos de carbono por tonelada transportada.
+        {% elif lang == 'pt-br' %}
+        {{ vessel.name }} é um veleiro de carga operado pela TOWT. Ao usar o vento como meio principal de propulsão, cada viagem reduz significativamente as emissões de CO₂ — até 90% menos carbono por tonelada transportada.
+        {% elif lang == 'vi' %}
+        {{ vessel.name }} là tàu buồm chở hàng do TOWT vận hành. Bằng cách sử dụng gió làm phương tiện đẩy chính, mỗi chuyến đi giảm đáng kể lượng khí thải CO₂ — giảm tới 90% carbon mỗi tấn hàng vận chuyển.
+        {% else %}
+        {{ vessel.name }} est un voilier-cargo opéré par TOWT. En utilisant le vent comme moyen de propulsion principal, chaque voyage réduit significativement les émissions de CO₂ — jusqu'à 90 % de carbone en moins par tonne transportée.
+        {% endif %}
+    </p>
+</div>
+
+<div class="card">
+    <h2>{% if lang == 'en' %}Images of the vessel construction{% elif lang == 'es' %}Imágenes de la construcción del navío{% elif lang == 'pt-br' %}Imagens da construção do navio{% elif lang == 'vi' %}Hình ảnh đóng tàu{% else %}Les images de la construction du navire{% endif %}</h2>
+    <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:10px;background:#000">
+        <iframe src="https://www.youtube-nocookie.com/embed/ts2NoXLYlP4" title="TOWT — Construction"
+            style="position:absolute;top:0;left:0;width:100%;height:100%;border:0"
+            allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture"
+            allowfullscreen loading="lazy"></iframe>
+    </div>
+</div>
+
+<div class="card">
+    <h2>{% if lang == 'en' %}How do commercial operations work?{% elif lang == 'es' %}¿Cómo funcionan las operaciones comerciales?{% elif lang == 'pt-br' %}Como funcionam as operações comerciais?{% elif lang == 'vi' %}Hoạt động thương mại diễn ra như thế nào?{% else %}Comment se déroulent les opérations commerciales ?{% endif %}</h2>
+    <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:10px;background:#000">
+        <iframe src="https://www.youtube-nocookie.com/embed/HuqD74dfXlI" title="TOWT Operations"
+            style="position:absolute;top:0;left:0;width:100%;height:100%;border:0"
+            allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture"
+            allowfullscreen loading="lazy"></iframe>
+    </div>
 </div>
 
 {% else %}

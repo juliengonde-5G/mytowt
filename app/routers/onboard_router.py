@@ -21,6 +21,11 @@ from app.models.packing_list import PackingList, PackingListBatch
 from app.models.onboard import (
     SofEvent, OnboardNotification, CargoDocument, ETAShift, OnboardAttachment,
     SOF_EVENT_TYPES, CARGO_DOC_TYPES, ETA_SHIFT_REASONS, ATTACHMENT_CATEGORIES,
+    MANDATORY_DOCS, OPTIONAL_DOCS, CONDITIONAL_DOCS, CARGO_DOC_LABELS,
+)
+from app.models.hold import (
+    HoldAssignment, HoldPlanConfirmation,
+    HOLD_CODES, HOLD_SHORT_LABELS, HOLD_CAPACITIES, get_hold_capacity,
 )
 
 router = APIRouter(prefix="/onboard", tags=["onboard"])
@@ -63,6 +68,10 @@ async def onboard_home(
     notifications = []
     last_sof = None
     eta_shifts = []
+    hold_summary = {}
+    hold_confirmation = None
+    existing_doc_types = set()
+    existing_docs_map = {}
     attachments = []
 
     next_leg = None  # leg export (départ du port)
@@ -118,7 +127,7 @@ async def onboard_home(
 
             # ─── CARGO summary ───
             orders_result = await db.execute(
-                select(Order).where(Order.leg_id == current_leg.id)
+                select(Order).where(Order.leg_id == current_leg.id, Order.status != "annule")
             )
             orders = orders_result.scalars().all()
             order_ids = [o.id for o in orders]
@@ -149,6 +158,46 @@ async def onboard_home(
                 "batches_count": len(batches),
             }
 
+            # ─── HOLD ASSIGNMENTS ───
+            hold_result = await db.execute(
+                select(HoldAssignment).where(HoldAssignment.leg_id == current_leg.id)
+            )
+            hold_assignments_raw = hold_result.scalars().all()
+
+            hold_summary = {}
+            for h_code, h_label in HOLD_CODES:
+                h_assigns = [a for a in hold_assignments_raw if a.hold_code == h_code]
+                total_qty = sum(a.pallet_quantity for a in h_assigns)
+                cap_normal = get_hold_capacity(h_code, "EPAL", False)
+                cap_stacked = get_hold_capacity(h_code, "EPAL", True)
+                cap = cap_stacked if any(a.is_stackable for a in h_assigns) else cap_normal
+                if cap <= 0:
+                    cap = cap_normal
+                # Build batch details for hold detail panel
+                batch_details = []
+                for a in h_assigns:
+                    batch_details.append({
+                        "batch_id": a.batch_id,
+                        "batch_ref": f"Batch #{a.batch_id}",
+                        "pallet_type": a.pallet_type or "EPAL",
+                        "pallet_quantity": a.pallet_quantity,
+                        "is_stackable": a.is_stackable,
+                    })
+                hold_summary[h_code] = {
+                    "label": h_label,
+                    "short": HOLD_SHORT_LABELS[h_code],
+                    "total_palettes": total_qty,
+                    "capacity": cap,
+                    "fill_pct": round(total_qty / cap * 100) if cap > 0 else 0,
+                    "assignments": h_assigns,
+                    "batches": batch_details,
+                }
+
+            confirm_result = await db.execute(
+                select(HoldPlanConfirmation).where(HoldPlanConfirmation.leg_id == current_leg.id)
+            )
+            hold_confirmation = confirm_result.scalar_one_or_none()
+
             # ─── SOF events ───
             sof_result = await db.execute(
                 select(SofEvent).where(SofEvent.leg_id == current_leg.id)
@@ -163,6 +212,14 @@ async def onboard_home(
                 .order_by(OnboardNotification.created_at.desc())
             )
             notifications = notif_result.scalars().all()
+
+            # ─── CARGO DOCUMENTS status ───
+            doc_result = await db.execute(
+                select(CargoDocument).where(CargoDocument.leg_id == current_leg.id)
+            )
+            existing_docs = doc_result.scalars().all()
+            existing_doc_types = {d.doc_type for d in existing_docs}
+            existing_docs_map = {d.doc_type: d for d in existing_docs}
 
             # ─── PASSENGERS for this leg ───
             from app.models.passenger import PassengerBooking, Passenger, PassengerDocument, DOCUMENT_TYPES, CABIN_CONFIG
@@ -209,6 +266,15 @@ async def onboard_home(
         "attachment_categories": ATTACHMENT_CATEGORIES,
         "sof_event_types": SOF_EVENT_TYPES,
         "cargo_doc_types": CARGO_DOC_TYPES,
+        "mandatory_docs": MANDATORY_DOCS,
+        "optional_docs": OPTIONAL_DOCS,
+        "conditional_docs": CONDITIONAL_DOCS,
+        "cargo_doc_labels": CARGO_DOC_LABELS,
+        "existing_doc_types": existing_doc_types,
+        "existing_docs_map": existing_docs_map,
+        "hold_summary": hold_summary if current_leg else {},
+        "hold_codes": HOLD_CODES,
+        "hold_confirmation": hold_confirmation if current_leg else None,
         "current_year": current_year,
         "active_module": "captain",
         "lang": user.language or "fr",
@@ -780,7 +846,7 @@ def _build_doc_paragraphs(doc_data: dict, doc_type: str, prefill: dict) -> list:
             ("Time (LT)", doc_data.get("notice_time", "")),
             ("Master", doc_data.get("master_name", "")),
         ]
-    elif doc_type == "HOLDS_CERT":
+    elif doc_type in ("HOLDS_CERT", "HOLD_READINESS"):
         rows += [
             ("To", doc_data.get("to", "")),
             ("Port", doc_data.get("port", "")),
@@ -1146,3 +1212,173 @@ async def cargo_doc_save(
         saved_doc_id = saved.id if saved else None
 
     return RedirectResponse(url=f"/onboard/doc/{leg_id}/{doc_type}?doc_id={saved_doc_id}", status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  ESCALE ARCHIVE GENERATION
+# ═══════════════════════════════════════════════════════════════
+@router.get("/archive/{leg_id}", response_class=Response)
+async def generate_archive(
+    leg_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a ZIP archive of all escale data for a leg."""
+    from app.permissions import can_view
+    if not can_view(user, "captain"):
+        raise HTTPException(status_code=403)
+
+    import zipfile
+    from io import BytesIO
+
+    # Load leg with relationships
+    leg_result = await db.execute(
+        select(Leg).options(
+            selectinload(Leg.vessel),
+            selectinload(Leg.departure_port),
+            selectinload(Leg.arrival_port),
+        ).where(Leg.id == leg_id)
+    )
+    leg = leg_result.scalar_one_or_none()
+    if not leg:
+        raise HTTPException(404)
+
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # 1. Résumé de l'escale
+        summary_lines = [
+            f"ARCHIVE ESCALE — {leg.leg_code}",
+            f"Navire : {leg.vessel.name}",
+            f"Route : {leg.departure_port.name} ({leg.departure_port.locode}) → {leg.arrival_port.name} ({leg.arrival_port.locode})",
+            f"ETD : {leg.etd.strftime('%d/%m/%Y %H:%M') if leg.etd else '—'}",
+            f"ETA : {leg.eta.strftime('%d/%m/%Y %H:%M') if leg.eta else '—'}",
+            f"ATD : {leg.atd.strftime('%d/%m/%Y %H:%M') if leg.atd else '—'}",
+            f"ATA : {leg.ata.strftime('%d/%m/%Y %H:%M') if leg.ata else '—'}",
+            f"Statut : {leg.status}",
+            f"Généré le : {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+            f"Généré par : {user.full_name}",
+            "",
+        ]
+        zf.writestr("01_resume_escale.txt", "\n".join(summary_lines))
+
+        # 2. SOF events
+        sof_result = await db.execute(
+            select(SofEvent).where(SofEvent.leg_id == leg_id)
+            .order_by(SofEvent.event_date.asc().nullslast(), SofEvent.event_time.asc(), SofEvent.id.asc())
+        )
+        sof_events = sof_result.scalars().all()
+        if sof_events:
+            sof_lines = ["STATEMENT OF FACTS", f"Leg: {leg.leg_code}", ""]
+            sof_lines.append(f"{'Événement':<50} {'Date':<12} {'Heure':<8} {'Remarques'}")
+            sof_lines.append("-" * 120)
+            for evt in sof_events:
+                d = evt.event_date.strftime('%d/%m/%Y') if evt.event_date else ''
+                t = evt.event_time or ''
+                r = evt.remarks or ''
+                sof_lines.append(f"{evt.event_label:<50} {d:<12} {t:<8} {r}")
+            zf.writestr("02_sof.txt", "\n".join(sof_lines))
+
+        # 3. ETA/ETD variations
+        shifts_result = await db.execute(
+            select(ETAShift).where(ETAShift.leg_id == leg_id).order_by(ETAShift.created_at.asc())
+        )
+        shifts = shifts_result.scalars().all()
+        if shifts:
+            shift_lines = ["VARIATIONS ETA/ETD", ""]
+            for s in shifts:
+                old = s.old_value.strftime('%d/%m/%Y %H:%M') if s.old_value else '—'
+                new = s.new_value.strftime('%d/%m/%Y %H:%M') if s.new_value else '—'
+                sign = "+" if s.shift_hours > 0 else ""
+                shift_lines.append(f"{s.created_at.strftime('%d/%m/%Y %H:%M')} | {s.field_changed.upper()} | {old} → {new} | {sign}{s.shift_hours:.1f}h | {s.reason} | {s.justification} | par {s.created_by}")
+            zf.writestr("03_variations_eta.txt", "\n".join(shift_lines))
+
+        # 4. Cargo documents
+        docs_result = await db.execute(
+            select(CargoDocument).where(CargoDocument.leg_id == leg_id).order_by(CargoDocument.created_at.asc())
+        )
+        docs = docs_result.scalars().all()
+        if docs:
+            doc_lines = ["DOCUMENTS GÉNÉRÉS", ""]
+            for d in docs:
+                label = CARGO_DOC_LABELS.get(d.doc_type, d.doc_type)
+                doc_lines.append(f"- {label} | créé {d.created_at.strftime('%d/%m/%Y %H:%M')} par {d.created_by or '—'}")
+            zf.writestr("04_documents_generes.txt", "\n".join(doc_lines))
+
+        # 5. Crew list
+        crew_result = await db.execute(
+            select(CrewAssignment).options(selectinload(CrewAssignment.member))
+            .where(CrewAssignment.vessel_id == leg.vessel_id, CrewAssignment.status == "active")
+            .order_by(CrewAssignment.embark_date.asc())
+        )
+        crew = crew_result.scalars().all()
+        if crew:
+            crew_lines = ["CREW LIST", f"Navire: {leg.vessel.name}", ""]
+            for ca in crew:
+                m = ca.member
+                embark = ca.embark_date.strftime('%d/%m/%Y') if ca.embark_date else '—'
+                crew_lines.append(f"- {m.full_name} | {m.role_label if hasattr(m, 'role_label') else m.role} | embarqué {embark}")
+            zf.writestr("05_crew_list.txt", "\n".join(crew_lines))
+
+        # 6. Packing list summary
+        orders_result = await db.execute(
+            select(Order).where(Order.leg_id == leg_id, Order.status != "annule").order_by(Order.created_at.asc())
+        )
+        orders = orders_result.scalars().all()
+        if orders:
+            cargo_lines = ["PACKING LIST / CARGO", ""]
+            for o in orders:
+                cargo_lines.append(f"- Ref: {o.reference or '—'} | Client: {o.client_name or '—'} | {o.quantity_palettes or 0} pal. | {o.total_weight or 0} kg | Statut: {o.status}")
+            zf.writestr("06_packing_list.txt", "\n".join(cargo_lines))
+
+        # 7. Passengers
+        try:
+            from app.models.passenger import PassengerBooking, Passenger
+            pax_result = await db.execute(
+                select(PassengerBooking).options(
+                    selectinload(PassengerBooking.passengers),
+                ).where(
+                    PassengerBooking.leg_id == leg_id,
+                    PassengerBooking.status.notin_(["cancelled"]),
+                ).order_by(PassengerBooking.cabin_number)
+            )
+            bookings = pax_result.scalars().all()
+            if bookings:
+                pax_lines = ["PASSAGERS", ""]
+                for b in bookings:
+                    for p in b.passengers:
+                        pax_lines.append(f"- {p.full_name} | Cab. {b.cabin_number} | Passeport: {p.passport_number or '—'} | Nat.: {p.nationality or '—'} | Statut: {b.status}")
+                zf.writestr("07_passagers.txt", "\n".join(pax_lines))
+        except Exception:
+            pass
+
+        # 8. Attachments list
+        att_result = await db.execute(
+            select(OnboardAttachment).where(OnboardAttachment.leg_id == leg_id).order_by(OnboardAttachment.created_at.asc())
+        )
+        attachments = att_result.scalars().all()
+        if attachments:
+            att_lines = ["FICHIERS & DOCUMENTS JOINTS", ""]
+            for a in attachments:
+                size = f"{a.file_size / 1024:.1f} Ko" if a.file_size else '—'
+                att_lines.append(f"- {a.title} | {a.category} | {a.filename} | {size} | par {a.uploaded_by} | {a.created_at.strftime('%d/%m/%Y %H:%M')}")
+            zf.writestr("08_fichiers_joints.txt", "\n".join(att_lines))
+
+        # 9. Notifications history
+        notif_result = await db.execute(
+            select(OnboardNotification).where(OnboardNotification.leg_id == leg_id).order_by(OnboardNotification.created_at.asc())
+        )
+        notifs = notif_result.scalars().all()
+        if notifs:
+            notif_lines = ["NOTIFICATIONS", ""]
+            for n in notifs:
+                notif_lines.append(f"- [{n.category}] {n.title} | {n.detail or ''} | {n.created_at.strftime('%d/%m/%Y %H:%M')}")
+            zf.writestr("09_notifications.txt", "\n".join(notif_lines))
+
+    buf.seek(0)
+    filename = f"archive_escale_{leg.leg_code}_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

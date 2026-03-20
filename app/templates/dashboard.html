@@ -116,7 +116,7 @@
         <div class="section-header" style="display:flex;align-items:center;gap:8px;">
             <h3><i data-lucide="radio" style="width:18px;height:18px;"></i> Notifications compagnie ({{ company_notifications|length }})</h3>
             {% if company_notifications|length > 1 %}
-            <form method="POST" action="/notifications/company/dismiss-all" style="margin-left:auto;">
+            <form method="POST" action="/notifications/dismiss-all" style="margin-left:auto;">
                 <button type="submit" class="btn btn-sm btn-secondary" style="font-size:11px;"><i data-lucide="check-check" style="width:12px;height:12px;"></i> Tout marquer lu</button>
             </form>
             {% endif %}
@@ -133,7 +133,7 @@
                     </div>
                 </div>
                 <div class="notif-actions">
-                    <form method="POST" action="/notifications/company/{{ cn.id }}/dismiss" style="display:inline;">
+                    <form method="POST" action="/notifications/{{ cn.id }}/dismiss" style="display:inline;">
                         <button type="submit" class="btn btn-sm btn-secondary" title="Marquer lu"><i data-lucide="check" style="width:12px;height:12px;"></i></button>
                     </form>
                 </div>
@@ -253,7 +253,7 @@
 
     <!-- Upcoming -->
     {% if upcoming_legs %}
-    <div class="section-header"><h3>{{ t('dash_upcoming', lang) }}</h3></div>
+    <div class="section-header"><h3>{{ t('dash_upcoming', lang) }} (par navire)</h3></div>
     <div class="table-container">
         <table class="data-table">
             <thead><tr><th>{{ t('th_leg', lang) }}</th><th>{{ t('th_vessel', lang) }}</th><th>{{ t('th_route', lang) }}</th><th>ETD</th><th>ETA</th><th>{{ t('th_duration', lang) }}</th></tr></thead>
@@ -358,8 +358,8 @@ window.addEventListener('load', function(){
     }
 
     const map = L.map('fleet-map',{scrollWheelZoom:true}).setView([20,0],2);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-        attribution:'&copy; OpenStreetMap',
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+        attribution:'&copy; OpenStreetMap &copy; CARTO',
         maxZoom:18,
     }).addTo(map);
 

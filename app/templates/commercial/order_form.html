@@ -109,10 +109,25 @@
                     </div>
                 </div>
 
+                <!-- Preferred holds -->
+                <div class="form-group">
+                    <label class="form-label">🚢 Cales souhaitées (optionnel)</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                        {% for hc, hl in [("INF_AV","Inf. Avant"),("INF_AR","Inf. Arrière"),("INT_AV","Int. Avant"),("INT_AR","Int. Arrière"),("SUP_AV","Sup. Avant"),("SUP_AR","Sup. Arrière")] %}
+                        <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;">
+                            <input type="checkbox" name="preferred_holds" value="{{ hc }}"
+                                   {% if edit_order and edit_order.preferred_holds and hc in edit_order.preferred_holds.split(',') %}checked{% endif %}>
+                            {{ hl }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <span style="font-size:10px;color:#999;">Le client peut demander le chargement dans des cales spécifiques</span>
+                </div>
+
                 <div class="form-row">
                     <div class="form-group" style="display:flex;align-items:center;gap:8px;margin-top:4px;">
                         <input type="checkbox" name="thc_included" id="thc_cb"
-                               {% if edit_order and edit_order.thc_included %}checked{% endif %}>
+                               {% if edit_order %}{% if edit_order.thc_included %}checked{% endif %}{% else %}checked{% endif %}>
                         <label for="thc_cb" class="form-label" style="margin:0;">THC inclus</label>
                     </div>
                     {% if edit_order %}

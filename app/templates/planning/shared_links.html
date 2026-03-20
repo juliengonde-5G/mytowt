@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}TOWT - Liens partagés{% endblock %}
+{% block page_title %}Liens partagés{% endblock %}
+
+{% block topbar_actions %}
+<a href="/planning" class="btn btn-secondary btn-sm"><i data-lucide="arrow-left"></i> Planning</a>
+<a href="/planning/pdf/commercial" class="btn btn-secondary btn-sm" hx-boost="false" target="_blank"><i data-lucide="file-text"></i> Support commercial</a>
+{% endblock %}
+
+{% block content %}
+<style>
+.links-table{width:100%;border-collapse:collapse;font-size:13px;}
+.links-table th{background:var(--towt-blue);color:white;padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.3px;}
+.links-table td{padding:10px 12px;border-bottom:1px solid #eee;vertical-align:middle;}
+.links-table tr:hover{background:#f8fafb;}
+.link-label{font-weight:600;color:var(--towt-blue);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.link-token{font-family:monospace;font-size:11px;color:#888;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;}
+.link-stats{display:flex;align-items:center;gap:12px;font-size:12px;color:#666;}
+.link-views{display:flex;align-items:center;gap:4px;}
+.link-views strong{color:var(--towt-blue);font-size:14px;}
+.badge-active{display:inline-block;padding:2px 10px;border-radius:100px;font-size:11px;font-weight:600;}
+.badge-active.on{background:rgba(135,189,43,0.15);color:#5a8010;}
+.badge-active.off{background:rgba(220,38,38,0.1);color:#dc2626;}
+.link-date{font-size:11px;color:#888;white-space:nowrap;}
+.link-actions{display:flex;gap:6px;align-items:center;}
+.btn-icon{padding:6px 8px;border:1px solid #ddd;border-radius:6px;background:white;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#555;text-decoration:none;}
+.btn-icon:hover{border-color:var(--towt-blue);color:var(--towt-blue);}
+.btn-icon.danger:hover{border-color:#dc2626;color:#dc2626;}
+.btn-icon.success{border-color:#87BD2B;color:#5a8010;}
+.empty-state{text-align:center;padding:60px 20px;color:#999;}
+.empty-state i{margin-bottom:12px;color:#ddd;}
+.copy-toast{position:fixed;bottom:20px;right:20px;background:#095561;color:white;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:9999;}
+.copy-toast.show{opacity:1;}
+</style>
+
+<div class="card" style="margin-top:16px;">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Historique des liens partagés</span>
+        <span style="font-size:12px;color:#888;font-weight:400;">{{ links|length }} lien{{ 's' if links|length > 1 }}</span>
+    </div>
+
+    {% if links %}
+    <div class="table-container">
+        <table class="links-table">
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>Lien</th>
+                    <th>Statut</th>
+                    <th>Vues</th>
+                    <th>Créé par</th>
+                    <th>Date</th>
+                    <th style="text-align:right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for link in links %}
+                <tr style="{% if not link.is_active %}opacity:0.5;{% endif %}">
+                    <td>
+                        <div class="link-label">{{ link.label or 'Tous les départs' }}</div>
+                        <div style="font-size:11px;color:#aaa;">{{ link.year }} · {{ link.lang|upper }}</div>
+                    </td>
+                    <td>
+                        <span class="link-token" title="{{ site_url }}/share/commercial/{{ link.token }}">{{ site_url }}/share/commercial/{{ link.token[:12] }}…</span>
+                        <button class="btn-icon" onclick="copyLink('{{ site_url }}/share/commercial/{{ link.token }}')" title="Copier le lien">
+                            <i data-lucide="copy" style="width:12px;height:12px;"></i>
+                        </button>
+                    </td>
+                    <td>
+                        {% if link.is_active %}
+                        <span class="badge-active on">Actif</span>
+                        {% else %}
+                        <span class="badge-active off">Inactif</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="link-views">
+                            <strong>{{ link.view_count or 0 }}</strong>
+                            <i data-lucide="eye" style="width:14px;height:14px;color:#aaa;"></i>
+                        </div>
+                        {% if link.last_viewed_at %}
+                        <div style="font-size:10px;color:#aaa;">{{ link.last_viewed_at.strftime('%d/%m %H:%M') }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="font-size:12px;">{{ link.created_by_name }}</div>
+                    </td>
+                    <td>
+                        <div class="link-date">{{ link.created_at.strftime('%d/%m/%Y') }}</div>
+                        <div class="link-date">{{ link.created_at.strftime('%H:%M') }}</div>
+                    </td>
+                    <td>
+                        <div class="link-actions" style="justify-content:flex-end;">
+                            <a href="{{ site_url }}/share/commercial/{{ link.token }}" target="_blank" class="btn-icon" title="Ouvrir">
+                                <i data-lucide="external-link" style="width:12px;height:12px;"></i>
+                            </a>
+                            <form method="POST" action="/planning/shared-links/{{ link.id }}/toggle" style="margin:0;">
+                                <button type="submit" class="btn-icon {% if link.is_active %}danger{% else %}success{% endif %}" title="{% if link.is_active %}Désactiver{% else %}Réactiver{% endif %}">
+                                    {% if link.is_active %}
+                                    <i data-lucide="pause" style="width:12px;height:12px;"></i>
+                                    {% else %}
+                                    <i data-lucide="play" style="width:12px;height:12px;"></i>
+                                    {% endif %}
+                                </button>
+                            </form>
+                            <button class="btn-icon danger" onclick="deleteLink({{ link.id }}, '{{ link.label|e }}')" title="Supprimer">
+                                <i data-lucide="trash-2" style="width:12px;height:12px;"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i data-lucide="link" style="width:48px;height:48px;"></i>
+        <p style="font-size:14px;margin-top:8px;">Aucun lien partagé</p>
+        <p style="font-size:12px;margin-top:4px;">Utilisez le bouton "Lien de partage" depuis le support commercial pour en créer un.</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="copy-toast" id="copy-toast">Lien copié !</div>
+
+<script>
+function copyLink(url) {
+    navigator.clipboard.writeText(url).then(function() {
+        var toast = document.getElementById('copy-toast');
+        toast.classList.add('show');
+        setTimeout(function() { toast.classList.remove('show'); }, 2000);
+    });
+}
+
+function deleteLink(id, label) {
+    if (!confirm('Supprimer définitivement le lien "' + label + '" ?')) return;
+    fetch('/planning/shared-links/' + id, { method: 'DELETE' })
+        .then(function() { window.location.reload(); });
+}
+</script>
+{% endblock %}

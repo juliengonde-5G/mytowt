@@ -462,6 +462,7 @@ def _date_fmt(val):
 TABLE_DEFS = {
     "legs": {"label": "Legs", "tables": ["legs"]},
     "orders": {"label": "Commandes", "tables": ["orders", "order_assignments"]},
+    "commercial": {"label": "Commercial", "tables": ["rate_grids", "rate_grid_lines", "rate_offers"]},
     "passengers": {"label": "Passagers", "tables": ["passenger_bookings", "passengers", "passenger_payments", "passenger_documents", "preboarding_forms", "passenger_audit_logs"]},
     "cargo": {"label": "Cargo", "tables": ["packing_lists", "packing_list_batches", "packing_list_audit"]},
     "finance": {"label": "Finance", "tables": ["leg_finances"]},
@@ -630,7 +631,7 @@ async def purge_selective(
     # Order matters for FK constraints — delete children first
     purge_order = [
         "notifications", "messages", "sof", "claims",
-        "cargo", "passengers", "finance", "crew_assignments", "orders", "legs",
+        "cargo", "passengers", "finance", "crew_assignments", "orders", "commercial", "legs",
     ]
 
     table_sql = {
@@ -645,6 +646,11 @@ async def purge_selective(
             "DELETE FROM passengers", "DELETE FROM passenger_bookings",
         ],
         "orders": ["DELETE FROM order_assignments", "DELETE FROM orders"],
+        "commercial": [
+            "DELETE FROM rate_offers",
+            "DELETE FROM rate_grid_lines",
+            "DELETE FROM rate_grids",
+        ],
         "finance": ["DELETE FROM leg_finances"],
         "crew_assignments": ["DELETE FROM crew_assignments"],
         "legs": [
@@ -697,6 +703,9 @@ async def reset_database(
         "DELETE FROM passenger_bookings",
         "DELETE FROM order_assignments",
         "DELETE FROM orders",
+        "DELETE FROM rate_offers",
+        "DELETE FROM rate_grid_lines",
+        "DELETE FROM rate_grids",
         "DELETE FROM crew_assignments",
         "DELETE FROM sof_events",
         "DELETE FROM onboard_notifications",

@@ -2,7 +2,7 @@
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, ForeignKey, Text, Date, func
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from app.database import Base
 
 
@@ -98,5 +98,5 @@ class MrvEvent(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
-    leg = relationship("Leg", backref="mrv_events")
+    leg = relationship("Leg", backref=backref("mrv_events", passive_deletes=True))
     sof_event = relationship("SofEvent", backref="mrv_event")

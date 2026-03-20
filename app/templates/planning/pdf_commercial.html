@@ -87,15 +87,20 @@
 </head>
 <body>
     <!-- Template selector (not printed) -->
-    <!-- Template selector (not printed) -->
-    <div class="no-print">
-        <h3>📄 {% if lang == 'en' %}Commercial brochure generator{% else %}Générateur de support commercial{% endif %}
+    <div class="no-print" {% if is_shared %}style="background:#f0f7e6;border-color:#87BD2B;"{% endif %}>
+        <h3>📄 {% if is_shared %}{% if lang == 'en' %}TOWT — Sailing schedule{% else %}TOWT — Calendrier de navigation{% endif %}{% else %}{% if lang == 'en' %}Commercial brochure generator{% else %}Générateur de support commercial{% endif %}{% endif %}
             <span class="lang-toggle">
+                {% if is_shared %}
+                <a href="?lang=fr" class="lang-btn {% if lang == 'fr' %}active{% endif %}">🇫🇷 FR</a>
+                <a href="?lang=en" class="lang-btn {% if lang == 'en' %}active{% endif %}">🇬🇧 EN</a>
+                {% else %}
                 <a href="javascript:void(0)" onclick="updateLang('fr')" class="lang-btn {% if lang == 'fr' %}active{% endif %}">🇫🇷 FR</a>
                 <a href="javascript:void(0)" onclick="updateLang('en')" class="lang-btn {% if lang == 'en' %}active{% endif %}">🇬🇧 EN</a>
+                {% endif %}
             </span>
         </h3>
 
+        {% if not is_shared %}
         <!-- FILTERS BAR -->
         <div class="filters-panel">
             <div class="filter-group">
@@ -142,6 +147,9 @@
         </div>
         {% endif %}
 
+        {% endif %}
+
+        {% if not is_shared %}
         <!-- CUSTOM LEG SELECTOR (collapsible) -->
         <details class="custom-selector" {% if selected_leg_ids %}open{% endif %}>
             <summary class="custom-toggle">✏️ {% if lang == 'en' %}Select specific legs{% else %}Sélectionner des legs spécifiques{% endif %} {% if selected_leg_ids %}<span class="custom-count">({{ selected_leg_ids|length }} {% if lang == 'en' %}selected{% else %}sélectionnés{% endif %})</span>{% endif %}</summary>
@@ -173,11 +181,25 @@
             </div>
         </details>
 
-        <!-- PRINT BUTTON -->
-        <div style="margin-top:14px;display:flex;gap:10px;align-items:center;">
+        {% endif %}
+
+        <!-- PRINT BUTTON + SHARE -->
+        <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
             <button class="print-btn" onclick="window.print()">🖨 {% if lang == 'en' %}Print / Save as PDF{% else %}Imprimer / Enregistrer en PDF{% endif %}</button>
+            {% if not is_shared %}
+            <button class="print-btn" style="background:#87BD2B;" onclick="generateShareLink()" id="share-btn">🔗 {% if lang == 'en' %}Share link{% else %}Lien de partage{% endif %}</button>
+            {% endif %}
             <span style="font-size:11px;color:#999;">{{ legs|length }} {% if lang == 'en' %}legs displayed{% else %}legs affichés{% endif %}</span>
         </div>
+        {% if not is_shared %}
+        <div id="share-result" style="display:none;margin-top:10px;padding:10px 14px;background:#f0f7e6;border:1px solid #87BD2B;border-radius:6px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <input type="text" id="share-url" readonly style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:4px;font-size:12px;font-family:monospace;background:white;">
+                <button onclick="copyShareLink()" class="mini-btn" style="border-color:#87BD2B;color:#095561;font-weight:600;" id="copy-btn">📋 {% if lang == 'en' %}Copy{% else %}Copier{% endif %}</button>
+            </div>
+            <p style="font-size:10px;color:#888;margin-top:6px;">{% if lang == 'en' %}This link can be shared with anyone — no login required.{% else %}Ce lien peut être partagé avec n'importe qui — aucune connexion requise.{% endif %}</p>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Printable content -->
@@ -322,6 +344,7 @@
     </div>
 
 <script>
+{% if not is_shared %}
 function buildUrl(params) {
     var base = '/planning/pdf/commercial?year={{ current_year }}';
     for (var k in params) {
@@ -373,6 +396,42 @@ function applyCustomSelection() {
     p.legs_ids = ids.join(',');
     window.location.href = buildUrl(p);
 }
+{% endif %}
+{% if not is_shared %}
+function generateShareLink() {
+    var btn = document.getElementById('share-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ ...';
+    var form = new FormData();
+    form.append('year', '{{ current_year }}');
+    form.append('lang', '{{ lang }}');
+    {% if selected_vessel %}form.append('vessel', '{{ selected_vessel }}');{% endif %}
+    {% if selected_origin %}form.append('origin', '{{ selected_origin }}');{% endif %}
+    {% if selected_destination %}form.append('destination', '{{ selected_destination }}');{% endif %}
+    {% if selected_leg_ids %}form.append('legs_ids', '{{ selected_leg_ids|join(",") }}');{% endif %}
+    fetch('/planning/pdf/commercial/share', {method:'POST', body:form})
+        .then(function(r){return r.json();})
+        .then(function(data){
+            document.getElementById('share-url').value = data.url;
+            document.getElementById('share-result').style.display = 'block';
+            btn.textContent = '🔗 {% if lang == "en" %}Share link{% else %}Lien de partage{% endif %}';
+            btn.disabled = false;
+        })
+        .catch(function(){
+            btn.textContent = '❌ Erreur';
+            btn.disabled = false;
+        });
+}
+function copyShareLink() {
+    var input = document.getElementById('share-url');
+    input.select();
+    navigator.clipboard.writeText(input.value).then(function(){
+        var btn = document.getElementById('copy-btn');
+        btn.textContent = '✅ {% if lang == "en" %}Copied!{% else %}Copié !{% endif %}';
+        setTimeout(function(){btn.textContent = '📋 {% if lang == "en" %}Copy{% else %}Copier{% endif %}';}, 2000);
+    });
+}
+{% endif %}
 // Auto-submit on filter change (optional — can use the button instead)
 // document.querySelectorAll('.filter-group select').forEach(function(s){s.addEventListener('change', applyFilters);});
 </script>

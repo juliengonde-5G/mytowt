@@ -8,6 +8,9 @@
 <a href="/cargo/{{ pl.id }}/excel" class="btn btn-secondary btn-sm"><i data-lucide="file-spreadsheet"></i> Excel</a>
 <a href="/cargo/{{ pl.id }}/bol" class="btn btn-secondary btn-sm"><i data-lucide="file-text"></i> Bill of Lading</a>
 <a href="/cargo/{{ pl.id }}/arrival-notice" class="btn btn-secondary btn-sm"><i data-lucide="ship"></i> Arrival Notice</a>
+{% if pl.order.leg_id %}
+<a href="/cargo/{{ pl.id }}/holds" class="btn btn-secondary btn-sm"><i data-lucide="layout-grid"></i> Plan de cales</a>
+{% endif %}
 {% if not pl.is_locked %}
 <button class="btn btn-secondary btn-sm" onclick="toggleEditMode()" id="edit-toggle-btn"><i data-lucide="pencil"></i> Modifier</button>
 <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-modal').style.display='flex'"><i data-lucide="upload"></i> Import Excel</button>
@@ -114,6 +117,7 @@
                 <div class="field-row"><span class="fl">Description</span><span class="fv view-val">{{ batch.description_of_goods or '—' }}</span><input type="text" name="{{ p }}description_of_goods" value="{{ batch.description_of_goods or '' }}" class="form-input edit-input"></div>
                 <div class="field-row"><span class="fl">Bio</span><span class="fv view-val">{{ batch.bio_products or '—' }}</span><input type="text" name="{{ p }}bio_products" value="{{ batch.bio_products or '' }}" class="form-input edit-input"></div>
                 <div class="field-row"><span class="fl">Nb palettes</span><span class="fv view-val {% if not batch.pallet_quantity %}missing{% endif %}">{{ batch.pallet_quantity or '⚠' }}</span><input type="number" name="{{ p }}pallet_quantity" value="{{ batch.pallet_quantity or '' }}" class="form-input edit-input"></div>
+                <div class="field-row"><span class="fl">Stackable</span><span class="fv view-val">{{ batch.stackable or '—' }}</span><select name="{{ p }}stackable" class="form-input edit-input" style="width:auto"><option value="">—</option><option value="Yes" {% if batch.stackable == 'Yes' %}selected{% endif %}>Yes</option><option value="No" {% if batch.stackable == 'No' %}selected{% endif %}>No</option></select></div>
                 <div class="field-row"><span class="fl">IMO</span><span class="fv view-val">{{ batch.imo_product_class or '—' }}</span><input type="text" name="{{ p }}imo_product_class" value="{{ batch.imo_product_class or '' }}" class="form-input edit-input"></div>
                 <div class="field-row"><span class="fl">Poids (kg)</span><span class="fv view-val {% if not batch.weight_kg %}missing{% endif %}">{{ batch.weight_kg or '⚠' }}</span><input type="text" name="{{ p }}weight_kg" value="{{ batch.weight_kg or '' }}" class="form-input edit-input"></div>
                 <div class="field-row"><span class="fl">Dim. L×l×H</span><span class="fv view-val">{{ batch.length_cm or '—' }}×{{ batch.width_cm or '—' }}×{{ batch.height_cm or '—' }}</span><input type="text" name="{{ p }}length_cm" value="{{ batch.length_cm or '' }}" class="form-input edit-input" placeholder="L" style="width:30%"><input type="text" name="{{ p }}width_cm" value="{{ batch.width_cm or '' }}" class="form-input edit-input" placeholder="l" style="width:30%"><input type="text" name="{{ p }}height_cm" value="{{ batch.height_cm or '' }}" class="form-input edit-input" placeholder="H" style="width:30%"></div>
@@ -145,6 +149,27 @@
         </form>
     </div>
 </div>
+
+{# ── Uploaded documents ── #}
+{% if uploaded_docs %}
+<div class="card" style="margin-top:16px">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>📎 Documents déposés ({{ uploaded_docs|length }})</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px;">
+        {% for d in uploaded_docs %}
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f8fafb;border-radius:8px;border:1px solid #e5e7eb;">
+            <span style="font-size:18px;">{% if d.filename.endswith('.pdf') %}📕{% elif d.filename.endswith('.xlsx') or d.filename.endswith('.xls') %}📊{% elif d.filename.endswith('.png') or d.filename.endswith('.jpg') or d.filename.endswith('.jpeg') %}🖼️{% else %}📎{% endif %}</span>
+            <div style="flex:1;min-width:0;">
+                <div style="font-size:12px;font-weight:600;color:var(--towt-blue);word-break:break-all;">{{ d.filename }}</div>
+                <div style="font-size:10px;color:#888;">{{ d.created_at.strftime('%d/%m/%Y %H:%M') }} · {{ d.uploaded_by }}{% if d.file_size %} · {{ (d.file_size / 1024)|round(0)|int }} Ko{% endif %}{% if d.notes %} · {{ d.notes }}{% endif %}</div>
+            </div>
+            <a href="/p/{{ pl.token }}/documents/{{ d.id }}/download" class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:10px;">Télécharger</a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 
 <style>
     .summary-bar{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px;display:flex;gap:24px;flex-wrap:wrap;align-items:center;margin-bottom:16px}

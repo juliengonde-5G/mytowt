@@ -127,6 +127,7 @@ class PackingListBatch(Base):
     height_cm = Column(Float, nullable=True)
     weight_kg = Column(Float, nullable=True)
     cargo_value_usd = Column(Float, nullable=True)
+    hold_preference = Column(String(20), nullable=True)  # SUP_AV, SUP_AR, MIL_AV, MIL_AR, INF_AV, INF_AR
 
     # === Computed by system ===
     surface_m2 = Column(Float, nullable=True)
@@ -160,3 +161,19 @@ class PackingListAudit(Base):
     changed_at = Column(DateTime(timezone=True), server_default=func.now())
 
     packing_list = relationship("PackingList", backref="audit_logs")
+
+
+class PackingListDocument(Base):
+    """Document uploaded by client on the packing list portal."""
+    __tablename__ = "packing_list_documents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    packing_list_id = Column(Integer, ForeignKey("packing_lists.id", ondelete="CASCADE"), nullable=False)
+    filename = Column(String(300), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)  # bytes
+    uploaded_by = Column(String(100), nullable=False, default="Client")  # "Client" or user name
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    packing_list = relationship("PackingList", backref="documents")

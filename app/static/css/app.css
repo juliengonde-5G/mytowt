@@ -558,6 +558,17 @@ a {
     height: 18px;
 }
 
+/* === PLANNING FILTERS === */
+.planning-filters{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+.year-selector{display:flex;gap:4px;background:white;padding:4px;border-radius:var(--radius);box-shadow:var(--shadow)}
+.year-btn{padding:6px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;color:var(--towt-gray)}
+.year-btn:hover{background:var(--towt-light)}.year-btn.active{background:var(--towt-green);color:white}
+.leg-selector{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.leg-chip{display:flex;flex-direction:column;gap:2px;padding:8px 14px;background:white;border-radius:var(--radius);box-shadow:var(--shadow);font-size:12px;border:2px solid transparent;text-decoration:none}
+.leg-chip:hover{border-color:var(--towt-sky)}.leg-chip.active{border-color:var(--towt-blue);background:rgba(9,85,97,0.05)}
+.leg-chip.terminated{opacity:0.5}.leg-chip.locked{opacity:0.5;background:#f8f8f8}
+.leg-chip strong{font-family:monospace;color:var(--towt-blue)}.leg-chip span{color:#888}
+
 /* === EMPTY STATE === */
 .empty-state {
     display: flex;

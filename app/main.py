@@ -10,7 +10,7 @@ from app.database import init_db
 from app.auth import AuthRequired
 from app.routers.auth_router import router as auth_router
 from app.routers.dashboard_router import router as dashboard_router
-from app.routers.planning_router import router as planning_router
+from app.routers.planning_router import router as planning_router, share_router as planning_share_router
 from app.routers.api_ports import router as api_ports_router
 from app.routers.admin_router import router as admin_router
 from app.routers.kpi_router import router as kpi_router
@@ -87,10 +87,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         csp = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "
             "font-src 'self' https://fonts.gstatic.com; "
-            "img-src 'self' data: https://*.tile.openstreetmap.org; "
+            "img-src 'self' data: https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org; "
             "connect-src 'self' https://unpkg.com https://nominatim.openstreetmap.org; "
+            "frame-src https://www.youtube-nocookie.com https://www.youtube.com; "
         )
         response.headers["Content-Security-Policy"] = csp
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -143,3 +144,4 @@ app.include_router(mrv_router, dependencies=[Depends(require_permission("mrv", "
 app.include_router(claim_router, dependencies=[Depends(require_permission("captain", "C"))])
 app.include_router(pricing_router, dependencies=[Depends(require_permission("commercial", "C"))])
 app.include_router(tracking_router)  # API — no auth (called by Power Automate)
+app.include_router(planning_share_router)  # Public shared commercial support (no auth)

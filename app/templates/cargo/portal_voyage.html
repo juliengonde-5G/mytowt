@@ -11,80 +11,248 @@ table.sched th{background:#f8fafb;padding:8px 10px;text-align:left;font-size:11p
 table.sched td{padding:8px 10px;border-bottom:1px solid #f0f0f0}
 table.sched tr.cur{background:rgba(9,85,97,.06);font-weight:600}
 .actual{color:#16a34a;font-weight:600}
-.crew-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:10px}
+.status-chip{display:inline-block;padding:3px 12px;border-radius:100px;font-size:11px;font-weight:600}
+.status-nav{background:rgba(37,99,235,.1);color:#2563eb}
+.status-arrived{background:rgba(22,163,74,.1);color:#16a34a}
+.status-planned{background:rgba(148,163,184,.15);color:#64748b}
+.status-port{background:rgba(245,158,11,.1);color:#d97706}
+.shift-timeline{position:relative;padding-left:24px;margin:12px 0}
+.shift-timeline::before{content:'';position:absolute;left:8px;top:4px;bottom:4px;width:2px;background:#e5e7eb}
+.shift-item{position:relative;padding:8px 0 8px 12px;font-size:12px}
+.shift-item::before{content:'';position:absolute;left:-20px;top:12px;width:10px;height:10px;border-radius:50%;border:2px solid #095561;background:white}
+.shift-item.delay::before{border-color:#dc2626;background:#fee2e2}
+.shift-item.advance::before{border-color:#16a34a;background:#dcfce7}
+.shift-field{font-weight:600;color:#095561}
+.shift-delta{font-weight:600}
+.shift-delta.delay{color:#dc2626}
+.shift-delta.advance{color:#16a34a}
+.shift-reason{color:#888;font-size:11px}
+.shift-date{color:#aaa;font-size:10px}
+#voyage-map{height:350px;border-radius:12px;background:#e8f0f6;overflow:hidden}
+.nav-badge{display:flex;align-items:center;gap:8px;padding:10px 16px;background:rgba(37,99,235,.08);border-radius:8px;font-size:13px;color:#2563eb;font-weight:600;margin-bottom:16px}
+.nav-badge .pulse{width:10px;height:10px;border-radius:50%;background:#2563eb;animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(37,99,235,.4)}70%{box-shadow:0 0 0 10px rgba(37,99,235,0)}100%{box-shadow:0 0 0 0 rgba(37,99,235,0)}}
 {% endblock %}
 
 {% block portal_content %}
 <h1>🗺️ {{ t('cp_voyage', lang) }}</h1>
 
 {% if leg %}
-<div class="card">
-  <h2>{{ t('cp_route', lang) }}</h2>
-  <div class="route-vis">
-    <div class="route-port">
-      <div class="rp-name">{{ leg.departure_port.name }}</div>
-      <div class="rp-code">{{ leg.departure_port.locode }}</div>
-    </div>
-    <div class="route-arrow">⛵ →</div>
-    <div class="route-port">
-      <div class="rp-name">{{ leg.arrival_port.name }}</div>
-      <div class="rp-code">{{ leg.arrival_port.locode }}</div>
-    </div>
-  </div>
-</div>
 
-<div class="card">
-  <h2>{{ t('cp_schedule', lang) }}</h2>
-  <div class="igrid">
-    <div class="ibox"><div class="il">{{ t('cp_leg_code', lang) }}</div><div class="iv">{{ leg.leg_code }}</div></div>
-    <div class="ibox"><div class="il">{{ t('cp_etd', lang) }}</div><div class="iv">{{ leg.etd.strftime('%d/%m/%Y %H:%M') if leg.etd else '—' }}</div></div>
-    <div class="ibox"><div class="il">{{ t('cp_eta', lang) }}</div><div class="iv">{{ leg.eta.strftime('%d/%m/%Y %H:%M') if leg.eta else '—' }}</div></div>
-    {% if leg.atd %}<div class="ibox"><div class="il">{{ t('cp_atd', lang) }}</div><div class="iv actual">{{ leg.atd.strftime('%d/%m/%Y %H:%M') }}</div></div>{% endif %}
-    {% if leg.ata %}<div class="ibox"><div class="il">{{ t('cp_ata', lang) }}</div><div class="iv actual">{{ leg.ata.strftime('%d/%m/%Y %H:%M') }}</div></div>{% endif %}
-    {% if leg.distance_nm %}<div class="ibox"><div class="il">{{ t('cp_distance', lang) }}</div><div class="iv">{{ leg.distance_nm }} NM</div></div>{% endif %}
-  </div>
-</div>
-
-{% if itinerary %}
-<div class="card">
-  <h2>{% if lang == 'en' %}Full itinerary{% elif lang == 'es' %}Itinerario completo{% elif lang == 'pt-br' %}Itinerário completo{% elif lang == 'vi' %}Lịch trình đầy đủ{% else %}Itinéraire complet{% endif %}</h2>
-  <div style="overflow-x:auto">
-  <table class="sched">
-    <thead><tr>
-      <th>{{ t('cp_leg_code', lang) }}</th>
-      <th>{{ t('cp_etd', lang) }}</th>
-      <th>{{ t('cp_eta', lang) }}</th>
-      <th>{{ t('cp_atd', lang) }}</th>
-      <th>{{ t('cp_ata', lang) }}</th>
-      <th>{{ t('cp_distance', lang) }}</th>
-    </tr></thead>
-    <tbody>
-    {% for l in itinerary %}
-    <tr {% if l.id == leg.id %}class="cur"{% endif %}>
-      <td>{{ l.leg_code }}</td>
-      <td>{{ l.etd.strftime('%d/%m/%Y') if l.etd else '—' }}</td>
-      <td>{{ l.eta.strftime('%d/%m/%Y') if l.eta else '—' }}</td>
-      <td>{% if l.atd %}<span class="actual">{{ l.atd.strftime('%d/%m/%Y') }}</span>{% else %}—{% endif %}</td>
-      <td>{% if l.ata %}<span class="actual">{{ l.ata.strftime('%d/%m/%Y') }}</span>{% else %}—{% endif %}</td>
-      <td>{{ l.distance_nm or '—' }}</td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  </div>
+{# ── Navigation status ── #}
+{% if is_navigating %}
+<div class="nav-badge">
+    <span class="pulse"></span>
+    {% if lang == 'en' %}Navigation in progress{% elif lang == 'es' %}Navegación en curso{% elif lang == 'pt-br' %}Navegação em curso{% elif lang == 'vi' %}Đang hành trình{% else %}Navigation en cours{% endif %}
+    {% if leg.atd %} — {% if lang == 'en' %}departed{% else %}départ{% endif %} {{ leg.atd.strftime('%d/%m/%Y %H:%M') }}{% endif %}
 </div>
 {% endif %}
 
-{% if crew %}
+{# ── Map (always shown if ports have coordinates) ── #}
+{% if (leg.departure_port.latitude and leg.arrival_port.latitude) %}
 <div class="card">
-  <h2>{{ t('cp_crew', lang) }}</h2>
-  <div class="crew-grid">
-    {% for c in crew %}
-    <div class="cc">
-      <div><div class="cr">{{ c.role or '—' }}</div><div class="cn">{{ c.crew_member_name or '—' }}</div></div>
+    <h2>{% if is_navigating %}{% if lang == 'en' %}Live position{% else %}Position en direct{% endif %}{% else %}{% if lang == 'en' %}Route map{% elif lang == 'es' %}Mapa de ruta{% elif lang == 'pt-br' %}Mapa da rota{% elif lang == 'vi' %}Bản đồ tuyến{% else %}Carte de la route{% endif %}{% endif %}</h2>
+    <div id="voyage-map"></div>
+    {% if is_navigating and vessel_position %}
+    <div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:#888;flex-wrap:wrap">
+        <span>Lat: {{ '%.4f'|format(vessel_position.latitude) }}° · Lon: {{ '%.4f'|format(vessel_position.longitude) }}°</span>
+        {% if vessel_position.sog is not none %}<span>SOG: {{ '%.1f'|format(vessel_position.sog) }} kn</span>{% endif %}
+        {% if vessel_position.cog is not none %}<span>COG: {{ '%.0f'|format(vessel_position.cog) }}°</span>{% endif %}
+        <span>{% if lang == 'en' %}Last update{% else %}Dernière mise à jour{% endif %}: {{ vessel_position.recorded_at.strftime('%d/%m/%Y %H:%M') }} UTC</span>
     </div>
-    {% endfor %}
-  </div>
+    {% endif %}
+</div>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+.leaflet-pane,.leaflet-tile,.leaflet-marker-icon,.leaflet-marker-shadow,
+.leaflet-tile-container,.leaflet-pane>svg,.leaflet-pane>canvas,
+.leaflet-zoom-box,.leaflet-image-layer,.leaflet-layer{position:absolute;left:0;top:0;}
+.leaflet-container{overflow:hidden;}
+.leaflet-tile{filter:inherit;visibility:hidden;}
+.leaflet-tile-loaded{visibility:inherit;}
+.leaflet-container img{max-width:none!important;max-height:none!important;}
+.leaflet-tile-pane{z-index:200;}.leaflet-overlay-pane{z-index:400;}
+.leaflet-marker-pane{z-index:600;}.leaflet-popup-pane{z-index:700;}
+.leaflet-control{position:relative;z-index:800;pointer-events:auto;}
+.leaflet-top,.leaflet-bottom{position:absolute;z-index:1000;pointer-events:none;}
+.leaflet-top{top:0;}.leaflet-right{right:0;}.leaflet-bottom{bottom:0;}.leaflet-left{left:0;}
+.leaflet-zoom-anim .leaflet-zoom-animated{transition:transform .25s cubic-bezier(0,0,.25,1);}
+.leaflet-container *,.leaflet-container *::before,.leaflet-container *::after{box-sizing:content-box;margin:0;padding:0;}
+.leaflet-control-container,.leaflet-control-container *{box-sizing:border-box;}
+</style>
+<script>
+window.addEventListener('load', function(){
+    if(typeof L === 'undefined') return;
+
+    var depLat = {{ leg.departure_port.latitude }};
+    var depLon = {{ leg.departure_port.longitude }};
+    var arrLat = {{ leg.arrival_port.latitude }};
+    var arrLon = {{ leg.arrival_port.longitude }};
+
+    // Center map on midpoint between ports
+    var centerLat = (depLat + arrLat) / 2;
+    var centerLon = (depLon + arrLon) / 2;
+
+    var map = L.map('voyage-map',{scrollWheelZoom:true}).setView([centerLat, centerLon], 4);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+        attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:18
+    }).addTo(map);
+
+    // Departure port
+    L.circleMarker([depLat, depLon], {
+        radius:7, color:'#095561', fillColor:'#095561', fillOpacity:0.8, weight:2
+    }).addTo(map).bindPopup('<strong>{{ leg.departure_port.name }}</strong><br>{{ leg.departure_port.locode }}');
+
+    // Arrival port
+    L.circleMarker([arrLat, arrLon], {
+        radius:7, color:'#16a34a', fillColor:'#16a34a', fillOpacity:0.8, weight:2
+    }).addTo(map).bindPopup('<strong>{{ leg.arrival_port.name }}</strong><br>{{ leg.arrival_port.locode }}');
+
+    // Route line
+    L.polyline([[depLat, depLon], [arrLat, arrLon]], {
+        color:'#095561', weight:2, opacity:0.4, dashArray:'8,6'
+    }).addTo(map);
+
+    // Fit bounds to show both ports
+    map.fitBounds([[depLat, depLon], [arrLat, arrLon]], {padding: [40, 40]});
+
+    {% if is_navigating and vessel_position %}
+    // Vessel marker (only when navigating)
+    var vesselIcon = L.divIcon({
+        className:'',
+        html:'<div style="background:#2563eb;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,0.35);"></div>',
+        iconSize:[22,22], iconAnchor:[11,11]
+    });
+    L.marker([{{ vessel_position.latitude }}, {{ vessel_position.longitude }}], {icon: vesselIcon}).addTo(map)
+        .bindPopup('<strong>{{ leg.vessel.name }}</strong><br>{{ leg.leg_code }}');
+    {% endif %}
+
+    setTimeout(function(){ map.invalidateSize(); }, 300);
+});
+</script>
+{% endif %}
+
+{# ── Route overview ── #}
+<div class="card">
+    <h2>{{ t('cp_route', lang) }}</h2>
+    <div class="route-vis">
+        <div class="route-port">
+            <div class="rp-name">{{ leg.departure_port.name }}</div>
+            <div class="rp-code">{{ leg.departure_port.locode }}</div>
+        </div>
+        <div class="route-arrow">⛵ →</div>
+        <div class="route-port">
+            <div class="rp-name">{{ leg.arrival_port.name }}</div>
+            <div class="rp-code">{{ leg.arrival_port.locode }}</div>
+        </div>
+    </div>
+</div>
+
+{# ── Schedule with status ── #}
+<div class="card">
+    <h2>{{ t('cp_schedule', lang) }}</h2>
+    <div class="igrid">
+        <div class="ibox"><div class="il">{{ t('cp_leg_code', lang) }}</div><div class="iv">{{ leg.leg_code }}</div></div>
+        <div class="ibox"><div class="il">{% if lang == 'en' %}Status{% else %}Statut{% endif %}</div><div class="iv">
+            {% if leg.ata %}
+            <span class="status-chip status-arrived">{% if lang == 'en' %}Arrived{% else %}Arrivé{% endif %}</span>
+            {% elif leg.atd %}
+            <span class="status-chip status-nav">{% if lang == 'en' %}Sailing{% else %}En mer{% endif %}</span>
+            {% elif leg.status == 'in_port' %}
+            <span class="status-chip status-port">{% if lang == 'en' %}In port{% else %}Au port{% endif %}</span>
+            {% else %}
+            <span class="status-chip status-planned">{% if lang == 'en' %}Planned{% else %}Planifié{% endif %}</span>
+            {% endif %}
+        </div></div>
+        <div class="ibox">
+            <div class="il">{{ t('cp_etd', lang) }}{% if lang == 'en' %} (estimated){% else %} (estimé){% endif %}</div>
+            <div class="iv">{{ leg.etd.strftime('%d/%m/%Y %H:%M') if leg.etd else '—' }}</div>
+        </div>
+        <div class="ibox">
+            <div class="il">{{ t('cp_eta', lang) }}{% if lang == 'en' %} (estimated){% else %} (estimé){% endif %}</div>
+            <div class="iv">{{ leg.eta.strftime('%d/%m/%Y %H:%M') if leg.eta else '—' }}</div>
+        </div>
+        {% if leg.atd %}
+        <div class="ibox" style="border-left:3px solid #16a34a">
+            <div class="il">{{ t('cp_atd', lang) }}{% if lang == 'en' %} (actual){% else %} (réel){% endif %}</div>
+            <div class="iv actual">{{ leg.atd.strftime('%d/%m/%Y %H:%M') }}</div>
+        </div>
+        {% endif %}
+        {% if leg.ata %}
+        <div class="ibox" style="border-left:3px solid #16a34a">
+            <div class="il">{{ t('cp_ata', lang) }}{% if lang == 'en' %} (actual){% else %} (réel){% endif %}</div>
+            <div class="iv actual">{{ leg.ata.strftime('%d/%m/%Y %H:%M') }}</div>
+        </div>
+        {% endif %}
+        {% if leg.distance_nm %}
+        <div class="ibox"><div class="il">{{ t('cp_distance', lang) }}</div><div class="iv">{{ leg.computed_distance|int if leg.computed_distance else leg.distance_nm|int }} NM</div></div>
+        {% endif %}
+        {% if leg.estimated_duration_hours %}
+        <div class="ibox"><div class="il">{% if lang == 'en' %}Est. duration{% else %}Durée estimée{% endif %}</div><div class="iv">{{ (leg.estimated_duration_hours / 24)|round(1) }} {% if lang == 'en' %}days{% else %}jours{% endif %}</div></div>
+        {% endif %}
+    </div>
+</div>
+
+{# ── ETA/ETD History ── #}
+{% if eta_shifts %}
+<div class="card">
+    <h2>{% if lang == 'en' %}Schedule changes{% elif lang == 'es' %}Cambios de horario{% elif lang == 'pt-br' %}Alterações de horário{% elif lang == 'vi' %}Thay đổi lịch trình{% else %}Historique des modifications{% endif %}</h2>
+    <div class="shift-timeline">
+        {% for s in eta_shifts %}
+        <div class="shift-item {{ 'delay' if s.shift_hours > 0 else 'advance' }}">
+            <span class="shift-field">{{ 'ETA' if s.field_changed == 'eta' else 'ETD' }}</span>
+            {% if s.old_value %}{{ s.old_value.strftime('%d/%m %H:%M') }}{% else %}—{% endif %}
+            →
+            {% if s.new_value %}{{ s.new_value.strftime('%d/%m %H:%M') }}{% else %}—{% endif %}
+            <span class="shift-delta {{ 'delay' if s.shift_hours > 0 else 'advance' }}">
+                ({{ '+' if s.shift_hours > 0 }}{{ '%.0f'|format(s.shift_hours) }}h)
+            </span>
+            <br>
+            <span class="shift-reason">{{ s.justification }}</span>
+            <span class="shift-date"> — {{ s.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# ── Upcoming routes (all vessels) ── #}
+{% if upcoming_legs %}
+<div class="card">
+    <h2>{% if lang == 'en' %}Upcoming routes{% elif lang == 'es' %}Próximas rutas{% elif lang == 'pt-br' %}Próximas rotas{% elif lang == 'vi' %}Các tuyến sắp tới{% else %}Prochaines routes{% endif %}</h2>
+    <div style="overflow-x:auto">
+    <table class="sched">
+        <thead><tr>
+            <th>{% if lang == 'en' %}Route{% else %}Route{% endif %}</th>
+            <th>{{ t('cp_etd', lang) }}</th>
+            <th>{{ t('cp_eta', lang) }}</th>
+            <th>{% if lang == 'en' %}Status{% else %}Statut{% endif %}</th>
+        </tr></thead>
+        <tbody>
+        {% for l in upcoming_legs %}
+        <tr {% if l.id == leg.id %}class="cur"{% endif %}>
+            <td style="font-size:12px">{{ l.departure_port.name }} → {{ l.arrival_port.name }}</td>
+            <td>
+                {% if l.atd %}<span class="actual">{{ l.atd.strftime('%d/%m/%Y') }}</span>
+                {% elif l.etd %}{{ l.etd.strftime('%d/%m/%Y') }}
+                {% else %}—{% endif %}
+            </td>
+            <td>
+                {% if l.ata %}<span class="actual">{{ l.ata.strftime('%d/%m/%Y') }}</span>
+                {% elif l.eta %}{{ l.eta.strftime('%d/%m/%Y') }}
+                {% else %}—{% endif %}
+            </td>
+            <td>
+                {% if l.atd %}<span class="status-chip status-nav" style="font-size:10px">⛵</span>
+                {% else %}<span class="status-chip status-planned" style="font-size:10px">—</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
 </div>
 {% endif %}
 

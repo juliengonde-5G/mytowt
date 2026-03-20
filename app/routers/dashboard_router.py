@@ -247,12 +247,20 @@ async def dashboard(
             fill_rates.append(min(100, (cargo / kl.vessel.dwt) * 100))
     avg_fill_rate = round(sum(fill_rates) / len(fill_rates), 1) if fill_rates else 0
 
+    # Next departure per vessel
     upcoming_result = await db.execute(
         select(Leg).options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
         .where(Leg.year == current_year, Leg.etd != None, Leg.atd == None)
-        .order_by(Leg.etd).limit(5)
+        .order_by(Leg.vessel_id, Leg.etd)
     )
-    upcoming_legs = upcoming_result.scalars().all()
+    all_upcoming = upcoming_result.scalars().all()
+    seen_vessels = set()
+    upcoming_legs = []
+    for leg in all_upcoming:
+        if leg.vessel_id not in seen_vessels:
+            seen_vessels.add(leg.vessel_id)
+            upcoming_legs.append(leg)
+    upcoming_legs.sort(key=lambda l: l.etd)
 
     # Alerts
     alerts = await compute_alerts(db, current_year)

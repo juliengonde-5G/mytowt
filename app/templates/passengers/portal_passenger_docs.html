@@ -23,7 +23,7 @@
             </td>
             <td>
                 {% if d.status in ('missing', 'rejected') %}
-                <form method="POST" action="/passenger/{{ token }}/doc/{{ d.id }}/upload" enctype="multipart/form-data" class="upload-zone">
+                <form method="POST" action="/boarding/{{ token }}/doc/{{ d.id }}/upload" enctype="multipart/form-data" class="upload-zone">
                     <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" required>
                     <button type="submit" class="btn btn-primary btn-sm">📤</button>
                 </form>

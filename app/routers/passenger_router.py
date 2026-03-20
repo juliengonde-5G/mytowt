@@ -42,9 +42,33 @@ def _gen_ref():
 async def passenger_list(
     request: Request,
     status: Optional[str] = Query(None),
+    vessel: Optional[int] = Query(None),
+    year: Optional[int] = Query(None),
+    leg_id: Optional[int] = Query(None),
     user: User = Depends(require_permission("passengers", "C")),
     db: AsyncSession = Depends(get_db),
 ):
+    current_year = year or datetime.now().year
+    years = list(range(2025, datetime.now().year + 2))
+
+    vessels_result = await db.execute(select(Vessel).where(Vessel.is_active == True).order_by(Vessel.code))
+    vessels = vessels_result.scalars().all()
+    selected_vessel = vessel or (vessels[0].code if vessels else None)
+
+    vessel_obj = None
+    if selected_vessel:
+        v_result = await db.execute(select(Vessel).where(Vessel.code == selected_vessel))
+        vessel_obj = v_result.scalar_one_or_none()
+
+    filter_legs = []
+    if vessel_obj:
+        fl_result = await db.execute(
+            select(Leg).options(selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
+            .where(Leg.vessel_id == vessel_obj.id, Leg.year == current_year)
+            .order_by(Leg.sequence)
+        )
+        filter_legs = fl_result.scalars().all()
+
     query = (
         select(PassengerBooking)
         .join(Leg, PassengerBooking.leg_id == Leg.id)
@@ -60,6 +84,12 @@ async def passenger_list(
     )
     if status:
         query = query.where(PassengerBooking.status == status)
+    if leg_id:
+        query = query.where(PassengerBooking.leg_id == leg_id)
+    elif vessel_obj:
+        fl_ids = [l.id for l in filter_legs]
+        if fl_ids:
+            query = query.where(PassengerBooking.leg_id.in_(fl_ids))
 
     result = await db.execute(query)
     bookings = result.scalars().all()
@@ -80,6 +110,9 @@ async def passenger_list(
         "bookings": bookings, "stats": stats,
         "cabin_labels": cabin_labels,
         "selected_status": status,
+        "vessels": vessels, "selected_vessel": selected_vessel,
+        "current_year": current_year, "years": years,
+        "legs": filter_legs, "leg_id": leg_id,
         "booking_statuses": BOOKING_STATUSES,
         "active_module": "passengers",
     })
@@ -118,7 +151,7 @@ async def booking_create_form(
 
     # Build booked cabins per leg (for disabling already-taken cabins)
     booked_result = await db.execute(
-        select(PassengerBooking.leg_id, PassengerBooking.cabin_number)
+        select(PassengerBooking.leg_id, PassengerBooking.cabin_number, PassengerBooking.cabin_numbers)
         .where(PassengerBooking.status != "cancelled")
     )
     booked_cabins = {}  # { "leg_id": [cabin_number, ...] }
@@ -126,7 +159,13 @@ async def booking_create_form(
         lid = str(row[0])
         if lid not in booked_cabins:
             booked_cabins[lid] = []
-        booked_cabins[lid].append(row[1])
+        if row[2]:  # cabin_numbers (comma-separated)
+            for cn in row[2].split(","):
+                cn = cn.strip()
+                if cn:
+                    booked_cabins[lid].append(int(cn))
+        elif row[1]:  # legacy cabin_number
+            booked_cabins[lid].append(row[1])
 
     return templates.TemplateResponse("passengers/booking_form.html", {
         "request": request, "user": user,
@@ -144,64 +183,74 @@ async def booking_create_form(
 async def booking_create_submit(
     request: Request,
     leg_id: int = Form(...),
-    cabin_number: int = Form(...),
     contact_email: str = Form(""),
     contact_phone: str = Form(""),
-    pax1_first: str = Form(...), pax1_last: str = Form(...),
-    pax1_email: str = Form(""), pax1_phone: str = Form(""),
-    pax1_dob: str = Form(""), pax1_nationality: str = Form(""),
-    pax1_passport: str = Form(""),
-    pax1_emergency_name: str = Form(""), pax1_emergency_phone: str = Form(""),
-    pax2_first: str = Form(""), pax2_last: str = Form(""),
-    pax2_email: str = Form(""), pax2_phone: str = Form(""),
-    pax2_dob: str = Form(""), pax2_nationality: str = Form(""),
-    pax2_passport: str = Form(""),
-    pax2_emergency_name: str = Form(""), pax2_emergency_phone: str = Form(""),
     notes: str = Form(""),
     user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
+    # Get cabin_numbers from form (checkboxes)
+    form = await request.form()
+    cabin_nums = form.getlist("cabin_numbers")
+    if not cabin_nums:
+        raise HTTPException(400, "Veuillez sélectionner au moins une cabine.")
+    cabin_nums_int = [int(c) for c in cabin_nums]
+    cabin_numbers_str = ",".join(str(c) for c in cabin_nums_int)
+
     # Get leg and vessel
     leg = await db.get(Leg, leg_id)
     if not leg:
         raise HTTPException(400, "Leg introuvable")
 
-    # Check cabin not already booked on this leg
-    existing_cabin = await db.execute(
+    # Check cabins not already booked on this leg
+    existing_result = await db.execute(
         select(PassengerBooking).where(
             PassengerBooking.leg_id == leg_id,
-            PassengerBooking.cabin_number == cabin_number,
             PassengerBooking.status != "cancelled",
         )
     )
-    if existing_cabin.scalar_one_or_none():
-        raise HTTPException(400, f"La cabine {cabin_number} est déjà réservée sur ce leg.")
+    existing_bookings = existing_result.scalars().all()
+    already_booked = set()
+    for eb in existing_bookings:
+        already_booked.update(eb.cabin_list)
+    conflicts = [c for c in cabin_nums_int if c in already_booked]
+    if conflicts:
+        raise HTTPException(400, f"Cabine(s) {', '.join(str(c) for c in conflicts)} déjà réservée(s) sur ce leg.")
 
-    # Auto-price from grid
-    cabin_type = "double" if cabin_number <= 2 else "twin"
-    price_result = await db.execute(
-        select(CabinPriceGrid).where(
-            CabinPriceGrid.origin_locode == leg.departure_port_locode,
-            CabinPriceGrid.destination_locode == leg.arrival_port_locode,
-            CabinPriceGrid.cabin_type == cabin_type,
-            CabinPriceGrid.is_active == True,
+    # Auto-price from grid (sum per cabin type)
+    price_total = 0.0
+    deposit_total = 0.0
+    has_price = False
+    for cn in cabin_nums_int:
+        cabin_type = "double" if cn <= 2 else "twin"
+        price_result = await db.execute(
+            select(CabinPriceGrid).where(
+                CabinPriceGrid.origin_locode == leg.departure_port_locode,
+                CabinPriceGrid.destination_locode == leg.arrival_port_locode,
+                CabinPriceGrid.cabin_type == cabin_type,
+                CabinPriceGrid.is_active == True,
+            )
         )
-    )
-    price_entry = price_result.scalar_one_or_none()
+        price_entry = price_result.scalar_one_or_none()
+        if price_entry:
+            has_price = True
+            p = float(price_entry.price)
+            price_total += p
+            deposit_total += round(p * price_entry.deposit_pct / 100, 2)
 
-    price_total = float(price_entry.price) if price_entry else None
-    deposit_pct = price_entry.deposit_pct if price_entry else 30
-    price_deposit = round(price_total * deposit_pct / 100, 2) if price_total else None
-    price_balance = round(price_total - price_deposit, 2) if price_total and price_deposit else None
+    price_deposit = round(deposit_total, 2) if has_price else None
+    price_balance = round(price_total - deposit_total, 2) if has_price else None
+    price_total_final = round(price_total, 2) if has_price else None
 
     booking = PassengerBooking(
         leg_id=leg_id,
         vessel_id=leg.vessel_id,
-        cabin_number=cabin_number,
+        cabin_number=cabin_nums_int[0],  # legacy compat
+        cabin_numbers=cabin_numbers_str,
         reference=_gen_ref(),
         status="draft",
         booking_date=date.today(),
-        price_total=price_total,
+        price_total=price_total_final,
         price_deposit=price_deposit,
         price_balance=price_balance,
         contact_email=contact_email.strip() or None,
@@ -215,39 +264,41 @@ async def booking_create_submit(
                        entity_label=booking.reference,
                        ip_address=get_client_ip(request))
 
-    # Add passenger 1 (mandatory)
-    pax1 = Passenger(
-        booking_id=booking.id,
-        first_name=pax1_first.strip(), last_name=pax1_last.strip(),
-        email=pax1_email.strip() or None, phone=pax1_phone.strip() or None,
-        date_of_birth=datetime.strptime(pax1_dob, "%Y-%m-%d").date() if pax1_dob.strip() else None,
-        nationality=pax1_nationality.strip() or None,
-        passport_number=pax1_passport.strip() or None,
-        emergency_contact_name=pax1_emergency_name.strip() or None,
-        emergency_contact_phone=pax1_emergency_phone.strip() or None,
-    )
-    db.add(pax1)
-    await db.flush()
-    # Create docs for pax1
-    for doc_code, _ in DOCUMENT_TYPES:
-        db.add(PassengerDocument(passenger_id=pax1.id, doc_type=doc_code, status="missing"))
+    # Add passengers dynamically (one per cabin minimum)
+    pax_firsts = form.getlist("pax_first[]")
+    pax_lasts = form.getlist("pax_last[]")
+    pax_emails = form.getlist("pax_email[]")
+    pax_phones = form.getlist("pax_phone[]")
+    pax_dobs = form.getlist("pax_dob[]")
+    pax_nationalities = form.getlist("pax_nationality[]")
+    pax_passports = form.getlist("pax_passport[]")
+    pax_emergency_names = form.getlist("pax_emergency_name[]")
+    pax_emergency_phones = form.getlist("pax_emergency_phone[]")
 
-    # Add passenger 2 (optional)
-    if pax2_first.strip() and pax2_last.strip():
-        pax2 = Passenger(
+    if not pax_firsts or not pax_firsts[0].strip():
+        raise HTTPException(400, "Au moins un passager est requis.")
+
+    first_pax_name = f"{pax_firsts[0].strip()} {pax_lasts[0].strip()}"
+    for i in range(len(pax_firsts)):
+        fn = pax_firsts[i].strip() if i < len(pax_firsts) else ""
+        ln = pax_lasts[i].strip() if i < len(pax_lasts) else ""
+        if not fn or not ln:
+            continue
+        pax = Passenger(
             booking_id=booking.id,
-            first_name=pax2_first.strip(), last_name=pax2_last.strip(),
-            email=pax2_email.strip() or None, phone=pax2_phone.strip() or None,
-            date_of_birth=datetime.strptime(pax2_dob, "%Y-%m-%d").date() if pax2_dob.strip() else None,
-            nationality=pax2_nationality.strip() or None,
-            passport_number=pax2_passport.strip() or None,
-            emergency_contact_name=pax2_emergency_name.strip() or None,
-            emergency_contact_phone=pax2_emergency_phone.strip() or None,
+            first_name=fn, last_name=ln,
+            email=(pax_emails[i].strip() or None) if i < len(pax_emails) else None,
+            phone=(pax_phones[i].strip() or None) if i < len(pax_phones) else None,
+            date_of_birth=datetime.strptime(pax_dobs[i], "%Y-%m-%d").date() if i < len(pax_dobs) and pax_dobs[i].strip() else None,
+            nationality=(pax_nationalities[i].strip() or None) if i < len(pax_nationalities) else None,
+            passport_number=(pax_passports[i].strip() or None) if i < len(pax_passports) else None,
+            emergency_contact_name=(pax_emergency_names[i].strip() or None) if i < len(pax_emergency_names) else None,
+            emergency_contact_phone=(pax_emergency_phones[i].strip() or None) if i < len(pax_emergency_phones) else None,
         )
-        db.add(pax2)
+        db.add(pax)
         await db.flush()
         for doc_code, _ in DOCUMENT_TYPES:
-            db.add(PassengerDocument(passenger_id=pax2.id, doc_type=doc_code, status="missing"))
+            db.add(PassengerDocument(passenger_id=pax.id, doc_type=doc_code, status="missing"))
 
     await db.flush()
 
@@ -256,7 +307,7 @@ async def booking_create_submit(
     db.add(Notification(
         type="new_passenger_booking",
         title=f"Nouvelle réservation {booking.reference}",
-        detail=f"{pax1_first.strip()} {pax1_last.strip()} — Cabine {cabin_number}",
+        detail=f"{first_pax_name} — Cabine(s) {cabin_numbers_str}",
         link=f"/passengers/{booking.id}",
         booking_id=booking.id,
     ))
@@ -297,9 +348,10 @@ async def booking_detail(
         )
         pax_forms[pax.id] = form_result.scalar_one_or_none()
 
-    # Get real cabin label
+    # Get real cabin label(s)
     vessel_code = booking.vessel.code if booking.vessel else None
-    cabin_full_label = get_cabin_label(vessel_code, booking.cabin_number)
+    cabin_labels_list = [get_cabin_label(vessel_code, cn) for cn in booking.cabin_list]
+    cabin_full_label = " / ".join(cabin_labels_list) if cabin_labels_list else "—"
 
     # Load portal messages
     msg_result = await db.execute(
@@ -418,12 +470,14 @@ async def add_passenger(
     if not booking:
         raise HTTPException(404)
 
-    # Check capacity
+    # Check capacity: 2 per cabin + 1 extra per cabin when multiple cabins
     pax_count = await db.execute(
         select(func.count(Passenger.id)).where(Passenger.booking_id == booking_id)
     )
-    if (pax_count.scalar() or 0) >= 2:
-        raise HTTPException(400, "Cabine pleine (2 passagers maximum)")
+    n_cabins = len(booking.cabin_list)
+    max_pax = n_cabins * 3 if n_cabins > 1 else 2
+    if (pax_count.scalar() or 0) >= max_pax:
+        raise HTTPException(400, f"Capacité atteinte ({max_pax} passagers maximum pour {n_cabins} cabine(s))")
 
     pax = Passenger(
         booking_id=booking_id,

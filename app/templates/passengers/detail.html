@@ -19,12 +19,16 @@
     <div class="bd-status-bar">
         <div class="bd-status-steps">
             {% set steps = ['draft','confirmed','paid','embarked','completed'] %}
+            {% set current_idx = steps.index(booking.status) if booking.status in steps else -1 %}
             {% for s in steps %}
-            <div class="bd-step {% if s == booking.status %}current{% endif %} {% if steps.index(s) < steps.index(booking.status) %}done{% endif %}">
+            <div class="bd-step {% if s == booking.status %}current{% endif %} {% if current_idx >= 0 and steps.index(s) < current_idx %}done{% endif %} {% if booking.status == 'cancelled' %}cancelled{% endif %}">
                 <span class="bd-step-dot"></span><span>{{ s|capitalize }}</span>
             </div>
-            {% if not loop.last %}<div class="bd-step-line {% if steps.index(s) < steps.index(booking.status) %}done{% endif %}"></div>{% endif %}
+            {% if not loop.last %}<div class="bd-step-line {% if current_idx >= 0 and steps.index(s) < current_idx %}done{% endif %}"></div>{% endif %}
             {% endfor %}
+            {% if booking.status == 'cancelled' %}
+            <div class="bd-step current cancelled"><span class="bd-step-dot"></span><span>Annulée</span></div>
+            {% endif %}
         </div>
         <form method="POST" action="/passengers/{{ booking.id }}/status" style="display:flex;gap:6px;align-items:center;">
             <select name="status" class="fi-sm">
@@ -36,14 +40,18 @@
 
     <!-- VOYAGE -->
     <div class="bd-card">
+        {% if booking.leg %}
         <h3>🚢 {{ booking.leg.leg_code }} — {{ booking.leg.vessel.name }}</h3>
         <div style="font-size:13px;color:#555;">
             {{ booking.leg.departure_port.name }} → {{ booking.leg.arrival_port.name }}
             · ETD {{ booking.leg.etd.strftime('%d/%m/%Y') if booking.leg.etd else '?' }}
         </div>
+        {% else %}
+        <h3>🚢 Voyage non assigné</h3>
+        {% endif %}
         <div style="margin-top:8px;display:flex;gap:12px;align-items:center;">
-            <span class="cabin-badge cabin-{{ booking.cabin_number }}">Cabine {{ booking.cabin_number }} · {{ booking.cabin_label }}</span>
-            <span style="font-size:12px;color:#888;">{{ booking.passengers|length }} / 2 passagers</span>
+            <span class="cabin-badge cabin-{{ booking.cabin_list[0] if booking.cabin_list else 1 }}">Cabine(s) {{ booking.cabin_numbers or booking.cabin_number }} · {{ booking.cabin_label }}</span>
+            <span style="font-size:12px;color:#888;">{% set max_pax = (booking.cabin_list|length * 3) if booking.cabin_list|length > 1 else 2 %}{{ booking.passengers|length }} / {{ max_pax }} passagers</span>
         </div>
     </div>
 
@@ -115,10 +123,11 @@
     </div>
     {% endfor %}
 
-    <!-- ADD 2nd PASSENGER -->
-    {% if booking.passengers|length < 2 %}
+    <!-- ADD PASSENGER -->
+    {% set max_pax_add = (booking.cabin_list|length * 3) if booking.cabin_list|length > 1 else 2 %}
+    {% if booking.passengers|length < max_pax_add %}
     <div class="bd-card" style="border-left:3px solid #87BD2B;">
-        <h3>＋ Ajouter un 2ème passager</h3>
+        <h3>＋ Ajouter un passager ({{ booking.passengers|length + 1 }}/{{ max_pax_add }})</h3>
         <form method="POST" action="/passengers/{{ booking.id }}/add-passenger">
             <div class="bd-grid">
                 <div class="fg"><label>Prénom *</label><input type="text" name="first_name" class="fi-sm" required></div>
@@ -151,7 +160,7 @@
         {% if booking.price_total %}
         <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;">
             <div style="flex:1;height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden;">
-                <div style="height:100%;background:#87BD2B;border-radius:4px;width:{{ ((paid_total / (booking.price_total|float)) * 100)|int }}%;"></div>
+                <div style="height:100%;background:#87BD2B;border-radius:4px;width:{{ ((paid_total|float / (booking.price_total|float)) * 100)|int }}%;"></div>
             </div>
             <span style="font-size:12px;font-weight:600;color:#555;">{{ "%.0f"|format(paid_total) }} / {{ "%.0f"|format(booking.price_total) }} €</span>
         </div>
@@ -165,7 +174,21 @@
             <tr>
                 <td><strong>{{ p.payment_type|capitalize }}</strong></td>
                 <td>{% if p.payment_method == 'virement' %}🏦 Virement{% elif p.payment_method == 'revolut' %}💳 CB Revolut{% else %}{{ p.payment_method or '—' }}{% endif %}</td>
-                <td style="font-weight:600;">{{ "%.2f"|format(p.amount) }} €</td>
+                <td style="font-weight:600;">
+                    {% if p.payment_method != 'revolut' %}
+                    <form method="POST" action="/passengers/payment/{{ p.id }}/edit" style="display:inline-flex;gap:4px;align-items:center;">
+                        <input type="hidden" name="payment_type" value="{{ p.payment_type }}">
+                        <input type="hidden" name="payment_method" value="{{ p.payment_method }}">
+                        <input type="hidden" name="due_date" value="{{ p.due_date.strftime('%Y-%m-%d') if p.due_date else '' }}">
+                        <input type="hidden" name="notes" value="{{ p.notes or '' }}">
+                        <input type="number" name="amount" value="{{ "%.2f"|format(p.amount) }}" step="0.01" min="0" class="fi-sm" style="width:90px;font-weight:600;">
+                        <span>€</span>
+                        <button type="submit" class="btn btn-sm btn-secondary" style="padding:3px 6px;font-size:9px;">✓</button>
+                    </form>
+                    {% else %}
+                    {{ "%.2f"|format(p.amount) }} €
+                    {% endif %}
+                </td>
                 <td>{{ p.due_date.strftime('%d/%m/%Y') if p.due_date else '—' }}</td>
                 <td>
                     <form method="POST" action="/passengers/payment/{{ p.id }}/status" style="display:inline-flex;gap:4px;">
@@ -233,7 +256,7 @@
         <h3>📋 Réservation</h3>
         <div class="bd-info-row"><span>Référence</span><strong>{{ booking.reference }}</strong></div>
         <div class="bd-info-row"><span>Date</span><strong>{{ booking.booking_date.strftime('%d/%m/%Y') if booking.booking_date else '—' }}</strong></div>
-        <div class="bd-info-row"><span>Cabine</span><strong>{{ booking.cabin_number }} · {{ booking.cabin_label }}</strong></div>
+        <div class="bd-info-row"><span>Cabine(s)</span><strong>{{ booking.cabin_numbers or booking.cabin_number }} · {{ booking.cabin_label }}</strong></div>
         <div class="bd-info-row"><span>Prix</span><strong>{{ "%.2f"|format(booking.price_total or 0) }} €</strong></div>
         <div class="bd-info-row"><span>Acompte</span><strong>{{ "%.2f"|format(booking.price_deposit or 0) }} €</strong></div>
         <div class="bd-info-row"><span>Solde</span><strong>{{ "%.2f"|format(booking.price_balance or 0) }} €</strong></div>
