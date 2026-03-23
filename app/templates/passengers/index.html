@@ -29,7 +29,7 @@
         </tr></thead>
         <tbody>
         {% for b in bookings %}
-        {% set paid_total = b.payments|selectattr('status','equalto','received')|map(attribute='amount')|sum %}
+        {% set paid_total = b.payments|selectattr('status','equalto','received')|map(attribute='amount')|map('float')|sum %}
         <tr>
             <td><a href="/passengers/{{ b.id }}" class="pax-ref">{{ b.reference }}</a></td>
             <td>
@@ -47,12 +47,12 @@
             </td>
             <td><span class="cabin-badge cabin-{{ b.cabin_number }}">Cab. {{ b.cabin_number }} · {{ b.cabin_label }}</span></td>
             <td><span class="status-pill st-{{ b.status }}">{{ b.status }}</span></td>
-            <td>{{ "%.0f"|format(b.price_total or 0) }} €</td>
+            <td>{{ "%.0f"|format(b.price_total|float or 0) }} €</td>
             <td>
                 {% if b.price_total %}
                 {% set pct = (paid_total / (b.price_total|float)) * 100 if b.price_total else 0 %}
                 <div class="pay-bar"><div class="pay-fill" style="width:{{ pct|int }}%"></div></div>
-                <span style="font-size:10px;color:#888;">{{ "%.0f"|format(paid_total) }}/{{ "%.0f"|format(b.price_total) }} €</span>
+                <span style="font-size:10px;color:#888;">{{ "%.0f"|format(paid_total) }}/{{ "%.0f"|format(b.price_total|float) }} €</span>
                 {% else %}—{% endif %}
             </td>
             <td><a href="/passengers/{{ b.id }}" class="btn btn-secondary btn-sm">Voir</a></td>

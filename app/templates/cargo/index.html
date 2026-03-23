@@ -50,7 +50,7 @@
                     </td>
                     <td>
                         <div style="display:flex;align-items:center;gap:6px;">
-                            <input type="text" value="{{ request.url.scheme }}://{{ request.url.netloc }}/p/{{ pl.token }}"
+                            <input type="text" value="{{ site_url }}/p/{{ pl.token }}"
                                    class="form-input" style="font-size:10px;padding:4px 6px;width:180px;" readonly
                                    id="link-{{ pl.id }}" onclick="this.select()">
                             <button class="btn btn-sm btn-secondary" onclick="copyLink({{ pl.id }})" title="Copier"><i data-lucide="copy" style="width:12px;height:12px;"></i></button>

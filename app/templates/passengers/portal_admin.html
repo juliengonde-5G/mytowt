@@ -1,0 +1,172 @@
+{% extends "passengers/portal_base.html" %}
+{% block portal_title %}{% if lang == 'en' %}Administration{% else %}Administratif{% endif %}{% endblock %}
+
+{% block portal_content %}
+<h1>{% if lang == 'en' %}Administration{% else %}Administratif{% endif %}</h1>
+
+<!-- STATUS -->
+<div class="card">
+    <div class="status-bar">
+        {% set steps = ['draft','confirmed','paid','embarked','completed'] %}
+        {% if lang == 'en' %}
+        {% set labels = {'draft':'Draft','confirmed':'Confirmed','paid':'Paid','embarked':'Embarked','completed':'Completed'} %}
+        {% else %}
+        {% set labels = {'draft':'Brouillon','confirmed':'Confirmée','paid':'Payée','embarked':'Embarqué','completed':'Terminée'} %}
+        {% endif %}
+        {% for s in steps %}
+        <div class="step {% if s == booking.status %}current{% endif %} {% if steps.index(s) < steps.index(booking.status) %}done{% endif %}">
+            <span class="step-dot"></span><span>{{ labels[s] }}</span>
+        </div>
+        {% if not loop.last %}<div class="step-line {% if steps.index(s) < steps.index(booking.status) %}done{% endif %}"></div>{% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<!-- VOYAGE SUMMARY -->
+{% if booking.leg %}
+<div class="card">
+    <h2>🚢 {% if lang == 'en' %}Your crossing{% else %}Votre traversée{% endif %}</h2>
+    <div class="info-grid">
+        <div class="info-item"><span class="label">{% if lang == 'en' %}Route{% else %}Trajet{% endif %}</span><span class="value">{{ booking.leg.departure_port.name }} → {{ booking.leg.arrival_port.name }}</span></div>
+        <div class="info-item"><span class="label">{% if lang == 'en' %}Vessel{% else %}Navire{% endif %}</span><span class="value">{{ booking.leg.vessel.name }}</span></div>
+        <div class="info-item"><span class="label">{% if lang == 'en' %}Departure{% else %}Départ{% endif %}</span><span class="value">{{ booking.leg.etd.strftime('%d/%m/%Y') if booking.leg.etd else '—' }}</span></div>
+        <div class="info-item"><span class="label">{% if lang == 'en' %}Cabin{% else %}Cabine{% endif %}</span><span class="value">{{ cabin_type_labels.get(booking.cabin_number, '') }}</span></div>
+    </div>
+</div>
+{% endif %}
+
+<!-- PASSENGERS -->
+{% for pax in booking.passengers %}
+<div class="card">
+    <h2>👤 {% if lang == 'en' %}Passenger{% else %}Passager{% endif %} {{ loop.index }} — {{ pax.full_name }}</h2>
+
+    <details {% if not pax.passport_number %}open{% endif %}>
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:#095561;">{% if lang == 'en' %}Personal information{% else %}Informations personnelles{% endif %}</summary>
+        <form method="POST" action="/passenger/{{ token }}/pax/{{ pax.id }}/update" style="margin-top:12px;">
+            <div class="form-grid">
+                <div class="fg"><label>{% if lang == 'en' %}First name{% else %}Prénom{% endif %}</label><input type="text" name="first_name" value="{{ pax.first_name }}" class="fi" required></div>
+                <div class="fg"><label>{% if lang == 'en' %}Last name{% else %}Nom{% endif %}</label><input type="text" name="last_name" value="{{ pax.last_name }}" class="fi" required></div>
+                <div class="fg"><label>Email</label><input type="email" name="email" value="{{ pax.email or '' }}" class="fi"></div>
+                <div class="fg"><label>{% if lang == 'en' %}Phone{% else %}Téléphone{% endif %}</label><input type="text" name="phone" value="{{ pax.phone or '' }}" class="fi"></div>
+                <div class="fg"><label>{% if lang == 'en' %}Date of birth{% else %}Date de naissance{% endif %}</label><input type="date" name="date_of_birth" value="{{ pax.date_of_birth.strftime('%Y-%m-%d') if pax.date_of_birth else '' }}" class="fi"></div>
+                <div class="fg"><label>{% if lang == 'en' %}Nationality{% else %}Nationalité{% endif %}</label><input type="text" name="nationality" value="{{ pax.nationality or '' }}" class="fi"></div>
+                <div class="fg"><label>{% if lang == 'en' %}Passport No.{% else %}N° Passeport{% endif %}</label><input type="text" name="passport_number" value="{{ pax.passport_number or '' }}" class="fi"></div>
+                <div class="fg"></div>
+                <div class="fg"><label>{% if lang == 'en' %}Emergency contact — Name{% else %}Contact urgence — Nom{% endif %}</label><input type="text" name="emergency_contact_name" value="{{ pax.emergency_contact_name or '' }}" class="fi"></div>
+                <div class="fg"><label>{% if lang == 'en' %}Emergency contact — Phone{% else %}Contact urgence — Tél.{% endif %}</label><input type="text" name="emergency_contact_phone" value="{{ pax.emergency_contact_phone or '' }}" class="fi"></div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm" style="margin-top:10px;">{% if lang == 'en' %}Save{% else %}Enregistrer{% endif %}</button>
+        </form>
+    </details>
+
+    <!-- QUESTIONNAIRE -->
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #f0f0f0;">
+        {% set form = pax_forms.get(pax.id) %}
+        {% if form and form.signed %}
+        <div class="q-done">✅ {% if lang == 'en' %}Pre-boarding questionnaire completed on {{ form.signed_at.strftime('%d/%m/%Y') if form.signed_at else '' }}.{% else %}Questionnaire pré-embarquement complété le {{ form.signed_at.strftime('%d/%m/%Y') if form.signed_at else '' }}.{% endif %}</div>
+        {% else %}
+        <h3>📋 {% if lang == 'en' %}Pre-boarding questionnaire{% else %}Questionnaire pré-embarquement{% endif %}</h3>
+        <form method="POST" action="/passenger/{{ token }}/pax/{{ pax.id }}/questionnaire">
+            <h3 style="font-size:12px;">{% if lang == 'en' %}Maritime experience{% else %}Expérience maritime{% endif %}</h3>
+            <div class="fg"><label>{% if lang == 'en' %}Have you sailed before?{% else %}Avez-vous déjà voyagé en voilier/bateau ?{% endif %}</label>
+                <div class="q-radio"><label><input type="radio" name="sailed_before" value="yes"> {% if lang == 'en' %}Yes{% else %}Oui{% endif %}</label><label><input type="radio" name="sailed_before" value="no"> {% if lang == 'en' %}No{% else %}Non{% endif %}</label></div>
+            </div>
+            <div class="fg"><label>{% if lang == 'en' %}Prone to seasickness?{% else %}Sujet au mal de mer ?{% endif %}</label>
+                <div class="q-radio"><label><input type="radio" name="seasick" value="yes"> {% if lang == 'en' %}Yes{% else %}Oui{% endif %}</label><label><input type="radio" name="seasick" value="no"> {% if lang == 'en' %}No{% else %}Non{% endif %}</label><label><input type="radio" name="seasick" value="sometimes"> {% if lang == 'en' %}Sometimes{% else %}Occasionnellement{% endif %}</label></div>
+            </div>
+            <div class="fg"><label>{% if lang == 'en' %}Willing to help with maneuvers?{% else %}Prêt à participer aux manœuvres ?{% endif %}</label>
+                <div class="q-radio"><label><input type="radio" name="willing_maneuvers" value="yes"> {% if lang == 'en' %}Yes{% else %}Oui{% endif %}</label><label><input type="radio" name="willing_maneuvers" value="no"> {% if lang == 'en' %}No{% else %}Non{% endif %}</label></div>
+            </div>
+            <h3 style="font-size:12px;">{% if lang == 'en' %}Health & Safety{% else %}Santé & sécurité{% endif %}</h3>
+            <div class="fg full"><label>{% if lang == 'en' %}Chronic conditions?{% else %}Problèmes médicaux chroniques ?{% endif %}</label><textarea name="chronic_conditions" class="fi" rows="2"></textarea></div>
+            <div class="fg full"><label>{% if lang == 'en' %}Allergies?{% else %}Allergies ?{% endif %}</label><textarea name="allergies" class="fi" rows="2"></textarea></div>
+            <div class="fg full"><label>{% if lang == 'en' %}Daily medication?{% else %}Traitement médical quotidien ?{% endif %}</label><textarea name="daily_medication" class="fi" rows="2"></textarea></div>
+            <div class="fg"><label>{% if lang == 'en' %}Can you swim 50m?{% else %}Savez-vous nager 50 m ?{% endif %}</label>
+                <div class="q-radio"><label><input type="radio" name="can_swim_50m" value="yes"> {% if lang == 'en' %}Yes{% else %}Oui{% endif %}</label><label><input type="radio" name="can_swim_50m" value="no"> {% if lang == 'en' %}No{% else %}Non{% endif %}</label></div>
+            </div>
+            <h3 style="font-size:12px;">{% if lang == 'en' %}Dietary preferences{% else %}Préférences alimentaires{% endif %}</h3>
+            <div class="fg full"><label>{% if lang == 'en' %}Dietary requirements{% else %}Régime particulier{% endif %}</label><textarea name="dietary_requirements" class="fi" rows="2"></textarea></div>
+            <div class="fg full"><label>{% if lang == 'en' %}Intolerances{% else %}Intolérances{% endif %}</label><textarea name="intolerances" class="fi" rows="2"></textarea></div>
+            <div style="margin-top:12px;padding:10px;background:rgba(9,85,97,0.03);border-radius:6px;font-size:11px;color:#555;">
+                {% if lang == 'en' %}I acknowledge having received the safety instructions on board, commit to respecting them and will inform the crew of any changes regarding my health or special needs.{% else %}Je reconnais avoir reçu les consignes de sécurité à bord, m'engage à les respecter et informe l'équipage de toute modification concernant ma santé ou mes besoins particuliers.{% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top:12px;">{% if lang == 'en' %}Sign & Submit{% else %}Signer & Envoyer{% endif %}</button>
+        </form>
+        {% endif %}
+    </div>
+
+    <!-- DOCUMENTS -->
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #f0f0f0;">
+        <h3 id="docs">📄 {% if lang == 'en' %}Required documents{% else %}Documents requis{% endif %}</h3>
+        <table>
+            <thead><tr><th>Document</th><th>{% if lang == 'en' %}Status{% else %}Statut{% endif %}</th><th>Action</th></tr></thead>
+            <tbody>
+            {% for d in pax.documents %}
+            <tr>
+                <td><strong>{% for code, label in document_types %}{% if code == d.doc_type %}{{ label }}{% endif %}{% endfor %}</strong></td>
+                <td>
+                    {% if d.status == 'missing' %}<span class="doc-missing">⚪ {% if lang == 'en' %}Missing{% else %}Manquant{% endif %}</span>
+                    {% elif d.status == 'uploaded' %}<span class="doc-uploaded">🔵 {% if lang == 'en' %}Uploaded{% else %}Téléversé{% endif %}</span>
+                    {% elif d.status == 'validated' %}<span class="doc-validated">🟢 {% if lang == 'en' %}Validated{% else %}Validé{% endif %}</span>
+                    {% elif d.status == 'rejected' %}<span class="doc-rejected">🔴 {% if lang == 'en' %}Rejected{% else %}Rejeté{% endif %} {% if d.notes %}— {{ d.notes }}{% endif %}</span>
+                    {% endif %}
+                    {% if d.filename %}<br><span style="font-size:10px;color:#888;">{{ d.filename }}</span>{% endif %}
+                </td>
+                <td>
+                    {% if d.status in ('missing', 'rejected') %}
+                    <form method="POST" action="/passenger/{{ token }}/doc/{{ d.id }}/upload" enctype="multipart/form-data" class="upload-zone">
+                        <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" required>
+                        <button type="submit" class="btn btn-primary btn-sm">📤</button>
+                    </form>
+                    {% elif d.status == 'uploaded' %}<span style="font-size:11px;color:#888;">{% if lang == 'en' %}Pending review{% else %}En attente de validation{% endif %}</span>
+                    {% elif d.status == 'validated' %}<span style="font-size:11px;color:#16a34a;">✓ OK</span>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+
+<!-- PAYMENTS -->
+<div class="card">
+    <h2>💶 {% if lang == 'en' %}Payments{% else %}Paiements{% endif %}</h2>
+    {% if booking.price_total %}
+    <div class="price-box">
+        <div class="price-total">{{ "%.2f"|format(booking.price_total) }} €</div>
+        <div class="price-detail">
+            {% if lang == 'en' %}Deposit{% else %}Acompte{% endif %}: {{ "%.2f"|format(booking.price_deposit or 0) }} €<br>
+            {% if lang == 'en' %}Balance{% else %}Solde{% endif %}: {{ "%.2f"|format(booking.price_balance or 0) }} €
+        </div>
+    </div>
+    {% endif %}
+    {% for p in booking.payments %}
+    <div class="pay-row">
+        <span>{{ p.payment_type|capitalize }} — {{ "%.2f"|format(p.amount) }} €</span>
+        <span class="pay-status pay-{{ p.status }}">
+            {% if p.status == 'pending' %}{% if lang == 'en' %}Pending{% else %}En attente{% endif %}
+            {% elif p.status == 'sent' %}{% if lang == 'en' %}Sent{% else %}Envoyé{% endif %}
+            {% elif p.status == 'received' %}{% if lang == 'en' %}Received{% else %}Reçu{% endif %}
+            {% elif p.status == 'failed' %}{% if lang == 'en' %}Failed{% else %}Échoué{% endif %}{% endif %}
+        </span>
+    </div>
+    {% endfor %}
+    <div style="margin-top:16px;padding:16px;background:rgba(9,85,97,0.03);border:1px solid rgba(9,85,97,0.1);border-radius:8px;">
+        <strong style="color:#095561;">{% if lang == 'en' %}Bank details{% else %}Coordonnées bancaires{% endif %}</strong><br>
+        <span style="font-size:12px;color:#555;">
+            TOWT SAS — IBAN: FR76 1131 5000 0108 0066 0752 397 — BIC: CEPAFRPP131
+        </span>
+    </div>
+</div>
+
+<!-- CROSSING BOOK -->
+<div class="card" style="text-align:center;">
+    <h2>📖 {% if lang == 'en' %}Crossing Book{% else %}Book de traversée{% endif %}</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:12px;">{% if lang == 'en' %}Download your crossing book with all voyage details.{% else %}Téléchargez votre book de traversée avec tous les détails du voyage.{% endif %}</p>
+    <div style="display:flex;gap:10px;justify-content:center;">
+        <a href="/passenger/{{ token }}/book" class="btn btn-primary">📖 Book FR</a>
+        <a href="/passenger/{{ token }}/book/en" class="btn btn-primary" style="background:#0a6b7a;">📖 Book EN</a>
+    </div>
+</div>
+{% endblock %}

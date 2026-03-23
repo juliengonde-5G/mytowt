@@ -15,6 +15,8 @@ class Vessel(Base):
     capacity_palettes = Column(Integer, nullable=True)  # Max palette capacity
     default_speed = Column(Float, default=8.0)  # Default exploitation speed in knots
     default_elongation = Column(Float, default=1.25)  # Default elongation coefficient
+    opex_daily_sea = Column(Float, nullable=True)  # OPEX journalier en mer (€/jour)
+    max_palettes = Column(Integer, default=850)  # Capacité max palettes
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

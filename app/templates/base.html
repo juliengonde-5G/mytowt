@@ -57,8 +57,10 @@
                     <a href="/onboard" class="nav-item {% if active_module == 'captain' %}active{% endif %}">
                         <i data-lucide="compass"></i><span>On Board</span>
                     </a>
+                    {% endif %}
+                    {% if has_any_access(user, 'passengers') or has_any_access(user, 'captain') %}
                     <a href="/passengers" class="nav-item {% if active_module == 'passengers' %}active{% endif %}">
-                        <i data-lucide="users"></i><span>Passagers</span>
+                        <i data-lucide="luggage"></i><span>Passagers</span>
                     </a>
                     {% endif %}
                     {% if has_any_access(user, 'crew') %}
@@ -71,10 +73,23 @@
                         <i data-lucide="file-box"></i><span>{{ t('nav_cargo', lang|default('fr')) }}</span>
                     </a>
                     {% endif %}
+                    {% if has_any_access(user, 'claims') %}
+                    <a href="/claims" class="nav-item {% if active_module == 'claims' %}active{% endif %}">
+                        <i data-lucide="shield-alert"></i><span>Claims</span>
+                    </a>
+                    {% endif %}
+                    {% if has_any_access(user, 'mrv') %}
+                    <a href="/mrv" class="nav-item {% if active_module == 'mrv' %}active{% endif %}">
+                        <i data-lucide="fuel"></i><span>MRV Fuel</span>
+                    </a>
+                    {% endif %}
                 </div>
                 <div class="nav-section">
                     <span class="nav-section-label">Administration</span>
-                    {% if user and user.role in ('administrateur', 'admin') %}
+                    <a href="/admin/my-account" class="nav-item {% if active_module == 'my-account' %}active{% endif %}">
+                        <i data-lucide="user-cog"></i><span>Mon compte</span>
+                    </a>
+                    {% if user and user.role in ('administrateur', 'admin', 'data_analyst') %}
                     <a href="/admin/settings" class="nav-item {% if active_module == 'settings' %}active{% endif %}">
                         <i data-lucide="settings"></i><span>{{ t('nav_settings', lang|default('fr')) }}</span>
                     </a>
@@ -106,6 +121,7 @@
         </main>
     </div>
     {% endblock %}
+    <div id="modal-container"></div>
     <div id="toast-container" class="toast-container"></div>
     <script>
         lucide.createIcons();
@@ -119,6 +135,16 @@
             c.appendChild(t);
             setTimeout(function(){t.remove();},4000);
         }
+        // Prevent double-submit on all forms
+        document.addEventListener('submit', function(e) {
+            var form = e.target;
+            var btn = form.querySelector('button[type="submit"], input[type="submit"]');
+            if (btn && !btn.disabled) {
+                btn.disabled = true;
+                btn.style.opacity = '0.6';
+                setTimeout(function() { btn.disabled = false; btn.style.opacity = '1'; }, 5000);
+            }
+        });
     </script>
     {% block extra_scripts %}{% endblock %}
 </body>

@@ -18,14 +18,44 @@ def _gen_token():
     return secrets.token_urlsafe(24)
 
 
-# ─── CABIN CONFIG (same for all vessels) ─────────────────────
+# ─── CABIN CONFIG PER VESSEL ──────────────────────────────
+# vessel_code → list of cabins
+CABIN_CONFIG_BY_VESSEL = {
+    1: [  # Anemos
+        {"number": 1, "ref": "3183", "name": "STENDHAL",          "bed_type": "double", "capacity": 2},
+        {"number": 2, "ref": "3284", "name": "Carole MARTINEZ",   "bed_type": "double", "capacity": 2},
+        {"number": 3, "ref": "3173", "name": "Gustave FLAUBERT",  "bed_type": "twin",   "capacity": 2},
+        {"number": 4, "ref": "3276", "name": "Daniel PENNAC",     "bed_type": "twin",   "capacity": 2},
+    ],
+    2: [  # Artemis
+        {"number": 1, "ref": "3183", "name": "Marie NDIAYE",              "bed_type": "double", "capacity": 2},
+        {"number": 2, "ref": "3284", "name": "George SAND",               "bed_type": "double", "capacity": 2},
+        {"number": 3, "ref": "3173", "name": "Jean-Marie LACLAVETINE",    "bed_type": "twin",   "capacity": 2},
+        {"number": 4, "ref": "3276", "name": "Guy DE MAUPASSANT",         "bed_type": "twin",   "capacity": 2},
+    ],
+}
+
+# Fallback generic config
 CABIN_CONFIG = [
-    {"number": 1, "name": "Cabine 1", "bed_type": "double", "capacity": 2},
-    {"number": 2, "name": "Cabine 2", "bed_type": "double", "capacity": 2},
-    {"number": 3, "name": "Cabine 3", "bed_type": "twin", "capacity": 2},
-    {"number": 4, "name": "Cabine 4", "bed_type": "twin", "capacity": 2},
+    {"number": 1, "ref": "3183", "name": "Cabine 1", "bed_type": "double", "capacity": 2},
+    {"number": 2, "ref": "3284", "name": "Cabine 2", "bed_type": "double", "capacity": 2},
+    {"number": 3, "ref": "3173", "name": "Cabine 3", "bed_type": "twin",   "capacity": 2},
+    {"number": 4, "ref": "3276", "name": "Cabine 4", "bed_type": "twin",   "capacity": 2},
 ]
-# Total: 8 passengers per voyage
+
+def get_cabin_config(vessel_code=None):
+    """Get cabin config for a vessel. Falls back to generic if unknown."""
+    if vessel_code and vessel_code in CABIN_CONFIG_BY_VESSEL:
+        return CABIN_CONFIG_BY_VESSEL[vessel_code]
+    return CABIN_CONFIG
+
+def get_cabin_label(vessel_code, cabin_number):
+    """Get full cabin label: ref + name."""
+    cabins = get_cabin_config(vessel_code)
+    for c in cabins:
+        if c["number"] == cabin_number:
+            return f"{c['ref']} {c['name']}"
+    return f"Cabine {cabin_number}"
 
 CABIN_TYPE_LABELS = {
     "double": "Lit double",
@@ -164,6 +194,8 @@ class PassengerPayment(Base):
     currency = Column(String(3), default="EUR")
     status = Column(String(20), nullable=False, default="pending")
     revolut_order_id = Column(String(200), nullable=True)
+    checkout_url = Column(String(500), nullable=True)
+    revolut_state = Column(String(50), nullable=True)  # raw Revolut state
     reference = Column(String(100), nullable=True)
     due_date = Column(Date, nullable=True)
     paid_date = Column(Date, nullable=True)
@@ -236,3 +268,20 @@ class PreBoardingForm(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     passenger = relationship("Passenger")
+
+
+class PassengerAuditLog(Base):
+    """Audit trail for passenger booking modifications."""
+    __tablename__ = "passenger_audit_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    booking_id = Column(Integer, ForeignKey("passenger_bookings.id", ondelete="CASCADE"), nullable=False)
+    passenger_id = Column(Integer, nullable=True)  # null = booking-level change
+    action = Column(String(100), nullable=False)  # e.g. "status_change", "pax_updated", "payment_added"
+    field_name = Column(String(100), nullable=True)
+    old_value = Column(Text, nullable=True)
+    new_value = Column(Text, nullable=True)
+    changed_by = Column(String(200), nullable=False)
+    changed_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    booking = relationship("PassengerBooking", backref="audit_logs")

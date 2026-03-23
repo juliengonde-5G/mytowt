@@ -888,3 +888,95 @@ a {
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* === UTILITY CLASSES === */
+
+/* Cards */
+.card {
+    background: var(--towt-white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    padding: 24px;
+}
+
+.card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--towt-blue);
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-title i { width: 18px; height: 18px; }
+
+/* Alert messages */
+.alert {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    margin-bottom: 20px;
+    border-left: 3px solid;
+    font-size: 13px;
+}
+
+.alert-success {
+    background: #f0fdf4;
+    color: #16a34a;
+    border-left-color: #16a34a;
+}
+
+.alert-error {
+    background: #fef2f2;
+    color: #dc2626;
+    border-left-color: #dc2626;
+}
+
+/* Form field label (subtle) */
+.field-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #888;
+    font-weight: 600;
+}
+
+.field-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--towt-gray);
+    margin-top: 2px;
+}
+
+/* Outline button */
+.btn-outline {
+    background: transparent;
+    color: var(--towt-blue);
+    border: 1px solid var(--towt-blue);
+}
+.btn-outline:hover {
+    background: var(--towt-blue);
+    color: white;
+}
+
+/* Monospace leg codes */
+.leg-code {
+    font-family: monospace;
+    font-weight: 700;
+    color: var(--towt-blue);
+}
+
+/* Account page grid */
+.account-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    max-width: 900px;
+}
+
+@media (max-width: 768px) {
+    .account-grid {
+        grid-template-columns: 1fr;
+    }
+}

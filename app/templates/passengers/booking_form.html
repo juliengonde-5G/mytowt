@@ -130,12 +130,47 @@
 </style>
 <script>
 var PRICING = {{ pricing_json|tojson }};
+var BOOKED_CABINS = {{ booked_cabins_json|tojson }};
+
+function updateCabinAvailability() {
+    var sel = document.getElementById('sel-leg');
+    var legId = sel.value;
+    var booked = BOOKED_CABINS[legId] || [];
+
+    document.querySelectorAll('.cabin-option').forEach(function(opt) {
+        var input = opt.querySelector('input[name="cabin_number"]');
+        var num = parseInt(input.value);
+        var taken = booked.indexOf(num) !== -1;
+        input.disabled = taken;
+        if (taken) { input.checked = false; }
+        opt.style.opacity = taken ? '0.35' : '1';
+        opt.style.pointerEvents = taken ? 'none' : 'auto';
+        var card = opt.querySelector('.cabin-card');
+        if (taken) {
+            card.style.borderColor = '#dc2626';
+            card.style.background = '#fef2f2';
+            if (!card.querySelector('.booked-tag')) {
+                var tag = document.createElement('span');
+                tag.className = 'booked-tag';
+                tag.style.cssText = 'font-size:10px;color:#dc2626;font-weight:600;display:block;margin-top:2px;';
+                tag.textContent = 'Réservée';
+                card.appendChild(tag);
+            }
+        } else {
+            card.style.borderColor = '';
+            card.style.background = '';
+            var tag = card.querySelector('.booked-tag');
+            if (tag) tag.remove();
+        }
+    });
+}
 
 function autoPrice() {
     var sel = document.getElementById('sel-leg');
     var opt = sel.options[sel.selectedIndex];
     var cabinEl = document.querySelector('input[name="cabin_number"]:checked');
 
+    updateCabinAvailability();
     document.getElementById('price-box').style.display = 'none';
     document.getElementById('price-missing').style.display = 'none';
 

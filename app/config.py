@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 heures
 
+    # External URL (for portal links shared with clients/passengers)
+    SITE_URL: str = "https://my.towt.eu"
+
+    # Pipedrive CRM integration
+    PIPEDRIVE_API_TOKEN: str = ""
+
     # TOWT Fleet
     FLEET: dict = {
         1: {"name": "Anemos", "code": 1},

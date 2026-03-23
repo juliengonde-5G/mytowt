@@ -243,7 +243,7 @@
         <h3>🔗 Lien passager</h3>
         <p style="font-size:11px;color:#888;margin-bottom:8px;">Partagez ce lien pour que le passager suive sa réservation et dépose ses documents.</p>
         <div class="token-box">
-            <input type="text" value="{{ request.base_url }}passenger/{{ booking.token }}" class="fi-sm" id="pax-link" readonly style="font-size:10px;">
+            <input type="text" value="{{ site_url }}/boarding/{{ booking.token }}" class="fi-sm" id="pax-link" readonly style="font-size:10px;">
             <button type="button" class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('pax-link').value)">📋</button>
         </div>
     </div>

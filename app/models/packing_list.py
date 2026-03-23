@@ -42,8 +42,12 @@ class PackingList(Base):
         if not self.batches:
             return 0
         required_fields = [
-            'customer_name', 'shipper_name', 'consignee_address',
-            'type_of_goods', 'pallet_quantity', 'weight_kg',
+            'customer_name',
+            'shipper_name', 'shipper_address', 'shipper_postal', 'shipper_city', 'shipper_country',
+            'notify_name', 'notify_address', 'notify_postal', 'notify_city', 'notify_country',
+            'consignee_name', 'consignee_address', 'consignee_postal', 'consignee_city', 'consignee_country',
+            'type_of_goods', 'pallet_quantity',
+            'length_cm', 'width_cm', 'height_cm', 'weight_kg',
         ]
         total = len(self.batches) * len(required_fields)
         filled = 0
@@ -85,14 +89,34 @@ class PackingListBatch(Base):
     customer_name = Column(String(200), nullable=True)
     freight_forwarder = Column(String(200), nullable=True)
     code_transitaire = Column(String(100), nullable=True)
+
+    # Shipper (structured)
     shipper_name = Column(String(200), nullable=True)
     shipper_address = Column(Text, nullable=True)
+    shipper_postal = Column(String(20), nullable=True)
+    shipper_city = Column(String(100), nullable=True)
+    shipper_country = Column(String(100), nullable=True)
+
     po_number = Column(String(100), nullable=True)
     customer_batch_id = Column(String(100), nullable=True)
+
+    # Notify (structured)
+    notify_name = Column(String(200), nullable=True)
     notify_address = Column(Text, nullable=True)
+    notify_postal = Column(String(20), nullable=True)
+    notify_city = Column(String(100), nullable=True)
+    notify_country = Column(String(100), nullable=True)
+
+    # Consignee (structured)
+    consignee_name = Column(String(200), nullable=True)
     consignee_address = Column(Text, nullable=True)
+    consignee_postal = Column(String(20), nullable=True)
+    consignee_city = Column(String(100), nullable=True)
+    consignee_country = Column(String(100), nullable=True)
+
     pallet_type = Column(String(50), nullable=True)      # EPAL, USPAL, etc.
     type_of_goods = Column(String(200), nullable=True)
+    description_of_goods = Column(Text, nullable=True)    # Full description for BL
     bio_products = Column(String(10), nullable=True)      # Yes/No
     cases_quantity = Column(Integer, nullable=True)
     units_per_case = Column(Integer, nullable=True)

@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <title>TOWT — Packing List {{ pl.order.reference }}</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#f5f7fa;color:#333;min-height:100vh}
+        body{font-family:'Poppins','Segoe UI',system-ui,-apple-system,sans-serif;background:#f5f7fa;color:#333;min-height:100vh}
         .header{background:#095561;color:white;padding:20px 0;text-align:center}
         .header h1{font-size:22px;font-weight:700;letter-spacing:1px}
         .header p{font-size:13px;opacity:0.8;margin-top:4px}
@@ -34,6 +37,7 @@
         .form-input,.form-select,.form-textarea{padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;transition:border-color 0.2s}
         .form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:#095561;box-shadow:0 0 0 2px rgba(9,85,97,0.1)}
         .form-textarea{resize:vertical;min-height:60px}
+        .field-help{font-size:10px;color:#888;font-style:italic;margin-top:2px}
         .btn{padding:10px 24px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
         .btn-primary{background:#095561;color:white}.btn-primary:hover{background:#0a6b79}
         .btn-secondary{background:#e5e7eb;color:#555}.btn-secondary:hover{background:#d1d5db}
@@ -51,13 +55,10 @@
     <div class="header">
         <h1>TOWT — {{ t('pl_title', lang) }}</h1>
         <p>{{ pl.order.reference }} · {{ pl.order.client_name }}</p>
-        <div style="margin-top:8px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
+        <div style="margin-top:8px;display:flex;gap:6px;justify-content:center;">
             {% for code, label in SUPPORTED_LANGUAGES.items() %}
             <a href="/p/{{ pl.token }}?lang={{ code }}" class="lang-btn {% if lang == code %}active{% endif %}">{{ label }}</a>
             {% endfor %}
-        </div>
-        <div style="margin-top:10px;">
-            <a href="/p/{{ pl.token }}/guide?lang={{ lang }}" style="color:white;font-size:13px;text-decoration:underline;opacity:0.9;">{{ t('guide_link_text', lang) }}</a>
         </div>
     </div>
 
@@ -68,6 +69,14 @@
 
         {% if request.query_params.get('saved') %}
         <div class="saved-banner">✅ {{ t('pl_saved_msg', lang) }}</div>
+        {% endif %}
+
+        {% if request.query_params.get('error') == 'no_file' %}
+        <div class="locked-banner">{{ t('error_no_file', lang) }}</div>
+        {% elif request.query_params.get('error') == 'invalid_file' %}
+        <div class="locked-banner">{{ t('error_invalid_file', lang) }}</div>
+        {% elif request.query_params.get('error') == 'invalid_format' %}
+        <div class="locked-banner">{{ t('error_invalid_format', lang) }}</div>
         {% endif %}
 
         <!-- Info bar -->
@@ -82,6 +91,17 @@
             <div class="info-item"><span class="info-label">Palettes commandées</span><span class="info-value">{{ pl.order.quantity_palettes }}</span></div>
         </div>
 
+        {% if decarb and decarb.decarb_kg > 0 %}
+        <div style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;gap:16px;align-items:center;border:1px solid #86efac;">
+            <div style="font-size:28px;">🌿</div>
+            <div>
+                <div style="font-size:16px;font-weight:700;color:#065f46;">{{ '%.1f'|format(decarb.decarb_kg) }} kg CO₂</div>
+                <div style="font-size:12px;color:#047857;">{{ t('co2_for_shipment', lang) }}</div>
+                <div style="font-size:10px;color:#6b7280;margin-top:4px;">TOWT EF: {{ co2_vars.towt_co2_ef }} gCO₂/t.km · Conventional EF: {{ co2_vars.conventional_co2_ef }} gCO₂/t.km</div>
+            </div>
+        </div>
+        {% endif %}
+
         <form method="POST" action="/p/{{ pl.token }}/save">
             {% for batch in pl.batches %}
             {% set p = 'batch_' ~ batch.id ~ '_' %}
@@ -91,7 +111,7 @@
                     {% if not pl.is_locked and pl.batches|length > 1 %}
                     <form method="POST" action="/p/{{ pl.token }}/batch/{{ batch.id }}" style="display:inline;">
                         <input type="hidden" name="_method" value="DELETE">
-                        <button type="button" class="btn-danger btn" onclick="if(confirm('Supprimer ce batch ?')) fetch('/p/{{ pl.token }}/batch/{{ batch.id }}',{method:'DELETE'}).then(()=>location.reload())">✕ Supprimer</button>
+                        <button type="button" class="btn-danger btn" onclick="if(confirm('{{ t('confirm_delete_batch', lang) }}')) fetch('/p/{{ pl.token }}/batch/{{ batch.id }}',{method:'DELETE'}).then(()=>location.reload())">✕ {{ t('delete', lang) }}</button>
                     </form>
                     {% endif %}
                 </div>
@@ -114,15 +134,38 @@
                     <!-- Client editable fields -->
                     <div class="section-title">👤 {{ t('pl_shipper_section', lang) }}</div>
                     <div class="form-grid">
-                        <div class="form-group"><label class="form-label">{{ t('f_customer_name', lang) }} *</label><input type="text" name="{{ p }}customer_name" class="form-input" value="{{ batch.customer_name or '' }}"></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_customer_name', lang) }} *</label><input type="text" name="{{ p }}customer_name" class="form-input" value="{{ batch.customer_name or '' }}" required></div>
                         <div class="form-group"><label class="form-label">{{ t('f_freight_forwarder', lang) }}</label><input type="text" name="{{ p }}freight_forwarder" class="form-input" value="{{ batch.freight_forwarder or '' }}"></div>
                         <div class="form-group"><label class="form-label">{{ t('f_code_transitaire', lang) }}</label><input type="text" name="{{ p }}code_transitaire" class="form-input" value="{{ batch.code_transitaire or '' }}"></div>
-                        <div class="form-group"><label class="form-label">{{ t('f_shipper_name', lang) }} *</label><input type="text" name="{{ p }}shipper_name" class="form-input" value="{{ batch.shipper_name or '' }}"></div>
-                        <div class="form-group full"><label class="form-label">{{ t('f_shipper_address', lang) }} *</label><textarea name="{{ p }}shipper_address" class="form-textarea">{{ batch.shipper_address or '' }}</textarea></div>
                         <div class="form-group"><label class="form-label">{{ t('f_po_number', lang) }}</label><input type="text" name="{{ p }}po_number" class="form-input" value="{{ batch.po_number or '' }}"></div>
                         <div class="form-group"><label class="form-label">{{ t('f_batch_id', lang) }}</label><input type="text" name="{{ p }}customer_batch_id" class="form-input" value="{{ batch.customer_batch_id or '' }}"></div>
-                        <div class="form-group full"><label class="form-label">{{ t('f_notify_address', lang) }}</label><textarea name="{{ p }}notify_address" class="form-textarea">{{ batch.notify_address or '' }}</textarea></div>
-                        <div class="form-group full"><label class="form-label">{{ t('f_consignee_address', lang) }} *</label><textarea name="{{ p }}consignee_address" class="form-textarea">{{ batch.consignee_address or '' }}</textarea></div>
+                    </div>
+
+                    <div class="section-title">📤 {{ t('f_shipper', lang) }}</div>
+                    <div class="form-grid">
+                        <div class="form-group"><label class="form-label">{{ t('f_shipper_name', lang) }} *</label><input type="text" name="{{ p }}shipper_name" class="form-input" value="{{ batch.shipper_name or '' }}" required></div>
+                        <div class="form-group full"><label class="form-label">{{ t('f_address', lang) }} *</label><input type="text" name="{{ p }}shipper_address" class="form-input" value="{{ batch.shipper_address or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_postal_code', lang) }} *</label><input type="text" name="{{ p }}shipper_postal" class="form-input" value="{{ batch.shipper_postal or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_city', lang) }} *</label><input type="text" name="{{ p }}shipper_city" class="form-input" value="{{ batch.shipper_city or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_country', lang) }} *</label><input type="text" name="{{ p }}shipper_country" class="form-input" value="{{ batch.shipper_country or '' }}" required></div>
+                    </div>
+
+                    <div class="section-title">🔔 {{ t('f_notify_party', lang) }}</div>
+                    <div class="form-grid">
+                        <div class="form-group"><label class="form-label">{{ t('f_name', lang) }} *</label><input type="text" name="{{ p }}notify_name" class="form-input" value="{{ batch.notify_name or '' }}" required></div>
+                        <div class="form-group full"><label class="form-label">{{ t('f_address', lang) }} *</label><input type="text" name="{{ p }}notify_address" class="form-input" value="{{ batch.notify_address or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_postal_code', lang) }} *</label><input type="text" name="{{ p }}notify_postal" class="form-input" value="{{ batch.notify_postal or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_city', lang) }} *</label><input type="text" name="{{ p }}notify_city" class="form-input" value="{{ batch.notify_city or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_country', lang) }} *</label><input type="text" name="{{ p }}notify_country" class="form-input" value="{{ batch.notify_country or '' }}" required></div>
+                    </div>
+
+                    <div class="section-title">📥 {{ t('f_consignee', lang) }}</div>
+                    <div class="form-grid">
+                        <div class="form-group"><label class="form-label">{{ t('f_name', lang) }} *</label><input type="text" name="{{ p }}consignee_name" class="form-input" value="{{ batch.consignee_name or '' }}" required></div>
+                        <div class="form-group full"><label class="form-label">{{ t('f_address', lang) }} *</label><input type="text" name="{{ p }}consignee_address" class="form-input" value="{{ batch.consignee_address or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_postal_code', lang) }} *</label><input type="text" name="{{ p }}consignee_postal" class="form-input" value="{{ batch.consignee_postal or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_city', lang) }} *</label><input type="text" name="{{ p }}consignee_city" class="form-input" value="{{ batch.consignee_city or '' }}" required></div>
+                        <div class="form-group"><label class="form-label">{{ t('f_country', lang) }} *</label><input type="text" name="{{ p }}consignee_country" class="form-input" value="{{ batch.consignee_country or '' }}" required></div>
                     </div>
 
                     <div class="section-title">📦 {{ t('pl_goods_section', lang) }}</div>
@@ -137,6 +180,7 @@
                             </select>
                         </div>
                         <div class="form-group"><label class="form-label">Nature des marchandises *</label><input type="text" name="{{ p }}type_of_goods" class="form-input" value="{{ batch.type_of_goods or '' }}" placeholder="ex: Vin, café, cosmétiques..."></div>
+                        <div class="form-group full"><label class="form-label">Description of the goods</label><textarea name="{{ p }}description_of_goods" class="form-textarea" placeholder="Full description for Bill of Lading">{{ batch.description_of_goods or '' }}</textarea></div>
                         <div class="form-group"><label class="form-label">Produits bio</label>
                             <select name="{{ p }}bio_products" class="form-select">
                                 <option value="">—</option>
@@ -160,10 +204,10 @@
 
                     <div class="section-title">📐 {{ t('pl_dimensions_section', lang) }}</div>
                     <div class="form-grid">
-                        <div class="form-group"><label class="form-label">Longueur (cm)</label><input type="text" name="{{ p }}length_cm" class="form-input" value="{{ batch.length_cm or '' }}"></div>
-                        <div class="form-group"><label class="form-label">Largeur (cm)</label><input type="text" name="{{ p }}width_cm" class="form-input" value="{{ batch.width_cm or '' }}"></div>
-                        <div class="form-group"><label class="form-label">Hauteur (cm)</label><input type="text" name="{{ p }}height_cm" class="form-input" value="{{ batch.height_cm or '' }}"></div>
-                        <div class="form-group"><label class="form-label">Poids brut (kg) *</label><input type="text" name="{{ p }}weight_kg" class="form-input" value="{{ batch.weight_kg or '' }}"></div>
+                        <div class="form-group"><label class="form-label">Longueur (cm) *</label><input type="text" name="{{ p }}length_cm" class="form-input" value="{{ batch.length_cm or '' }}" required><span class="field-help">Outer pallet length incl. packaging</span></div>
+                        <div class="form-group"><label class="form-label">Largeur (cm) *</label><input type="text" name="{{ p }}width_cm" class="form-input" value="{{ batch.width_cm or '' }}" required><span class="field-help">Outer pallet width incl. packaging</span></div>
+                        <div class="form-group"><label class="form-label">Hauteur (cm) *</label><input type="text" name="{{ p }}height_cm" class="form-input" value="{{ batch.height_cm or '' }}" required><span class="field-help">Total height from floor to top of goods, pallet included</span></div>
+                        <div class="form-group"><label class="form-label">Poids brut (kg) *</label><input type="text" name="{{ p }}weight_kg" class="form-input" value="{{ batch.weight_kg or '' }}" required><span class="field-help">Gross weight per pallet: goods + pallet + wrapping</span></div>
                     </div>
                     {% endif %}
                 </div>
@@ -172,17 +216,46 @@
 
             {% if not pl.is_locked %}
             <div class="actions-bar">
-                <form method="POST" action="/p/{{ pl.token }}/batch/add">
-                    <button type="submit" class="btn btn-add">＋ {{ t('pl_add_batch', lang) }}</button>
-                </form>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                    <form method="POST" action="/p/{{ pl.token }}/batch/add" style="display:inline;">
+                        <button type="submit" class="btn btn-add" style="width:auto;padding:10px 20px;">＋ {{ t('pl_add_batch', lang) }}</button>
+                    </form>
+                    <a href="/p/{{ pl.token }}/template" class="btn btn-secondary">📥 {{ t('download_template', lang) }}</a>
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='flex'">📤 {{ t('import_excel', lang) }}</button>
+                </div>
                 <button type="submit" class="btn btn-primary">💾 {{ t('save', lang) }}</button>
             </div>
             {% endif %}
         </form>
     </div>
 
+    <!-- Import Excel Modal -->
+    <div id="import-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;" onclick="if(event.target===this) this.style.display='none'">
+        <div style="background:white;border-radius:12px;padding:24px;max-width:500px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+            <h3 style="margin-bottom:8px;color:#095561;">📤 {{ t('import_excel_title', lang) }}</h3>
+            <p style="font-size:12px;color:#888;margin-bottom:16px;">{{ t('import_excel_desc', lang) }}</p>
+            <form method="POST" action="/p/{{ pl.token }}/import" enctype="multipart/form-data">
+                <input type="file" name="file" accept=".xlsx,.xls" class="form-input" required style="margin-bottom:16px;">
+                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='none'">{{ t('cancel', lang) }}</button>
+                    <button type="submit" class="btn btn-primary">📤 {{ t('import_excel', lang) }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="footer">
         <p>TOWT — Transport à la voile · Décarboner le fret maritime</p>
     </div>
+    <script>
+        document.addEventListener('submit', function(e) {
+            var btn = e.target.querySelector('button[type="submit"]');
+            if (btn && !btn.disabled) {
+                btn.disabled = true;
+                btn.style.opacity = '0.6';
+                setTimeout(function() { btn.disabled = false; btn.style.opacity = '1'; }, 5000);
+            }
+        });
+    </script>
 </body>
 </html>

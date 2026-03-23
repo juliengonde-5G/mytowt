@@ -32,7 +32,7 @@
                 <div class="fg"><label>To (Charterer)</label><input type="text" name="to_charterer" value="{{ doc_data.get('to_charterer', '') }}" class="fi"></div>
                 <div class="fg"><label>Vessel</label><input type="text" name="vessel_name" value="{{ doc_data.get('vessel_name', prefill.vessel_name) }}" class="fi" readonly></div>
                 <div class="fg"><label>Voyage No</label><input type="text" name="voyage_no" value="{{ doc_data.get('voyage_no', prefill.voyage_no) }}" class="fi" readonly></div>
-                <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.port_dep) }}" class="fi"></div>
+                <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.current_port) }}" class="fi"></div>
                 <div class="fg"><label>Date of Notice</label><input type="date" name="notice_date" value="{{ doc_data.get('notice_date', prefill.date_today) }}" class="fi"></div>
                 <div class="fg"><label>Time of Notice (LT)</label><input type="time" name="notice_time" value="{{ doc_data.get('notice_time', '') }}" class="fi"></div>
             </div>
@@ -40,7 +40,14 @@
             <div class="fg full"><label>Position (roads/at berth/anchorage)</label><input type="text" name="position" value="{{ doc_data.get('position', '') }}" class="fi" placeholder="roads / at berth / anchorage"></div>
             <div class="fg full"><label>Additional remarks</label><textarea name="remarks" class="fi ta">{{ doc_data.get('remarks', '') }}</textarea></div>
             <div class="doc-grid-2">
-                <div class="fg"><label>Master name</label><input type="text" name="master_name" value="{{ doc_data.get('master_name', '') }}" class="fi"></div>
+                <div class="fg"><label>Master name</label>
+                    <select name="master_name" class="fi">
+                        <option value="">—</option>
+                        {% for ca in crew_onboard %}
+                        <option value="{{ ca.member.full_name }}" {% if doc_data.get('master_name') == ca.member.full_name %}selected{% endif %}>{{ ca.member.full_name }} ({{ ca.member.role_label }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="fg"><label>Agent stamp / signature</label><input type="text" name="agent_stamp" value="{{ doc_data.get('agent_stamp', '') }}" class="fi" placeholder="For terminal use"></div>
             </div>
         </div>
@@ -54,14 +61,21 @@
                 <div class="fg"><label>To</label><input type="text" name="to_charterer" value="{{ doc_data.get('to_charterer', '') }}" class="fi"></div>
                 <div class="fg"><label>Vessel</label><input type="text" name="vessel_name" value="{{ doc_data.get('vessel_name', prefill.vessel_name) }}" class="fi" readonly></div>
                 <div class="fg"><label>Voyage No</label><input type="text" name="voyage_no" value="{{ doc_data.get('voyage_no', prefill.voyage_no) }}" class="fi" readonly></div>
-                <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.port_dep) }}" class="fi"></div>
+                <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.current_port) }}" class="fi"></div>
             </div>
             <div class="fg full"><label>Reason for re-tendering</label><textarea name="reason" class="fi ta">{{ doc_data.get('reason', '') }}</textarea></div>
             <div class="doc-grid-2">
                 <div class="fg"><label>Date</label><input type="date" name="notice_date" value="{{ doc_data.get('notice_date', prefill.date_today) }}" class="fi"></div>
                 <div class="fg"><label>Time (LT)</label><input type="time" name="notice_time" value="{{ doc_data.get('notice_time', '') }}" class="fi"></div>
             </div>
-            <div class="fg"><label>Master name</label><input type="text" name="master_name" value="{{ doc_data.get('master_name', '') }}" class="fi"></div>
+            <div class="fg"><label>Master name</label>
+                <select name="master_name" class="fi">
+                    <option value="">—</option>
+                    {% for ca in crew_onboard %}
+                    <option value="{{ ca.member.full_name }}" {% if doc_data.get('master_name') == ca.member.full_name %}selected{% endif %}>{{ ca.member.full_name }} ({{ ca.member.role_label }})</option>
+                    {% endfor %}
+                </select>
+            </div>
         </div>
 
         <!-- ═══ HOLDS_CERT ═══ -->
@@ -72,14 +86,21 @@
                 <div class="fg"><label>To</label><input type="text" name="to" value="{{ doc_data.get('to', '') }}" class="fi"></div>
                 <div class="fg"><label>Vessel</label><input type="text" name="vessel_name" value="{{ doc_data.get('vessel_name', prefill.vessel_name) }}" class="fi" readonly></div>
                 <div class="fg"><label>Voyage No</label><input type="text" name="voyage_no" value="{{ doc_data.get('voyage_no', prefill.voyage_no) }}" class="fi" readonly></div>
-                <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.port_dep) }}" class="fi"></div>
+                <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.current_port) }}" class="fi"></div>
                 <div class="fg"><label>Cargo to be loaded</label><input type="text" name="cargo" value="{{ doc_data.get('cargo', '') }}" class="fi"></div>
                 <div class="fg"><label>Date of inspection</label><input type="date" name="inspection_date" value="{{ doc_data.get('inspection_date', prefill.date_today) }}" class="fi"></div>
             </div>
             <div class="fg full"><label>Holds inspected (e.g. FWD Hold, AFT Hold)</label><textarea name="holds_list" class="fi ta">{{ doc_data.get('holds_list', '') }}</textarea></div>
             <div class="fg full"><label>Result / observations</label><textarea name="observations" class="fi ta">{{ doc_data.get('observations', '') }}</textarea></div>
             <div class="doc-grid-2">
-                <div class="fg"><label>Chief Officer / Master</label><input type="text" name="officer_name" value="{{ doc_data.get('officer_name', '') }}" class="fi"></div>
+                <div class="fg"><label>Chief Officer / Master</label>
+                    <select name="officer_name" class="fi">
+                        <option value="">—</option>
+                        {% for ca in crew_onboard %}
+                        <option value="{{ ca.member.full_name }}" {% if doc_data.get('officer_name') == ca.member.full_name %}selected{% endif %}>{{ ca.member.full_name }} ({{ ca.member.role_label }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="fg"><label>Surveyor / Terminal stamp</label><input type="text" name="surveyor" value="{{ doc_data.get('surveyor', '') }}" class="fi"></div>
             </div>
         </div>
@@ -90,7 +111,7 @@
             <h3>KEY TRANSFER MEETING</h3>
             <div class="doc-grid-2">
                 <div class="fg"><label>Vessel</label><input type="text" name="vessel_name" value="{{ doc_data.get('vessel_name', prefill.vessel_name) }}" class="fi" readonly></div>
-                <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.port_dep) }}" class="fi"></div>
+                <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.current_port) }}" class="fi"></div>
                 <div class="fg"><label>Voyage No</label><input type="text" name="voyage_no" value="{{ doc_data.get('voyage_no', prefill.voyage_no) }}" class="fi" readonly></div>
                 <div class="fg"><label>Date</label><input type="date" name="meeting_date" value="{{ doc_data.get('meeting_date', prefill.date_today) }}" class="fi"></div>
             </div>
@@ -105,7 +126,7 @@
             <h3>PRE-LOADING / DISCHARGING MEETING</h3>
             <div class="doc-grid-2">
                 <div class="fg"><label>Vessel</label><input type="text" name="vessel_name" value="{{ doc_data.get('vessel_name', prefill.vessel_name) }}" class="fi" readonly></div>
-                <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.port_dep) }}" class="fi"></div>
+                <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.current_port) }}" class="fi"></div>
                 <div class="fg"><label>Voyage No</label><input type="text" name="voyage_no" value="{{ doc_data.get('voyage_no', prefill.voyage_no) }}" class="fi" readonly></div>
                 <div class="fg"><label>Date</label><input type="date" name="meeting_date" value="{{ doc_data.get('meeting_date', prefill.date_today) }}" class="fi"></div>
             </div>
@@ -123,7 +144,7 @@
                 <div class="fg"><label>To</label><input type="text" name="to" value="{{ doc_data.get('to', 'TO WHOM IT MAY CONCERN') }}" class="fi"></div>
                 <div class="fg"><label>Vessel</label><input type="text" name="vessel_name" value="{{ doc_data.get('vessel_name', prefill.vessel_name) }}" class="fi" readonly></div>
                 <div class="fg"><label>Voyage No</label><input type="text" name="voyage_no" value="{{ doc_data.get('voyage_no', prefill.voyage_no) }}" class="fi" readonly></div>
-                <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.port_dep) }}" class="fi"></div>
+                <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.current_port) }}" class="fi"></div>
                 <div class="fg"><label>Date</label><input type="date" name="lop_date" value="{{ doc_data.get('lop_date', prefill.date_today) }}" class="fi"></div>
                 <div class="fg"><label>Time</label><input type="time" name="lop_time" value="{{ doc_data.get('lop_time', '') }}" class="fi"></div>
             </div>
@@ -131,7 +152,14 @@
             <div class="fg full"><label>Details and facts</label><textarea name="details" class="fi ta" rows="8">{{ doc_data.get('details', '') }}</textarea></div>
             <div class="fg full"><label>Reserve all rights</label><textarea name="reserve" class="fi ta">{{ doc_data.get('reserve', 'We hereby reserve all our rights and those of our owners, charterers, and insurers, and hold you and/or your principals responsible for all consequences, losses and expenses arising therefrom.') }}</textarea></div>
             <div class="doc-grid-2">
-                <div class="fg"><label>Master name</label><input type="text" name="master_name" value="{{ doc_data.get('master_name', '') }}" class="fi"></div>
+                <div class="fg"><label>Master name</label>
+                    <select name="master_name" class="fi">
+                        <option value="">—</option>
+                        {% for ca in crew_onboard %}
+                        <option value="{{ ca.member.full_name }}" {% if doc_data.get('master_name') == ca.member.full_name %}selected{% endif %}>{{ ca.member.full_name }} ({{ ca.member.role_label }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="fg"><label>Countersigned by</label><input type="text" name="countersigned" value="{{ doc_data.get('countersigned', '') }}" class="fi" placeholder="For receipt only without prejudice"></div>
             </div>
         </div>
@@ -143,7 +171,7 @@
             <div class="doc-grid-2">
                 <div class="fg"><label>Vessel</label><input type="text" name="vessel_name" value="{{ doc_data.get('vessel_name', prefill.vessel_name) }}" class="fi" readonly></div>
                 <div class="fg"><label>Voyage No</label><input type="text" name="voyage_no" value="{{ doc_data.get('voyage_no', prefill.voyage_no) }}" class="fi" readonly></div>
-                <div class="fg"><label>Port of loading</label><input type="text" name="port_loading" value="{{ doc_data.get('port_loading', prefill.port_dep) }}" class="fi"></div>
+                <div class="fg"><label>Port of loading</label><input type="text" name="port_loading" value="{{ doc_data.get('port_loading', prefill.current_port) }}" class="fi"></div>
                 <div class="fg"><label>Date</label><input type="date" name="receipt_date" value="{{ doc_data.get('receipt_date', prefill.date_today) }}" class="fi"></div>
             </div>
             <div class="fg full"><label>Shipper</label><input type="text" name="shipper" value="{{ doc_data.get('shipper', '') }}" class="fi"></div>
@@ -153,7 +181,14 @@
                 <div class="fg"><label>Gross weight (kg)</label><input type="text" name="weight" value="{{ doc_data.get('weight', '') }}" class="fi"></div>
             </div>
             <div class="fg full"><label>Condition / Remarks</label><textarea name="condition" class="fi ta">{{ doc_data.get('condition', 'Received in apparent good order and condition') }}</textarea></div>
-            <div class="fg"><label>Chief Officer</label><input type="text" name="officer_name" value="{{ doc_data.get('officer_name', '') }}" class="fi"></div>
+            <div class="fg"><label>Chief Officer</label>
+                <select name="officer_name" class="fi">
+                    <option value="">—</option>
+                    {% for ca in crew_onboard %}
+                    <option value="{{ ca.member.full_name }}" {% if doc_data.get('officer_name') == ca.member.full_name %}selected{% endif %}>{{ ca.member.full_name }} ({{ ca.member.role_label }})</option>
+                    {% endfor %}
+                </select>
+            </div>
         </div>
 
         <!-- ═══ SOF document ═══ -->

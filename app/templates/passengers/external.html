@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <title>TOWT — {% if lang == 'en' %}Your crossing{% else %}Votre traversée{% endif %} {{ booking.reference }}</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f7f8;color:#333;min-height:100vh}
+        body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f7f8;color:#333;min-height:100vh}
         .header{background:linear-gradient(135deg,#095561 0%,#0a6b7a 100%);color:white;padding:24px;text-align:center}
         .header h1{font-size:20px;margin-bottom:4px}.header p{font-size:13px;opacity:0.8}
         .lang-toggle{display:inline-flex;gap:4px;margin-top:8px}

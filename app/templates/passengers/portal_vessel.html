@@ -1,0 +1,47 @@
+{% extends "passengers/portal_base.html" %}
+{% block portal_title %}{% if lang == 'en' %}The Vessel{% else %}Le Navire{% endif %}{% endblock %}
+
+{% block portal_content %}
+<h1>🚢 {% if lang == 'en' %}The Vessel{% else %}Le Navire{% endif %} — {{ vessel.name }}</h1>
+
+<div class="card">
+    <div class="info-grid">
+        <div class="info-item"><span class="label">{% if lang == 'en' %}Name{% else %}Nom{% endif %}</span><span class="value">{{ vessel.name }}</span></div>
+        <div class="info-item"><span class="label">IMO</span><span class="value">{{ vessel.imo_number or '—' }}</span></div>
+        <div class="info-item"><span class="label">{% if lang == 'en' %}Flag{% else %}Pavillon{% endif %}</span><span class="value">{{ vessel.flag or '—' }}</span></div>
+        <div class="info-item"><span class="label">{% if lang == 'en' %}Deadweight{% else %}Port en lourd{% endif %}</span><span class="value">{{ '%.0f'|format(vessel.dwt) if vessel.dwt else '—' }} T</span></div>
+        <div class="info-item"><span class="label">{% if lang == 'en' %}Pallet capacity{% else %}Capacité palettes{% endif %}</span><span class="value">{{ vessel.capacity_palettes or '—' }}</span></div>
+        <div class="info-item"><span class="label">{% if lang == 'en' %}Cruising speed{% else %}Vitesse de croisière{% endif %}</span><span class="value">{{ vessel.default_speed or 8 }} {% if lang == 'en' %}knots{% else %}nœuds{% endif %}</span></div>
+    </div>
+</div>
+
+<div class="card content-section">
+    {% if lang == 'en' %}
+    <h2>About {{ vessel.name }}</h2>
+    <p>{{ vessel.name }} is part of the TOWT fleet of modern cargo sailing vessels, designed to transport goods across the ocean using wind power while offering a unique experience to a limited number of passengers.</p>
+    <h3>Key features</h3>
+    <ul>
+        <li>Modern sailing cargo vessel optimized for transoceanic routes</li>
+        <li>4 comfortable cabins for passengers (8 berths maximum)</li>
+        <li>Professional crew trained in both sailing and passenger safety</li>
+        <li>Shared living spaces: saloon, library, observation deck</li>
+        <li>Full galley with meals prepared by the ship's cook</li>
+    </ul>
+    <h3>Passenger experience</h3>
+    <p>As a passenger aboard {{ vessel.name }}, you'll live alongside the crew, share meals in the saloon, and have the opportunity to participate in sailing maneuvers if you wish. Each day brings new horizons, wildlife sightings, and the rhythm of the sea.</p>
+    {% else %}
+    <h2>À propos du {{ vessel.name }}</h2>
+    <p>Le {{ vessel.name }} fait partie de la flotte TOWT de voiliers-cargos modernes, conçus pour transporter des marchandises à travers l'océan grâce à la force du vent tout en offrant une expérience unique à un nombre limité de passagers.</p>
+    <h3>Caractéristiques principales</h3>
+    <ul>
+        <li>Voilier-cargo moderne optimisé pour les routes transocéaniques</li>
+        <li>4 cabines confortables pour les passagers (8 couchettes maximum)</li>
+        <li>Équipage professionnel formé à la navigation et à la sécurité des passagers</li>
+        <li>Espaces de vie partagés : carré, bibliothèque, pont d'observation</li>
+        <li>Cuisine complète avec repas préparés par le cuisinier de bord</li>
+    </ul>
+    <h3>L'expérience passager</h3>
+    <p>En tant que passager à bord du {{ vessel.name }}, vous vivrez aux côtés de l'équipage, partagerez les repas au carré, et aurez l'opportunité de participer aux manœuvres si vous le souhaitez. Chaque jour apporte de nouveaux horizons, des observations de la faune marine et le rythme de la mer.</p>
+    {% endif %}
+</div>
+{% endblock %}

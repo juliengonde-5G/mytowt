@@ -1,0 +1,54 @@
+{% extends "passengers/portal_base.html" %}
+{% block portal_title %}{% if lang == 'en' %}Documents{% else %}Documentation{% endif %}{% endblock %}
+
+{% block portal_content %}
+<h1>📄 {% if lang == 'en' %}Contractual Documents{% else %}Documentation contractuelle{% endif %}</h1>
+
+<div class="card">
+    <h2>{% if lang == 'en' %}Crossing book{% else %}Book de traversée{% endif %}</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:12px;">{% if lang == 'en' %}Your complete crossing book with vessel information, safety procedures, and voyage details.{% else %}Votre book de traversée complet avec les informations du navire, les procédures de sécurité et les détails du voyage.{% endif %}</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="/passenger/{{ token }}/book" class="btn btn-primary">📖 Book FR (PDF)</a>
+        <a href="/passenger/{{ token }}/book/en" class="btn btn-primary" style="background:#0a6b7a;">📖 Book EN (PDF)</a>
+    </div>
+</div>
+
+<div class="card content-section">
+    <h2>{% if lang == 'en' %}General conditions of transport{% else %}Conditions générales de transport{% endif %}</h2>
+    {% if lang == 'en' %}
+    <p>By booking your crossing with TOWT, you accept the following general conditions:</p>
+    <h3>1. Nature of the crossing</h3>
+    <p>TOWT provides passenger transport on cargo sailing vessels. The crossing is an adventure, not a cruise. Schedules are indicative and depend on weather conditions. Departure and arrival dates may vary by several days.</p>
+    <h3>2. Pricing and payment</h3>
+    <p>The price includes cabin accommodation, full board (3 meals per day), and insurance. A 30% deposit is required upon booking confirmation. The balance is due 60 days before departure.</p>
+    <h3>3. Cancellation policy</h3>
+    <ul>
+        <li>More than 60 days before departure: full refund minus administrative fees (50€)</li>
+        <li>30–60 days before departure: 50% of the total price retained</li>
+        <li>Less than 30 days before departure: no refund</li>
+        <li>Cancellation by TOWT (weather, technical): full refund or rebooking</li>
+    </ul>
+    <h3>4. Insurance</h3>
+    <p>Travel insurance covering repatriation and medical expenses is mandatory. Proof of insurance must be provided before boarding.</p>
+    <h3>5. Liability</h3>
+    <p>TOWT is responsible for the safe transport of passengers in accordance with maritime law. Passengers must follow all safety instructions from the crew at all times.</p>
+    {% else %}
+    <p>En réservant votre traversée avec TOWT, vous acceptez les conditions générales suivantes :</p>
+    <h3>1. Nature de la traversée</h3>
+    <p>TOWT assure le transport de passagers sur des voiliers-cargos. La traversée est une aventure, pas une croisière. Les horaires sont indicatifs et dépendent des conditions météorologiques. Les dates de départ et d'arrivée peuvent varier de plusieurs jours.</p>
+    <h3>2. Tarifs et paiement</h3>
+    <p>Le prix inclut l'hébergement en cabine, la pension complète (3 repas par jour) et l'assurance. Un acompte de 30% est requis à la confirmation de la réservation. Le solde est dû 60 jours avant le départ.</p>
+    <h3>3. Politique d'annulation</h3>
+    <ul>
+        <li>Plus de 60 jours avant le départ : remboursement intégral moins frais administratifs (50€)</li>
+        <li>30–60 jours avant le départ : 50% du prix total retenu</li>
+        <li>Moins de 30 jours avant le départ : aucun remboursement</li>
+        <li>Annulation par TOWT (météo, technique) : remboursement intégral ou report</li>
+    </ul>
+    <h3>4. Assurance</h3>
+    <p>Une assurance voyage couvrant le rapatriement et les frais médicaux est obligatoire. Le justificatif d'assurance doit être fourni avant l'embarquement.</p>
+    <h3>5. Responsabilité</h3>
+    <p>TOWT est responsable du transport sûr des passagers conformément au droit maritime. Les passagers doivent suivre toutes les consignes de sécurité de l'équipage en permanence.</p>
+    {% endif %}
+</div>
+{% endblock %}

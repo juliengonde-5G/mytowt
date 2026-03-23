@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Depends, Query, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -16,6 +16,8 @@ from app.models.order import Order
 from app.models.finance import LegFinance
 from app.models.operation import EscaleOperation
 from app.models.packing_list import PackingList
+from app.models.onboard import OnboardNotification
+from app.utils.activity import log_activity
 
 router = APIRouter(tags=["dashboard"])
 
@@ -172,10 +174,15 @@ async def dashboard(
                 location = leg.arrival_port.name if leg.arrival_port else leg.arrival_port_locode
                 current_leg = leg
                 break
-            elif leg.eta and leg.eta > now and not leg.ata:
+            elif leg.atd and not leg.ata:
                 status = "en_mer"
                 current_leg = leg
-                location = f"→ {leg.arrival_port.name}"
+                location = f"→ {leg.arrival_port.name}" if leg.arrival_port else "→ ?"
+                break
+            elif not leg.atd and not leg.ata and leg.etd and leg.etd > now:
+                status = "a_quai"
+                location = leg.departure_port.name if leg.departure_port else leg.departure_port_locode
+                current_leg = leg
                 break
 
         if status == "unknown" and legs:
@@ -218,6 +225,10 @@ async def dashboard(
 
     # CO2 avoided + fill rate
     from app.models.kpi import LegKPI
+    from app.routers.kpi_router import get_emission_params
+    emission_params = await get_emission_params(db)
+    co2_conv_factor = emission_params.get("conventional_co2_per_ton_nm", 0.0152)
+    co2_sail_factor = emission_params.get("sail_co2_per_ton_nm", 0.00198)
     kpi_legs_result = await db.execute(
         select(Leg).options(selectinload(Leg.vessel), selectinload(Leg.kpi))
         .where(Leg.year == current_year, Leg.status != "cancelled")
@@ -229,8 +240,8 @@ async def dashboard(
         cargo = kl.kpi.cargo_tons if kl.kpi else 0
         distance = kl.computed_distance or 0
         if cargo and distance:
-            co2_conv = cargo * distance * 0.0152
-            co2_sail = cargo * distance * 0.00198
+            co2_conv = cargo * distance * co2_conv_factor
+            co2_sail = cargo * distance * co2_sail_factor
             co2_avoided_total += (co2_conv - co2_sail)
         if kl.vessel and kl.vessel.dwt and cargo:
             fill_rates.append(min(100, (cargo / kl.vessel.dwt) * 100))
@@ -256,6 +267,26 @@ async def dashboard(
     )
     cargo_notifications = notif_result.scalars().all()
 
+    # Dashboard notifications
+    from app.models.notification import Notification
+    notifs_result = await db.execute(
+        select(Notification)
+        .where(Notification.is_archived == False)
+        .order_by(Notification.created_at.desc())
+        .limit(50)
+    )
+    notifications = notifs_result.scalars().all()
+
+    # Company-wide operational notifications (ATA/ATD/order confirmed)
+    company_notif_result = await db.execute(
+        select(OnboardNotification)
+        .options(selectinload(OnboardNotification.leg))
+        .where(OnboardNotification.is_read == False)
+        .order_by(OnboardNotification.created_at.desc())
+        .limit(20)
+    )
+    company_notifications = company_notif_result.scalars().all()
+
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "user": user,
         "vessel_statuses": vessel_statuses,
@@ -264,6 +295,8 @@ async def dashboard(
         "co2_avoided_kg": co2_avoided_total, "avg_fill_rate": avg_fill_rate,
         "upcoming_legs": upcoming_legs, "alerts": alerts,
         "cargo_notifications": cargo_notifications,
+        "notifications": notifications,
+        "company_notifications": company_notifications,
         "current_year": current_year, "active_module": "dashboard",
     })
 
@@ -285,7 +318,55 @@ async def dismiss_cargo_notification(
     return RedirectResponse(url="/", status_code=303)
 
 
-# ─── CAPTAIN DASHBOARD ──────────────────────────────────────
+# ─── NOTIFICATION ACTIONS ────────────────────────────────────
+@router.post("/notifications/{nid}/toggle-read", response_class=HTMLResponse)
+async def toggle_notification_read(
+    nid: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.notification import Notification
+    notif = await db.get(Notification, nid)
+    if notif:
+        notif.is_read = not notif.is_read
+        await db.flush()
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/"})
+    return RedirectResponse(url="/", status_code=303)
+
+
+@router.post("/notifications/{nid}/archive", response_class=HTMLResponse)
+async def archive_notification(
+    nid: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.notification import Notification
+    notif = await db.get(Notification, nid)
+    if notif:
+        notif.is_archived = True
+        await db.flush()
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/"})
+    return RedirectResponse(url="/", status_code=303)
+
+
+@router.post("/notifications/archive-read", response_class=HTMLResponse)
+async def archive_all_read_notifications(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.notification import Notification
+    result = await db.execute(
+        select(Notification).where(Notification.is_read == True, Notification.is_archived == False)
+    )
+    for n in result.scalars().all():
+        n.is_archived = True
+    await db.flush()
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/"})
+    return RedirectResponse(url="/", status_code=303)
 @router.get("/captain", response_class=HTMLResponse)
 async def captain_dashboard(
     request: Request,
