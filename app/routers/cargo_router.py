@@ -391,20 +391,35 @@ async def bill_of_lading(
     shipper_full = first.shipper_name or "" if first else ""
     if first and first.shipper_address:
         shipper_full += "\n" + first.shipper_address
+    # Compute departure_date (ATD or ETD) and loading_date (from first batch or ETD)
+    leg = pl.order.leg
+    departure_date_str = ""
+    loading_date_str = ""
+    if leg:
+        dep_dt = leg.atd or leg.etd
+        if dep_dt:
+            departure_date_str = dep_dt.strftime("%d/%m/%Y")
+    if first and first.loading_date:
+        loading_date_str = first.loading_date.strftime("%d/%m/%Y")
+    elif leg and leg.etd:
+        loading_date_str = leg.etd.strftime("%d/%m/%Y")
+
     replacements = {
         "SHIPPER_NAME": shipper_full,
         "BILL_OF_LADING_ID": f"{pl.order.reference}-BL",
         "BOOKING_CONFIRMATION_TOWT": pl.order.reference or "",
         "CONSIGNEE_ORDER_ADRESS": (first.consignee_address if first else "") or "",
         "NOTIFY_ADRESS": (first.notify_address if first else "") or "",
-        "VESSEL": pl.order.leg.vessel.name if pl.order.leg and pl.order.leg.vessel else "",
-        "VOYAGE_ID": pl.order.leg.leg_code if pl.order.leg else "",
-        "POL_NAME": pl.order.leg.departure_port.name if pl.order.leg and pl.order.leg.departure_port else "",
-        "POD_NAME": pl.order.leg.arrival_port.name if pl.order.leg and pl.order.leg.arrival_port else "",
+        "VESSEL": leg.vessel.name if leg and leg.vessel else "",
+        "VOYAGE_ID": leg.leg_code if leg else "",
+        "POL_NAME": leg.departure_port.name if leg and leg.departure_port else "",
+        "POD_NAME": leg.arrival_port.name if leg and leg.arrival_port else "",
         "Maximum_de_CASES_QUANTITY": str(total_cases) if total_cases else "—",
         "Nombre_de_PALLET_ID": str(total_pallets) if total_pallets else "—",
         "Maximum_de_WEIGHT_KG": str(int(total_weight)) if total_weight else "—",
         "TYPE_OF_GOODS": goods_types or "—",
+        "departure_date": departure_date_str or "—",
+        "loading_date": loading_date_str or "—",
     }
 
     # Clone template and do replacement in document.xml
@@ -900,6 +915,20 @@ async def client_packing_list(
         "request": request, "pl": pl,
         "imo_classes": IMO_CLASSES,
         "lang": lang,
+    })
+
+
+@ext_router.get("/{token}/guide", response_class=HTMLResponse)
+async def client_guide(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(PackingList).where(PackingList.token == token))
+    pl = result.scalar_one_or_none()
+    if not pl:
+        raise HTTPException(404, detail="Lien invalide ou expiré")
+    lang = request.query_params.get('lang') or request.cookies.get('towt_lang') or 'fr'
+    if lang not in ('fr', 'en', 'es', 'pt-br', 'vi'):
+        lang = 'fr'
+    return templates.TemplateResponse("cargo/client_guide.html", {
+        "request": request, "token": token, "lang": lang,
     })
 
 
