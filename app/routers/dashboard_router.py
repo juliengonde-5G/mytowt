@@ -343,6 +343,38 @@ async def toggle_notification_read(
     return RedirectResponse(url="/", status_code=303)
 
 
+@router.post("/notifications/{nid}/dismiss", response_class=HTMLResponse)
+async def dismiss_company_notification(
+    nid: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    notif = await db.get(OnboardNotification, nid)
+    if notif:
+        notif.is_read = True
+        await db.flush()
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/"})
+    return RedirectResponse(url="/", status_code=303)
+
+
+@router.post("/notifications/dismiss-all", response_class=HTMLResponse)
+async def dismiss_all_company_notifications(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(OnboardNotification).where(OnboardNotification.is_read == False)
+    )
+    for n in result.scalars().all():
+        n.is_read = True
+    await db.flush()
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/"})
+    return RedirectResponse(url="/", status_code=303)
+
+
 @router.post("/notifications/{nid}/archive", response_class=HTMLResponse)
 async def archive_notification(
     nid: int, request: Request,
