@@ -59,6 +59,16 @@ async def generate_reference(db: AsyncSession) -> str:
     return f"{prefix}{count + 1:04d}"
 
 
+async def generate_transport_reference(db: AsyncSession, leg: Leg) -> str:
+    """Generate TUAW{leg_code}{nn} reference for an order assigned to a leg."""
+    prefix = f"TUAW{leg.leg_code}"
+    result = await db.execute(
+        select(func.count(Order.id)).where(Order.reference.like(f"{prefix}%"))
+    )
+    count = result.scalar() or 0
+    return f"{prefix}{count + 1:02d}"
+
+
 async def find_matching_leg(db: AsyncSession, order: Order):
     if not order.departure_locode and not order.arrival_locode:
         return None
@@ -180,6 +190,7 @@ async def order_create_submit(
     if matching:
         order.leg_id = matching.id
         order.status = "reserve"
+        order.reference = await generate_transport_reference(db, matching)
 
     # ─── Push to Pipedrive as Deal ───
     try:
@@ -360,6 +371,11 @@ async def order_assign_submit(
     if _lid:
         if order.status == "non_affecte":
             order.status = "reserve"
+        # Generate TUAW reference if not already set
+        if not order.reference.startswith("TUAW"):
+            leg_result = await db.execute(select(Leg).where(Leg.id == _lid))
+            leg = leg_result.scalar_one()
+            order.reference = await generate_transport_reference(db, leg)
     else:
         order.status = "non_affecte"
     await db.flush()

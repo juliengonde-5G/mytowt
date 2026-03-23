@@ -6,7 +6,6 @@
 <a href="/cargo" class="btn btn-secondary btn-sm"><i data-lucide="arrow-left"></i> Retour</a>
 <a href="/cargo/{{ pl.id }}/history" class="btn btn-secondary btn-sm"><i data-lucide="history"></i> Historique</a>
 <a href="/cargo/{{ pl.id }}/excel" class="btn btn-secondary btn-sm"><i data-lucide="file-spreadsheet"></i> Excel</a>
-<a href="/cargo/{{ pl.id }}/bol" class="btn btn-secondary btn-sm"><i data-lucide="file-text"></i> Bill of Lading</a>
 <a href="/cargo/{{ pl.id }}/arrival-notice" class="btn btn-secondary btn-sm"><i data-lucide="ship"></i> Arrival Notice</a>
 {% if not pl.is_locked %}
 <button class="btn btn-secondary btn-sm" onclick="toggleEditMode()" id="edit-toggle-btn"><i data-lucide="pencil"></i> Modifier</button>
@@ -67,7 +66,10 @@
     <div class="batch-card {% if pl.is_locked %}locked{% endif %}">
         <div class="batch-header">
             <h4>Batch #{{ batch.batch_number }}{% if batch.customer_batch_id %} — {{ batch.customer_batch_id }}{% endif %}</h4>
-            <span style="font-size:11px;color:#888;">{% if batch.pallet_quantity %}{{ batch.pallet_quantity }} pal.{% endif %}{% if batch.weight_kg %} · {{ batch.weight_kg }} kg{% endif %}</span>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:11px;color:#888;">{% if batch.pallet_quantity %}{{ batch.pallet_quantity }} pal.{% endif %}{% if batch.weight_kg %} · {{ batch.weight_kg }} kg{% endif %}</span>
+                <a href="/cargo/{{ pl.id }}/bol/{{ batch.id }}" class="btn btn-secondary btn-sm" style="font-size:11px;padding:3px 8px;"><i data-lucide="file-text" style="width:12px;height:12px;"></i> BL</a>
+            </div>
         </div>
         <div class="batch-grid">
             <div class="batch-section">

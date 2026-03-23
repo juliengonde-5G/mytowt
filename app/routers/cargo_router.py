@@ -374,9 +374,9 @@ async def export_excel(
 
 
 # === PDF/DOCX BILL OF LADING (from TOWT template) ===
-@router.get("/{pl_id}/bol")
+@router.get("/{pl_id}/bol/{batch_id}")
 async def bill_of_lading(
-    pl_id: int, request: Request,
+    pl_id: int, batch_id: int, request: Request,
     user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -392,6 +392,11 @@ async def bill_of_lading(
     if not pl:
         raise HTTPException(404)
 
+    # Find the specific batch
+    batch = next((b for b in pl.batches if b.id == batch_id), None)
+    if not batch:
+        raise HTTPException(404, detail="Batch non trouvé")
+
     import shutil, zipfile, re, os
 
     template_path = "/app/app/static/BILL_OF_LADING_TEMPLATE.docx"
@@ -401,35 +406,32 @@ async def bill_of_lading(
     if not os.path.exists(template_path):
         raise HTTPException(500, detail="Template BOL non trouvé")
 
-    # Aggregate batch data
-    total_cases = sum(b.cases_quantity or 0 for b in pl.batches)
-    total_pallets = sum(b.pallet_quantity or 0 for b in pl.batches)
-    total_weight = sum(b.weight_kg or 0 for b in pl.batches)
-    goods_types = ", ".join(set(b.type_of_goods for b in pl.batches if b.type_of_goods))
-    first = pl.batches[0] if pl.batches else None
+    # Batch-specific data
+    bl_id = batch.bill_of_lading_id or f"{pl.order.reference}_B{batch.batch_number:02d}"
+    leg = pl.order.leg
 
-    # Build replacement map
-    shipper_full = first.shipper_name or "" if first else ""
-    if first and first.shipper_address:
-        shipper_full += "\n" + first.shipper_address
+    # Build replacement map from this batch
+    shipper_full = batch.shipper_name or ""
+    if batch.shipper_address:
+        shipper_full += "\n" + batch.shipper_address
     replacements = {
         "SHIPPER_NAME": shipper_full,
-        "BILL_OF_LADING_ID": f"{pl.order.reference}-BL",
+        "BILL_OF_LADING_ID": bl_id,
         "BOOKING_CONFIRMATION_TOWT": pl.order.reference or "",
-        "CONSIGNEE_ORDER_ADRESS": (first.consignee_address if first else "") or "",
-        "NOTIFY_ADRESS": (first.notify_address if first else "") or "",
-        "VESSEL": pl.order.leg.vessel.name if pl.order.leg and pl.order.leg.vessel else "",
-        "VOYAGE_ID": pl.order.leg.leg_code if pl.order.leg else "",
-        "POL_NAME": pl.order.leg.departure_port.name if pl.order.leg and pl.order.leg.departure_port else "",
-        "POD_NAME": pl.order.leg.arrival_port.name if pl.order.leg and pl.order.leg.arrival_port else "",
-        "Maximum_de_CASES_QUANTITY": str(total_cases) if total_cases else "—",
-        "Nombre_de_PALLET_ID": str(total_pallets) if total_pallets else "—",
-        "Maximum_de_WEIGHT_KG": str(int(total_weight)) if total_weight else "—",
-        "TYPE_OF_GOODS": goods_types or "—",
+        "CONSIGNEE_ORDER_ADRESS": batch.consignee_address or "",
+        "NOTIFY_ADRESS": batch.notify_address or "",
+        "VESSEL": leg.vessel.name if leg and leg.vessel else "",
+        "VOYAGE_ID": leg.leg_code if leg else "",
+        "POL_NAME": leg.departure_port.name if leg and leg.departure_port else "",
+        "POD_NAME": leg.arrival_port.name if leg and leg.arrival_port else "",
+        "Maximum_de_CASES_QUANTITY": str(batch.cases_quantity) if batch.cases_quantity else "—",
+        "Nombre_de_PALLET_ID": str(batch.pallet_quantity) if batch.pallet_quantity else "—",
+        "Maximum_de_WEIGHT_KG": str(int(batch.weight_kg)) if batch.weight_kg else "—",
+        "TYPE_OF_GOODS": batch.type_of_goods or "—",
     }
 
     # Clone template and do replacement in document.xml
-    work_dir = f"/tmp/bol_{pl.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    work_dir = f"/tmp/bol_{pl.id}_{batch_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
     os.makedirs(work_dir, exist_ok=True)
     output_path = os.path.join(work_dir, "output.docx")
     shutil.copy2(template_path, output_path)
@@ -510,7 +512,7 @@ async def bill_of_lading(
     # Cleanup
     shutil.rmtree(work_dir, ignore_errors=True)
 
-    filename = f"BOL_{pl.order.reference}_{datetime.now().strftime('%Y%m%d')}.docx"
+    filename = f"BOL_{bl_id}_{datetime.now().strftime('%Y%m%d')}.docx"
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
