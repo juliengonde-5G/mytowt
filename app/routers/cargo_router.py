@@ -918,6 +918,20 @@ async def client_packing_list(
     })
 
 
+@ext_router.get("/{token}/guide", response_class=HTMLResponse)
+async def client_guide(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(PackingList).where(PackingList.token == token))
+    pl = result.scalar_one_or_none()
+    if not pl:
+        raise HTTPException(404, detail="Lien invalide ou expiré")
+    lang = request.query_params.get('lang') or request.cookies.get('towt_lang') or 'fr'
+    if lang not in ('fr', 'en', 'es', 'pt-br', 'vi'):
+        lang = 'fr'
+    return templates.TemplateResponse("cargo/client_guide.html", {
+        "request": request, "token": token, "lang": lang,
+    })
+
+
 @ext_router.post("/{token}/batch/add", response_class=HTMLResponse)
 async def client_add_batch(
     token: str, request: Request,

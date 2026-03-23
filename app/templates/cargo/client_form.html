@@ -51,10 +51,13 @@
     <div class="header">
         <h1>TOWT — {{ t('pl_title', lang) }}</h1>
         <p>{{ pl.order.reference }} · {{ pl.order.client_name }}</p>
-        <div style="margin-top:8px;display:flex;gap:6px;justify-content:center;">
+        <div style="margin-top:8px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
             {% for code, label in SUPPORTED_LANGUAGES.items() %}
             <a href="/p/{{ pl.token }}?lang={{ code }}" class="lang-btn {% if lang == code %}active{% endif %}">{{ label }}</a>
             {% endfor %}
+        </div>
+        <div style="margin-top:10px;">
+            <a href="/p/{{ pl.token }}/guide?lang={{ lang }}" style="color:white;font-size:13px;text-decoration:underline;opacity:0.9;">{{ t('guide_link_text', lang) }}</a>
         </div>
     </div>
 
