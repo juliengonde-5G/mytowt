@@ -12,11 +12,14 @@ import math
 
 from app.database import get_db
 from app.auth import get_current_user, AuthRequired
+from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.kpi import LegKPI
 from app.models.emission_parameter import EmissionParameter
+from app.models.co2_variable import Co2Variable, CO2_DEFAULTS
+from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/kpi", tags=["kpi"])
 
@@ -34,6 +37,42 @@ DEFAULTS = {
     "co2_per_flight_paris_nyc": 525,           # tonnes CO2 for 1 Paris-NYC flight (plane, ~300 pax)
     "co2_per_container_asia_eu": 2.5,          # tonnes CO2 for 1 container Asia-Europe conventional
 }
+
+
+async def get_co2_variables(db: AsyncSession) -> dict:
+    """Get current CO2 decarbonation variables from DB, fallback to defaults."""
+    result = await db.execute(
+        select(Co2Variable).where(Co2Variable.is_current == True)
+    )
+    stored = {v.variable_name: v.variable_value for v in result.scalars().all()}
+    return {k: stored.get(k, info["value"]) for k, info in CO2_DEFAULTS.items()}
+
+
+def compute_decarbonation(cargo_tons: float, distance_nm: float, co2_vars: dict) -> dict:
+    """Compute decarbonation for given cargo and distance.
+
+    Formula: (Conv EF - TOWT EF) * fill_rate * capacity * distance * nm_to_km
+    Simplified: (Conv EF - TOWT EF) * cargo_tons * distance * nm_to_km (gCO2)
+    """
+    towt_ef = co2_vars.get("towt_co2_ef", 1.5)
+    conv_ef = co2_vars.get("conventional_co2_ef", 13.7)
+    capacity = co2_vars.get("sailing_cargo_capacity", 1100)
+    nm_to_km = co2_vars.get("nm_to_km", 1.852)
+
+    if not cargo_tons or not distance_nm:
+        return {"decarb_g": 0, "decarb_kg": 0, "decarb_t": 0, "fill_rate_pct": 0}
+
+    fill_rate = min(cargo_tons / capacity, 1.0) if capacity > 0 else 0
+    decarb_g = (conv_ef - towt_ef) * fill_rate * capacity * distance_nm * nm_to_km
+    decarb_kg = decarb_g / 1000
+    decarb_t = decarb_kg / 1000
+
+    return {
+        "decarb_g": round(decarb_g, 1),
+        "decarb_kg": round(decarb_kg, 2),
+        "decarb_t": round(decarb_t, 3),
+        "fill_rate_pct": round(fill_rate * 100, 1),
+    }
 
 
 async def get_emission_params(db: AsyncSession) -> dict:
@@ -107,7 +146,7 @@ async def kpi_dashboard(
     request: Request,
     vessel: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("kpi", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     current_year = year or datetime.now().year
@@ -117,6 +156,7 @@ async def kpi_dashboard(
     vessels = vessels_result.scalars().all()
 
     params = await get_emission_params(db)
+    co2_vars = await get_co2_variables(db)
 
     # Get all legs (optionally filtered)
     query = (
@@ -124,11 +164,12 @@ async def kpi_dashboard(
         .options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
         .where(Leg.year == current_year)
     )
+    vessel_obj = None
     if vessel:
         v_result = await db.execute(select(Vessel).where(Vessel.code == vessel))
-        v = v_result.scalar_one_or_none()
-        if v:
-            query = query.where(Leg.vessel_id == v.id)
+        vessel_obj = v_result.scalar_one_or_none()
+        if vessel_obj:
+            query = query.where(Leg.vessel_id == vessel_obj.id)
 
     result = await db.execute(query.order_by(Leg.vessel_id, Leg.sequence))
     legs = result.scalars().all()
@@ -145,15 +186,19 @@ async def kpi_dashboard(
         "co2_avoided_kg": 0, "nox_avoided_kg": 0, "sox_avoided_kg": 0,
         "distance_nm": 0, "cargo_tons": 0, "co2_sail_kg": 0,
         "equiv_flights": 0, "equiv_containers": 0, "occupation_sum": 0,
-        "leg_count": 0,
+        "leg_count": 0, "decarb_t": 0,
     }
 
     for leg in legs:
         stored = kpi_data.get(leg.id)
         cargo_tons = stored.cargo_tons if stored else 0
         kpi = compute_leg_kpi(leg, cargo_tons, params)
+        decarb = compute_decarbonation(cargo_tons, kpi["distance_nm"], co2_vars)
         kpi["leg"] = leg
         kpi["cargo_tons"] = cargo_tons
+        kpi["decarb_t"] = decarb["decarb_t"]
+        kpi["decarb_kg"] = decarb["decarb_kg"]
+        kpi["fill_rate_pct"] = decarb["fill_rate_pct"]
         leg_kpis.append(kpi)
 
         totals["co2_avoided_kg"] += kpi["co2_avoided_kg"]
@@ -166,9 +211,29 @@ async def kpi_dashboard(
         totals["equiv_containers"] += kpi["equiv_containers_asia_eu"]
         totals["occupation_sum"] += kpi["occupation_pct"]
         totals["leg_count"] += 1
+        totals["decarb_t"] += decarb["decarb_t"]
 
     totals["occupation_avg"] = round(totals["occupation_sum"] / totals["leg_count"], 1) if totals["leg_count"] > 0 else 0
     totals["co2_per_ton_avg"] = round(totals["co2_sail_kg"] / totals["cargo_tons"], 3) if totals["cargo_tons"] > 0 else 0
+
+    # ── Claims statistics for KPI dashboard ──
+    from app.models.claim import Claim
+    claims_query = select(Claim).join(Leg, Claim.leg_id == Leg.id).where(Leg.year == current_year)
+    if vessel_obj:
+        claims_query = claims_query.where(Claim.vessel_id == vessel_obj.id)
+    claims_result = await db.execute(claims_query)
+    all_claims = claims_result.scalars().all()
+    claims_stats = {
+        "total": len(all_claims),
+        "open": sum(1 for c in all_claims if c.status in ("open", "declared", "instruction")),
+        "closed": sum(1 for c in all_claims if c.status in ("accepted", "refused", "closed")),
+        "cargo": sum(1 for c in all_claims if c.claim_type == "cargo"),
+        "crew": sum(1 for c in all_claims if c.claim_type == "crew"),
+        "hull": sum(1 for c in all_claims if c.claim_type == "hull"),
+        "total_provision": sum(float(c.provision_amount or 0) for c in all_claims),
+        "total_indemnity": sum(float(c.indemnity_amount or 0) for c in all_claims),
+    }
+    claims_per_leg = round(claims_stats["total"] / totals["leg_count"], 2) if totals["leg_count"] > 0 else 0
 
     return templates.TemplateResponse("kpi/index.html", {
         "request": request,
@@ -180,6 +245,9 @@ async def kpi_dashboard(
         "leg_kpis": leg_kpis,
         "totals": totals,
         "params": params,
+        "co2_vars": co2_vars,
+        "claims_stats": claims_stats,
+        "claims_per_leg": claims_per_leg,
         "active_module": "kpi",
     })
 
@@ -190,7 +258,7 @@ async def update_cargo(
     leg_id: int,
     request: Request,
     cargo_tons: str = Form(...),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("kpi", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     _tons = 0
@@ -209,6 +277,7 @@ async def update_cargo(
         db.add(kpi)
 
     await db.flush()
+    await log_activity(db, user, "kpi", "update_cargo", "LegKPI", leg_id, f"Tonnage cargo → {_tons}t")
 
     # Redirect back
     leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == leg_id))
@@ -225,10 +294,11 @@ async def update_cargo(
 # ─── EXPORT KPI CSV ──────────────────────────────────────────
 @router.get("/export/csv", response_class=StreamingResponse)
 async def export_kpi_csv(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("kpi", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     params = await get_emission_params(db)
+    co2_vars = await get_co2_variables(db)
 
     legs_result = await db.execute(
         select(Leg)
@@ -247,13 +317,15 @@ async def export_kpi_csv(
         "Tonnes transportées", "Occupation (%)",
         "CO2 conventionnel (kg)", "CO2 voile (kg)", "CO2 évité (kg)",
         "NOx évité (kg)", "SOx évité (kg)",
-        "CO2/tonne (kg)", "Equiv. vols Paris-NYC", "Equiv. containers Asie-EU"
+        "CO2/tonne (kg)", "Equiv. vols Paris-NYC", "Equiv. containers Asie-EU",
+        "Décarbonation (t CO2)"
     ])
 
     for leg in legs:
         stored = kpi_data.get(leg.id)
         cargo = stored.cargo_tons if stored else 0
         kpi = compute_leg_kpi(leg, cargo, params)
+        decarb = compute_decarbonation(cargo, kpi["distance_nm"], co2_vars)
         writer.writerow([
             leg.leg_code, leg.vessel.name, leg.year,
             leg.departure_port.locode, leg.arrival_port.locode,
@@ -261,6 +333,7 @@ async def export_kpi_csv(
             kpi["co2_conventional_kg"], kpi["co2_sail_kg"], kpi["co2_avoided_kg"],
             kpi["nox_avoided_kg"], kpi["sox_avoided_kg"],
             kpi["co2_per_ton_kg"], kpi["equiv_flights_paris_nyc"], kpi["equiv_containers_asia_eu"],
+            decarb["decarb_t"],
         ])
 
     output.seek(0)

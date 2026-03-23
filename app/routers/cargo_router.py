@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.utils.activity import log_activity, get_client_ip
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import Optional
@@ -10,11 +11,16 @@ import io
 
 from app.database import get_db
 from app.auth import get_current_user
+from app.permissions import require_permission
 from app.models.user import User
 from app.models.order import Order
 from app.models.leg import Leg
 from app.models.vessel import Vessel
 from app.models.packing_list import PackingList, PackingListBatch, PackingListAudit
+from app.models.portal_message import PortalMessage
+from app.utils.notifications import notify_cargo_progress
+from app.routers.kpi_router import compute_decarbonation, get_co2_variables
+from app.models.crew import CrewAssignment, CrewMember
 from app.i18n import get_lang_from_request
 
 router = APIRouter(prefix="/cargo", tags=["cargo"])
@@ -62,7 +68,7 @@ def pi(val, default=None):
 async def cargo_home(
     request: Request,
     status: Optional[str] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     query = (
@@ -93,7 +99,7 @@ async def cargo_home(
 async def create_packing_list(
     request: Request,
     order_id: str = Form(...),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     oid = int(order_id)
@@ -119,6 +125,10 @@ async def create_packing_list(
     pl = PackingList(order_id=oid)
     db.add(pl)
     await db.flush()
+    await log_activity(db, user=user, action="create", module="cargo",
+                       entity_type="packing_list", entity_id=pl.id,
+                       entity_label=f"PL for {order.reference}",
+                       ip_address=get_client_ip(request))
 
     # Create one default batch pre-filled with TOWT data
     batch = PackingListBatch(
@@ -151,7 +161,7 @@ async def create_packing_list(
 @router.get("/{pl_id}", response_class=HTMLResponse)
 async def cargo_detail(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -166,10 +176,21 @@ async def cargo_detail(
     if not pl:
         raise HTTPException(404)
 
+    # Load portal messages
+    msg_result = await db.execute(
+        select(PortalMessage)
+        .where(PortalMessage.packing_list_id == pl_id)
+        .order_by(PortalMessage.created_at)
+    )
+    portal_messages = msg_result.scalars().all()
+    unread_client_msgs = sum(1 for m in portal_messages if m.sender_type == "client" and not m.is_read)
+
     return templates.TemplateResponse("cargo/detail.html", {
         "request": request, "user": user,
         "pl": pl, "imo_classes": IMO_CLASSES,
         "active_module": "cargo",
+        "portal_messages": portal_messages,
+        "unread_client_msgs": unread_client_msgs,
     })
 
 
@@ -177,7 +198,7 @@ async def cargo_detail(
 @router.post("/{pl_id}/lock", response_class=HTMLResponse)
 async def lock_packing_list(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(PackingList).where(PackingList.id == pl_id))
@@ -197,7 +218,7 @@ async def lock_packing_list(
 @router.post("/{pl_id}/unlock", response_class=HTMLResponse)
 async def unlock_packing_list(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(PackingList).where(PackingList.id == pl_id))
@@ -218,7 +239,7 @@ async def unlock_packing_list(
 @router.delete("/{pl_id}", response_class=HTMLResponse)
 async def delete_packing_list(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "S")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(PackingList).where(PackingList.id == pl_id))
@@ -237,7 +258,7 @@ async def delete_packing_list(
 @router.get("/{pl_id}/excel")
 async def export_excel(
     pl_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -356,7 +377,7 @@ async def export_excel(
 @router.get("/{pl_id}/bol")
 async def bill_of_lading(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -391,35 +412,20 @@ async def bill_of_lading(
     shipper_full = first.shipper_name or "" if first else ""
     if first and first.shipper_address:
         shipper_full += "\n" + first.shipper_address
-    # Compute departure_date (ATD or ETD) and loading_date (from first batch or ETD)
-    leg = pl.order.leg
-    departure_date_str = ""
-    loading_date_str = ""
-    if leg:
-        dep_dt = leg.atd or leg.etd
-        if dep_dt:
-            departure_date_str = dep_dt.strftime("%d/%m/%Y")
-    if first and first.loading_date:
-        loading_date_str = first.loading_date.strftime("%d/%m/%Y")
-    elif leg and leg.etd:
-        loading_date_str = leg.etd.strftime("%d/%m/%Y")
-
     replacements = {
         "SHIPPER_NAME": shipper_full,
         "BILL_OF_LADING_ID": f"{pl.order.reference}-BL",
         "BOOKING_CONFIRMATION_TOWT": pl.order.reference or "",
         "CONSIGNEE_ORDER_ADRESS": (first.consignee_address if first else "") or "",
         "NOTIFY_ADRESS": (first.notify_address if first else "") or "",
-        "VESSEL": leg.vessel.name if leg and leg.vessel else "",
-        "VOYAGE_ID": leg.leg_code if leg else "",
-        "POL_NAME": leg.departure_port.name if leg and leg.departure_port else "",
-        "POD_NAME": leg.arrival_port.name if leg and leg.arrival_port else "",
+        "VESSEL": pl.order.leg.vessel.name if pl.order.leg and pl.order.leg.vessel else "",
+        "VOYAGE_ID": pl.order.leg.leg_code if pl.order.leg else "",
+        "POL_NAME": pl.order.leg.departure_port.name if pl.order.leg and pl.order.leg.departure_port else "",
+        "POD_NAME": pl.order.leg.arrival_port.name if pl.order.leg and pl.order.leg.arrival_port else "",
         "Maximum_de_CASES_QUANTITY": str(total_cases) if total_cases else "—",
         "Nombre_de_PALLET_ID": str(total_pallets) if total_pallets else "—",
         "Maximum_de_WEIGHT_KG": str(int(total_weight)) if total_weight else "—",
         "TYPE_OF_GOODS": goods_types or "—",
-        "departure_date": departure_date_str or "—",
-        "loading_date": loading_date_str or "—",
     }
 
     # Clone template and do replacement in document.xml
@@ -516,7 +522,7 @@ async def bill_of_lading(
 @router.post("/{pl_id}/add-batch", response_class=HTMLResponse)
 async def add_batch(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -612,7 +618,7 @@ def apply_batch_fields(batch, form_data):
 @router.post("/{pl_id}/edit", response_class=HTMLResponse)
 async def exploitation_edit_batches(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -644,7 +650,7 @@ async def exploitation_edit_batches(
 @router.get("/{pl_id}/history", response_class=HTMLResponse)
 async def audit_history(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -672,7 +678,7 @@ async def audit_history(
 @router.post("/{pl_id}/import-excel", response_class=HTMLResponse)
 async def import_excel(
     pl_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     from fastapi import UploadFile, File
@@ -788,7 +794,7 @@ async def import_excel(
 @router.get("/voyage/{leg_id}/excel")
 async def export_voyage_excel(
     leg_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("cargo", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     leg_result = await db.execute(
@@ -886,14 +892,59 @@ async def export_voyage_excel(
 # EXTERNAL CLIENT ACCESS (no auth required)
 # ═══════════════════════════════════════════════════════════════
 
-ext_router = APIRouter(prefix="/p", tags=["packing-external"])
+# ═══ BACKOFFICE CARGO MESSAGING ═══════════════════════════════
 
-
-@ext_router.get("/{token}", response_class=HTMLResponse)
-async def client_packing_list(
-    token: str, request: Request,
+@router.post("/{pl_id}/messages/send", response_class=HTMLResponse)
+async def backoffice_cargo_send_message(
+    pl_id: int, request: Request,
+    user: User = Depends(require_permission("cargo", "M")),
     db: AsyncSession = Depends(get_db),
 ):
+    form = await request.form()
+    message_text = form.get("message", "").strip()
+    if message_text:
+        msg = PortalMessage(
+            packing_list_id=pl_id,
+            sender_type="company",
+            sender_name=user.username or "TOWT",
+            message=message_text,
+        )
+        db.add(msg)
+        await db.flush()
+    return RedirectResponse(url=f"/cargo/{pl_id}#messaging", status_code=303)
+
+
+@router.post("/{pl_id}/messages/read", response_class=HTMLResponse)
+async def backoffice_cargo_mark_messages_read(
+    pl_id: int, request: Request,
+    user: User = Depends(require_permission("cargo", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(PortalMessage).where(
+            PortalMessage.packing_list_id == pl_id,
+            PortalMessage.sender_type == "client",
+            PortalMessage.is_read == False,
+        )
+    )
+    for msg in result.scalars().all():
+        msg.is_read = True
+    await db.flush()
+    return RedirectResponse(url=f"/cargo/{pl_id}#messaging", status_code=303)
+
+
+# ═══ CLIENT EXTERNAL PORTAL ═══════════════════════════════════
+
+ext_router = APIRouter(prefix="/p", tags=["packing-external"])
+
+# ── Helpers ────────────────────────────────────────────────────
+VALID_LANGS = ('fr', 'en', 'es', 'pt-br', 'vi')
+
+def _lang(request):
+    lang = request.query_params.get('lang') or request.cookies.get('towt_lang') or 'fr'
+    return lang if lang in VALID_LANGS else 'fr'
+
+async def _get_pl(token, db):
     result = await db.execute(
         select(PackingList).options(
             selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.vessel),
@@ -905,38 +956,148 @@ async def client_packing_list(
     pl = result.scalar_one_or_none()
     if not pl:
         raise HTTPException(404, detail="Lien invalide ou expiré")
+    return pl
 
-    # Language from query param or cookie, default fr
-    lang = request.query_params.get('lang') or request.cookies.get('towt_lang') or 'fr'
-    if lang not in ('fr', 'en', 'es', 'pt-br', 'vi'):
-        lang = 'fr'
+async def _unread_count(pl_id, db):
+    r = await db.execute(
+        select(func.count(PortalMessage.id)).where(
+            PortalMessage.packing_list_id == pl_id,
+            PortalMessage.sender_type == "company",
+            PortalMessage.is_read == False,
+        )
+    )
+    return r.scalar() or 0
 
-    return templates.TemplateResponse("cargo/client_form.html", {
+
+# ── Page 1: Packing List (default) ────────────────────────────
+@ext_router.get("/{token}", response_class=HTMLResponse)
+async def client_portal_packing(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db)
+    lang = _lang(request)
+    return templates.TemplateResponse("cargo/portal_packing.html", {
+        "request": request, "pl": pl, "imo_classes": IMO_CLASSES,
+        "lang": lang, "active_page": "packing",
+        "unread_messages": await _unread_count(pl.id, db),
+    })
+
+
+# ── Page 2: Vessel ────────────────────────────────────────────
+@ext_router.get("/{token}/vessel", response_class=HTMLResponse)
+async def client_portal_vessel(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db)
+    lang = _lang(request)
+    vessel = pl.order.leg.vessel if pl.order.leg else None
+    return templates.TemplateResponse("cargo/portal_vessel.html", {
+        "request": request, "pl": pl, "vessel": vessel,
+        "lang": lang, "active_page": "vessel", "page_suffix": "/vessel",
+        "unread_messages": await _unread_count(pl.id, db),
+    })
+
+
+# ── Page 3: Voyage ────────────────────────────────────────────
+@ext_router.get("/{token}/voyage", response_class=HTMLResponse)
+async def client_portal_voyage(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db)
+    lang = _lang(request)
+    leg = pl.order.leg
+    itinerary = []
+    crew = []
+    if leg:
+        # Full itinerary for same vessel/year
+        yr = leg.etd.year if leg.etd else None
+        if yr:
+            it_result = await db.execute(
+                select(Leg).options(
+                    selectinload(Leg.departure_port), selectinload(Leg.arrival_port)
+                ).where(Leg.vessel_id == leg.vessel_id)
+                .order_by(Leg.etd)
+            )
+            itinerary = it_result.scalars().all()
+        # Crew on board
+        from datetime import date
+        crew_result = await db.execute(
+            select(CrewAssignment).options(selectinload(CrewAssignment.member))
+            .where(
+                CrewAssignment.vessel_id == leg.vessel_id,
+                CrewAssignment.embark_date <= (leg.etd.date() if leg.etd else date.today()),
+                (CrewAssignment.disembark_date == None) | (CrewAssignment.disembark_date >= (leg.etd.date() if leg.etd else date.today())),
+            )
+        )
+        crew = crew_result.scalars().all()
+    return templates.TemplateResponse("cargo/portal_voyage.html", {
+        "request": request, "pl": pl, "leg": leg,
+        "itinerary": itinerary, "crew": crew,
+        "lang": lang, "active_page": "voyage", "page_suffix": "/voyage",
+        "unread_messages": await _unread_count(pl.id, db),
+    })
+
+
+# ── Page 4: Documents ─────────────────────────────────────────
+@ext_router.get("/{token}/documents", response_class=HTMLResponse)
+async def client_portal_docs(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db)
+    lang = _lang(request)
+    return templates.TemplateResponse("cargo/portal_docs.html", {
         "request": request, "pl": pl,
-        "imo_classes": IMO_CLASSES,
-        "lang": lang,
+        "lang": lang, "active_page": "docs", "page_suffix": "/documents",
+        "unread_messages": await _unread_count(pl.id, db),
     })
 
 
-@ext_router.get("/{token}/guide", response_class=HTMLResponse)
-async def client_guide(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(PackingList).where(PackingList.token == token))
-    pl = result.scalar_one_or_none()
-    if not pl:
-        raise HTTPException(404, detail="Lien invalide ou expiré")
-    lang = request.query_params.get('lang') or request.cookies.get('towt_lang') or 'fr'
-    if lang not in ('fr', 'en', 'es', 'pt-br', 'vi'):
-        lang = 'fr'
-    return templates.TemplateResponse("cargo/client_guide.html", {
-        "request": request, "token": token, "lang": lang,
+# ── Page 5: Messages ──────────────────────────────────────────
+@ext_router.get("/{token}/messages", response_class=HTMLResponse)
+async def client_portal_messages(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db)
+    lang = _lang(request)
+    # Load messages
+    msg_result = await db.execute(
+        select(PortalMessage)
+        .where(PortalMessage.packing_list_id == pl.id)
+        .order_by(PortalMessage.created_at)
+    )
+    messages = msg_result.scalars().all()
+    # Mark company messages as read
+    for m in messages:
+        if m.sender_type == "company" and not m.is_read:
+            m.is_read = True
+    await db.flush()
+    return templates.TemplateResponse("cargo/portal_messages.html", {
+        "request": request, "pl": pl, "messages": messages,
+        "lang": lang, "active_page": "messages", "page_suffix": "/messages",
+        "unread_messages": 0,
     })
 
 
+@ext_router.post("/{token}/messages/send", response_class=HTMLResponse)
+async def client_portal_send_message(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db)
+    lang = _lang(request)
+    form = await request.form()
+    message_text = form.get("message", "").strip()
+    if message_text:
+        msg = PortalMessage(
+            packing_list_id=pl.id,
+            sender_type="client",
+            sender_name=pl.order.client_name or "Client",
+            message=message_text,
+        )
+        db.add(msg)
+        # Notification
+        from app.models.notification import Notification
+        db.add(Notification(
+            type="new_cargo_message",
+            title=f"Message client — {pl.order.reference}",
+            detail=f"{pl.order.client_name}: {message_text[:100]}",
+            link=f"/cargo/{pl.id}#messages",
+            packing_list_id=pl.id,
+        ))
+        await db.flush()
+    return RedirectResponse(url=f"/p/{token}/messages?lang={lang}", status_code=303)
+
+
+# ── Existing actions (batch add/save/delete) ──────────────────
 @ext_router.post("/{token}/batch/add", response_class=HTMLResponse)
-async def client_add_batch(
-    token: str, request: Request,
-    db: AsyncSession = Depends(get_db),
-):
+async def client_add_batch(token: str, request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(PackingList).options(
             selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.vessel),
@@ -948,8 +1109,6 @@ async def client_add_batch(
     pl = result.scalar_one_or_none()
     if not pl or pl.is_locked:
         raise HTTPException(403)
-
-    # Copy TOWT fields from first batch
     first = pl.batches[0] if pl.batches else None
     batch = PackingListBatch(
         packing_list_id=pl.id,
@@ -966,15 +1125,11 @@ async def client_add_batch(
     )
     db.add(batch)
     await db.flush()
-
     return RedirectResponse(url=f"/p/{token}", status_code=303)
 
 
 @ext_router.post("/{token}/save", response_class=HTMLResponse)
-async def client_save_batches(
-    token: str, request: Request,
-    db: AsyncSession = Depends(get_db),
-):
+async def client_save_batches(token: str, request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(PackingList).options(selectinload(PackingList.batches))
         .where(PackingList.token == token)
@@ -982,28 +1137,21 @@ async def client_save_batches(
     pl = result.scalar_one_or_none()
     if not pl or pl.is_locked:
         raise HTTPException(403)
-
     form = await request.form()
-
     for batch in pl.batches:
         prefix = f"batch_{batch.id}_"
         form_data = {k.replace(prefix, ''): v for k, v in form.items() if k.startswith(prefix)}
         if form_data:
             await audit_batch_changes(db, pl.id, batch, form_data, "Client")
             apply_batch_fields(batch, form_data)
-
     if pl.status == "draft":
         pl.status = "submitted"
-
     await db.flush()
     return RedirectResponse(url=f"/p/{token}?saved=1", status_code=303)
 
 
 @ext_router.delete("/{token}/batch/{batch_id}", response_class=HTMLResponse)
-async def client_delete_batch(
-    token: str, batch_id: int, request: Request,
-    db: AsyncSession = Depends(get_db),
-):
+async def client_delete_batch(token: str, batch_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(PackingList).options(selectinload(PackingList.batches))
         .where(PackingList.token == token)
@@ -1013,7 +1161,6 @@ async def client_delete_batch(
         raise HTTPException(403)
     if len(pl.batches) <= 1:
         raise HTTPException(400, detail="Au moins 1 batch requis")
-
     batch_result = await db.execute(
         select(PackingListBatch).where(
             PackingListBatch.id == batch_id,
@@ -1024,5 +1171,4 @@ async def client_delete_batch(
     if batch:
         await db.delete(batch)
         await db.flush()
-
     return RedirectResponse(url=f"/p/{token}", status_code=303)

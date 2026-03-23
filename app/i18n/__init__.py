@@ -141,6 +141,263 @@ TRANSLATIONS = {
     "settings_language": {"fr": "Langue de l'interface", "en": "Interface language", "es": "Idioma de la interfaz", "pt-br": "Idioma da interface", "vi": "Ngôn ngữ giao diện"},
     "settings_saved": {"fr": "Paramètres enregistrés", "en": "Settings saved", "es": "Configuración guardada", "pt-br": "Configurações salvas", "vi": "Đã lưu cài đặt"},
 
+    # ═══ BACKOFFICE — PAGE TITLES ═══
+    "page_dashboard": {"fr": "Tableau de bord", "en": "Dashboard", "es": "Panel", "pt-br": "Painel", "vi": "Bảng điều khiển"},
+    "page_planning": {"fr": "Planification", "en": "Planning", "es": "Planificación", "pt-br": "Planejamento", "vi": "Kế hoạch"},
+    "page_commercial": {"fr": "Ordres de transport", "en": "Freight orders", "es": "Órdenes de transporte", "pt-br": "Ordens de transporte", "vi": "Đơn vận chuyển"},
+    "page_passengers": {"fr": "Passagers", "en": "Passengers", "es": "Pasajeros", "pt-br": "Passageiros", "vi": "Hành khách"},
+    "page_new_booking": {"fr": "Nouvelle réservation", "en": "New booking", "es": "Nueva reserva", "pt-br": "Nova reserva", "vi": "Đặt chỗ mới"},
+    "page_escale": {"fr": "Opérations d'escale", "en": "Port call operations", "es": "Operaciones de escala", "pt-br": "Operações de escala", "vi": "Hoạt động cảng"},
+    "page_cargo": {"fr": "Gestion documentaire cargo", "en": "Cargo document management", "es": "Gestión documental carga", "pt-br": "Gestão documental carga", "vi": "Quản lý hồ sơ hàng"},
+    "page_onboard": {"fr": "On Board", "en": "On Board", "es": "A bordo", "pt-br": "A bordo", "vi": "Trên tàu"},
+    "page_crew": {"fr": "Gestion d'équipage", "en": "Crew management", "es": "Gestión de tripulación", "pt-br": "Gestão de tripulação", "vi": "Quản lý thủy thủ đoàn"},
+    "page_finance": {"fr": "Suivi financier", "en": "Financial tracking", "es": "Seguimiento financiero", "pt-br": "Acompanhamento financeiro", "vi": "Theo dõi tài chính"},
+    "page_port_config": {"fr": "Configuration des ports", "en": "Port configuration", "es": "Configuración de puertos", "pt-br": "Configuração de portos", "vi": "Cấu hình cảng"},
+    "page_kpi": {"fr": "KPI", "en": "KPI", "es": "KPI", "pt-br": "KPI", "vi": "KPI"},
+    "page_claims": {"fr": "Claims", "en": "Claims", "es": "Siniestros", "pt-br": "Sinistros", "vi": "Khiếu nại"},
+    "page_new_claim": {"fr": "Nouveau Claim", "en": "New Claim", "es": "Nuevo siniestro", "pt-br": "Novo sinistro", "vi": "Khiếu nại mới"},
+    "page_captain": {"fr": "Vue Capitaine", "en": "Captain view", "es": "Vista Capitán", "pt-br": "Visão do Capitão", "vi": "Giao diện Thuyền trưởng"},
+    "page_settings": {"fr": "Paramètres", "en": "Settings", "es": "Configuración", "pt-br": "Configurações", "vi": "Cài đặt"},
+    "page_my_account": {"fr": "Mon compte", "en": "My account", "es": "Mi cuenta", "pt-br": "Minha conta", "vi": "Tài khoản"},
+    "page_history": {"fr": "Historique", "en": "History", "es": "Historial", "pt-br": "Histórico", "vi": "Lịch sử"},
+    "page_port_conflicts": {"fr": "Vue par port — Surveillance des escales", "en": "Port view — Call monitoring", "es": "Vista por puerto — Vigilancia", "pt-br": "Vista por porto — Monitoramento", "vi": "Theo cảng — Giám sát"},
+
+    # ═══ BACKOFFICE — DASHBOARD ═══
+    "dash_welcome": {"fr": "Bienvenue,", "en": "Welcome,", "es": "Bienvenido,", "pt-br": "Bem-vindo,", "vi": "Xin chào,"},
+    "dash_subtitle": {"fr": "TOWT — Transport à la voile · Gestion de la flotte", "en": "TOWT — Sailing transport · Fleet management", "es": "TOWT — Transporte a vela · Gestión de flota", "pt-br": "TOWT — Transporte à vela · Gestão de frota", "vi": "TOWT — Vận tải buồm · Quản lý đội tàu"},
+    "dash_notifications": {"fr": "Notifications", "en": "Notifications", "es": "Notificaciones", "pt-br": "Notificações", "vi": "Thông báo"},
+    "dash_archive_read": {"fr": "Archiver les lus", "en": "Archive read", "es": "Archivar leídos", "pt-br": "Arquivar lidos", "vi": "Lưu trữ đã đọc"},
+    "dash_mark_read": {"fr": "Marquer lu", "en": "Mark as read", "es": "Marcar leído", "pt-br": "Marcar lido", "vi": "Đánh dấu đã đọc"},
+    "dash_mark_unread": {"fr": "Marquer non lu", "en": "Mark as unread", "es": "Marcar no leído", "pt-br": "Marcar não lido", "vi": "Đánh dấu chưa đọc"},
+    "dash_archive": {"fr": "Archiver", "en": "Archive", "es": "Archivar", "pt-br": "Arquivar", "vi": "Lưu trữ"},
+    "dash_packing_to_review": {"fr": "Packing Lists à traiter", "en": "Packing Lists to review", "es": "Listas de empaque a revisar", "pt-br": "Listas de embalagem a revisar", "vi": "Danh sách cần xem"},
+    "dash_alerts": {"fr": "Alertes", "en": "Alerts", "es": "Alertas", "pt-br": "Alertas", "vi": "Cảnh báo"},
+    "dash_hide_show": {"fr": "Masquer/Afficher", "en": "Hide/Show", "es": "Ocultar/Mostrar", "pt-br": "Ocultar/Mostrar", "vi": "Ẩn/Hiện"},
+    "dash_fleet": {"fr": "Flotte TOWT", "en": "TOWT Fleet", "es": "Flota TOWT", "pt-br": "Frota TOWT", "vi": "Đội tàu TOWT"},
+    "dash_tracking_map": {"fr": "Suivi GPS de la flotte", "en": "Fleet GPS Tracking", "es": "Seguimiento GPS de la flota", "pt-br": "Rastreamento GPS da frota", "vi": "Theo dõi GPS đội tàu"},
+    "dash_upcoming": {"fr": "Prochains départs", "en": "Upcoming departures", "es": "Próximas salidas", "pt-br": "Próximas partidas", "vi": "Khởi hành sắp tới"},
+    "dash_quick_access": {"fr": "Accès rapide", "en": "Quick access", "es": "Acceso rápido", "pt-br": "Acesso rápido", "vi": "Truy cập nhanh"},
+    "dash_legs": {"fr": "Legs", "en": "Legs", "es": "Tramos", "pt-br": "Trechos", "vi": "Chặng"},
+    "dash_active_orders": {"fr": "Commandes actives", "en": "Active orders", "es": "Pedidos activos", "pt-br": "Pedidos ativos", "vi": "Đơn hàng"},
+    "dash_calls_month": {"fr": "Escales ce mois", "en": "Port calls this month", "es": "Escalas este mes", "pt-br": "Escalas este mês", "vi": "Ghé cảng tháng này"},
+    "dash_revenue_forecast": {"fr": "CA prév.", "en": "Revenue fcst.", "es": "Ing. prev.", "pt-br": "Rec. prev.", "vi": "DT dự kiến"},
+    "dash_co2_avoided": {"fr": "CO₂ évité", "en": "CO₂ avoided", "es": "CO₂ evitado", "pt-br": "CO₂ evitado", "vi": "CO₂ tránh"},
+    "dash_fill_rate": {"fr": "Remplissage moy.", "en": "Avg fill rate", "es": "Llenado prom.", "pt-br": "Taxa méd.", "vi": "Tỷ lệ TB"},
+    "dash_treated": {"fr": "Traité", "en": "Treated", "es": "Tratado", "pt-br": "Tratado", "vi": "Đã xử lý"},
+    "dash_view": {"fr": "Voir", "en": "View", "es": "Ver", "pt-br": "Ver", "vi": "Xem"},
+
+    # ═══ BACKOFFICE — SIDEBAR ═══
+    "nav_passengers": {"fr": "Passagers", "en": "Passengers", "es": "Pasajeros", "pt-br": "Passageiros", "vi": "Hành khách"},
+    "nav_onboard": {"fr": "On Board", "en": "On Board", "es": "A bordo", "pt-br": "A bordo", "vi": "Trên tàu"},
+    "nav_claims": {"fr": "Claims", "en": "Claims", "es": "Siniestros", "pt-br": "Sinistros", "vi": "Khiếu nại"},
+    "nav_my_account": {"fr": "Mon compte", "en": "My account", "es": "Mi cuenta", "pt-br": "Minha conta", "vi": "Tài khoản"},
+    "nav_logout": {"fr": "Déconnexion", "en": "Logout", "es": "Cerrar sesión", "pt-br": "Sair", "vi": "Đăng xuất"},
+    "nav_administration": {"fr": "Administration", "en": "Administration", "es": "Administración", "pt-br": "Administração", "vi": "Quản trị"},
+    "nav_navigation": {"fr": "Navigation", "en": "Navigation", "es": "Navegación", "pt-br": "Navegação", "vi": "Điều hướng"},
+
+    # ═══ BACKOFFICE — COMMON TABLE HEADERS ═══
+    "th_reference": {"fr": "Référence", "en": "Reference", "es": "Referencia", "pt-br": "Referência", "vi": "Mã"},
+    "th_client": {"fr": "Client", "en": "Client", "es": "Cliente", "pt-br": "Cliente", "vi": "Khách hàng"},
+    "th_vessel": {"fr": "Navire", "en": "Vessel", "es": "Buque", "pt-br": "Navio", "vi": "Tàu"},
+    "th_leg": {"fr": "Leg", "en": "Leg", "es": "Tramo", "pt-br": "Trecho", "vi": "Chặng"},
+    "th_route": {"fr": "Route", "en": "Route", "es": "Ruta", "pt-br": "Rota", "vi": "Tuyến"},
+    "th_departure": {"fr": "Départ", "en": "Departure", "es": "Salida", "pt-br": "Partida", "vi": "Khởi hành"},
+    "th_arrival": {"fr": "Arrivée", "en": "Arrival", "es": "Llegada", "pt-br": "Chegada", "vi": "Đến"},
+    "th_palettes": {"fr": "Palettes", "en": "Pallets", "es": "Paletas", "pt-br": "Paletes", "vi": "Pallet"},
+    "th_amount": {"fr": "Montant", "en": "Amount", "es": "Importe", "pt-br": "Valor", "vi": "Số tiền"},
+    "th_year": {"fr": "Année", "en": "Year", "es": "Año", "pt-br": "Ano", "vi": "Năm"},
+    "th_type": {"fr": "Type", "en": "Type", "es": "Tipo", "pt-br": "Tipo", "vi": "Loại"},
+    "th_cabin": {"fr": "Cabine", "en": "Cabin", "es": "Camarote", "pt-br": "Cabine", "vi": "Phòng"},
+    "th_passenger": {"fr": "Passager", "en": "Passenger", "es": "Pasajero", "pt-br": "Passageiro", "vi": "Hành khách"},
+    "th_total": {"fr": "Total", "en": "Total", "es": "Total", "pt-br": "Total", "vi": "Tổng"},
+    "th_provision": {"fr": "Provision", "en": "Provision", "es": "Provisión", "pt-br": "Provisão", "vi": "Dự phòng"},
+    "th_distance": {"fr": "Distance NM", "en": "Distance NM", "es": "Distancia MN", "pt-br": "Distância MN", "vi": "Khoảng cách HL"},
+    "th_duration": {"fr": "Durée jours", "en": "Duration days", "es": "Duración días", "pt-br": "Duração dias", "vi": "Thời gian ngày"},
+
+    # ═══ BACKOFFICE — COMMON BUTTONS ═══
+    "btn_new_order": {"fr": "Nouvelle commande", "en": "New order", "es": "Nuevo pedido", "pt-br": "Novo pedido", "vi": "Đơn mới"},
+    "btn_new_booking": {"fr": "Nouvelle réservation", "en": "New booking", "es": "Nueva reserva", "pt-br": "Nova reserva", "vi": "Đặt chỗ mới"},
+    "btn_new_claim": {"fr": "Nouveau Claim", "en": "New Claim", "es": "Nuevo siniestro", "pt-br": "Novo sinistro", "vi": "Khiếu nại mới"},
+    "btn_new_leg": {"fr": "Nouveau leg", "en": "New leg", "es": "Nuevo tramo", "pt-br": "Novo trecho", "vi": "Chặng mới"},
+    "btn_export": {"fr": "Exporter", "en": "Export", "es": "Exportar", "pt-br": "Exportar", "vi": "Xuất"},
+    "btn_import": {"fr": "Importer", "en": "Import", "es": "Importar", "pt-br": "Importar", "vi": "Nhập"},
+    "btn_filter": {"fr": "Filtrer", "en": "Filter", "es": "Filtrar", "pt-br": "Filtrar", "vi": "Lọc"},
+    "btn_print": {"fr": "Imprimer", "en": "Print", "es": "Imprimir", "pt-br": "Imprimir", "vi": "In"},
+    "btn_update": {"fr": "Mettre à jour", "en": "Update", "es": "Actualizar", "pt-br": "Atualizar", "vi": "Cập nhật"},
+    "btn_send": {"fr": "Envoyer", "en": "Send", "es": "Enviar", "pt-br": "Enviar", "vi": "Gửi"},
+    "btn_reply": {"fr": "Répondre", "en": "Reply", "es": "Responder", "pt-br": "Responder", "vi": "Trả lời"},
+    "btn_mark_read": {"fr": "Marquer comme lus", "en": "Mark as read", "es": "Marcar como leídos", "pt-br": "Marcar como lidos", "vi": "Đánh dấu đã đọc"},
+    "btn_create": {"fr": "Créer", "en": "Create", "es": "Crear", "pt-br": "Criar", "vi": "Tạo"},
+
+    # ═══ BACKOFFICE — STATUSES ═══
+    "status_draft": {"fr": "Brouillon", "en": "Draft", "es": "Borrador", "pt-br": "Rascunho", "vi": "Nháp"},
+    "status_confirmed": {"fr": "Confirmé", "en": "Confirmed", "es": "Confirmado", "pt-br": "Confirmado", "vi": "Đã xác nhận"},
+    "status_cancelled": {"fr": "Annulé", "en": "Cancelled", "es": "Cancelado", "pt-br": "Cancelado", "vi": "Đã hủy"},
+    "status_completed": {"fr": "Terminé", "en": "Completed", "es": "Completado", "pt-br": "Concluído", "vi": "Hoàn thành"},
+    "status_at_port": {"fr": "À quai", "en": "At port", "es": "En muelle", "pt-br": "No cais", "vi": "Tại cảng"},
+    "status_at_sea": {"fr": "En mer", "en": "At sea", "es": "En el mar", "pt-br": "No mar", "vi": "Trên biển"},
+    "status_reserved": {"fr": "Réservé", "en": "Reserved", "es": "Reservado", "pt-br": "Reservado", "vi": "Đã đặt"},
+    "status_unassigned": {"fr": "Non affecté", "en": "Unassigned", "es": "Sin asignar", "pt-br": "Não atribuído", "vi": "Chưa phân"},
+
+    # ═══ BACKOFFICE — MY ACCOUNT ═══
+    "account_info": {"fr": "Informations", "en": "Information", "es": "Información", "pt-br": "Informações", "vi": "Thông tin"},
+    "account_full_name": {"fr": "Nom complet", "en": "Full name", "es": "Nombre completo", "pt-br": "Nome completo", "vi": "Họ tên"},
+    "account_username": {"fr": "Identifiant", "en": "Username", "es": "Identificador", "pt-br": "Usuário", "vi": "Tên đăng nhập"},
+    "account_role": {"fr": "Rôle", "en": "Role", "es": "Rol", "pt-br": "Função", "vi": "Vai trò"},
+    "account_language": {"fr": "Langue d'affichage", "en": "Display language", "es": "Idioma de visualización", "pt-br": "Idioma de exibição", "vi": "Ngôn ngữ hiển thị"},
+    "account_change_password": {"fr": "Changer le mot de passe", "en": "Change password", "es": "Cambiar contraseña", "pt-br": "Alterar senha", "vi": "Đổi mật khẩu"},
+    "account_current_password": {"fr": "Mot de passe actuel", "en": "Current password", "es": "Contraseña actual", "pt-br": "Senha atual", "vi": "Mật khẩu hiện tại"},
+    "account_new_password": {"fr": "Nouveau mot de passe", "en": "New password", "es": "Nueva contraseña", "pt-br": "Nova senha", "vi": "Mật khẩu mới"},
+    "account_confirm_password": {"fr": "Confirmer", "en": "Confirm", "es": "Confirmar", "pt-br": "Confirmar", "vi": "Xác nhận"},
+
+    # ═══ BACKOFFICE — NOTIFICATIONS ═══
+    "notif_new_order": {"fr": "Nouvelle commande client", "en": "New client order", "es": "Nuevo pedido", "pt-br": "Novo pedido", "vi": "Đơn hàng mới"},
+    "notif_new_cargo_message": {"fr": "Nouveau message messagerie client", "en": "New client message", "es": "Nuevo mensaje cliente", "pt-br": "Nova mensagem cliente", "vi": "Tin nhắn mới"},
+    "notif_new_passenger_message": {"fr": "Nouveau message messagerie passager", "en": "New passenger message", "es": "Nuevo mensaje pasajero", "pt-br": "Nova mensagem passageiro", "vi": "Tin nhắn mới"},
+    "notif_eosp": {"fr": "EOSP (End of Sea Passage)", "en": "EOSP (End of Sea Passage)", "es": "EOSP", "pt-br": "EOSP", "vi": "EOSP"},
+    "notif_sosp": {"fr": "SOSP (Start of Sea Passage)", "en": "SOSP (Start of Sea Passage)", "es": "SOSP", "pt-br": "SOSP", "vi": "SOSP"},
+    "notif_new_passenger_booking": {"fr": "Nouvelle réservation passager", "en": "New passenger booking", "es": "Nueva reserva pasajero", "pt-br": "Nova reserva passageiro", "vi": "Đặt chỗ mới"},
+
+    # ═══ BACKOFFICE — CLAIMS ═══
+    "claim_financial": {"fr": "Suivi financier", "en": "Financial tracking", "es": "Seguimiento financiero", "pt-br": "Acompanhamento financeiro", "vi": "Theo dõi tài chính"},
+    "claim_provision": {"fr": "Provision", "en": "Provision", "es": "Provisión", "pt-br": "Provisão", "vi": "Dự phòng"},
+    "claim_franchise": {"fr": "Franchise", "en": "Deductible", "es": "Franquicia", "pt-br": "Franquia", "vi": "Khấu trừ"},
+    "claim_indemnity": {"fr": "Prise en charge assureur", "en": "Insurer coverage", "es": "Cobertura aseguradora", "pt-br": "Cobertura seguradora", "vi": "Bảo hiểm chi trả"},
+    "claim_company_charge": {"fr": "Reste à charge", "en": "Company charge", "es": "A cargo empresa", "pt-br": "Custo empresa", "vi": "Phí công ty"},
+    "claim_responsibility": {"fr": "Responsabilité", "en": "Responsibility", "es": "Responsabilidad", "pt-br": "Responsabilidade", "vi": "Trách nhiệm"},
+    "claim_voyage": {"fr": "Voyage", "en": "Voyage", "es": "Viaje", "pt-br": "Viagem", "vi": "Chuyến đi"},
+
+    # ═══ BACKOFFICE — MESSAGES ═══
+    "msg_reply_placeholder": {"fr": "Répondre au passager…", "en": "Reply to passenger…", "es": "Responder al pasajero…", "pt-br": "Responder ao passageiro…", "vi": "Trả lời hành khách…"},
+    "msg_reply_cargo_placeholder": {"fr": "Répondre au client…", "en": "Reply to client…", "es": "Responder al cliente…", "pt-br": "Responder ao cliente…", "vi": "Trả lời khách hàng…"},
+    "msg_no_messages": {"fr": "Aucun message", "en": "No messages", "es": "Sin mensajes", "pt-br": "Sem mensagens", "vi": "Không có tin nhắn"},
+    "msg_unread": {"fr": "non lu(s)", "en": "unread", "es": "no leído(s)", "pt-br": "não lido(s)", "vi": "chưa đọc"},
+    "msg_messages": {"fr": "Messages", "en": "Messages", "es": "Mensajes", "pt-br": "Mensagens", "vi": "Tin nhắn"},
+
+    # ═══ BACKOFFICE — COMMERCIAL ═══
+    "com_new": {"fr": "Nouveau", "en": "New", "es": "Nuevo", "pt-br": "Novo", "vi": "Mới"},
+    "com_all": {"fr": "Tous", "en": "All", "es": "Todos", "pt-br": "Todos", "vi": "Tất cả"},
+    "com_ref": {"fr": "Réf.", "en": "Ref.", "es": "Ref.", "pt-br": "Ref.", "vi": "Mã"},
+    "com_client": {"fr": "Client", "en": "Client", "es": "Cliente", "pt-br": "Cliente", "vi": "Khách hàng"},
+    "com_palettes": {"fr": "Palettes", "en": "Pallets", "es": "Paletas", "pt-br": "Paletes", "vi": "Pallet"},
+    "com_format": {"fr": "Format", "en": "Format", "es": "Formato", "pt-br": "Formato", "vi": "Loại"},
+    "com_fees": {"fr": "Frais", "en": "Fees", "es": "Costes", "pt-br": "Taxas", "vi": "Phí"},
+    "com_total": {"fr": "Total", "en": "Total", "es": "Total", "pt-br": "Total", "vi": "Tổng"},
+    "com_desired_route": {"fr": "Route souhaitée", "en": "Desired route", "es": "Ruta deseada", "pt-br": "Rota desejada", "vi": "Tuyến yêu cầu"},
+    "com_assignment": {"fr": "Affectation", "en": "Assignment", "es": "Asignación", "pt-br": "Atribuição", "vi": "Phân bổ"},
+    "com_status": {"fr": "Statut", "en": "Status", "es": "Estado", "pt-br": "Status", "vi": "Trạng thái"},
+    "com_attachment": {"fr": "PJ", "en": "Att.", "es": "Adj.", "pt-br": "Anexo", "vi": "Đính kèm"},
+    "com_actions": {"fr": "Actions", "en": "Actions", "es": "Acciones", "pt-br": "Ações", "vi": "Hành động"},
+    "com_no_orders": {"fr": "Aucun ordre de transport", "en": "No freight orders", "es": "Sin órdenes de transporte", "pt-br": "Nenhuma ordem de transporte", "vi": "Không có đơn vận chuyển"},
+    "com_edit": {"fr": "Modifier", "en": "Edit", "es": "Editar", "pt-br": "Editar", "vi": "Sửa"},
+    "com_assign": {"fr": "Affecter", "en": "Assign", "es": "Asignar", "pt-br": "Atribuir", "vi": "Phân bổ"},
+    "com_attachment_label": {"fr": "Pièce jointe", "en": "Attachment", "es": "Archivo adjunto", "pt-br": "Anexo", "vi": "Đính kèm"},
+    "com_file_label": {"fr": "Fichier (PDF ou Word)", "en": "File (PDF or Word)", "es": "Archivo (PDF o Word)", "pt-br": "Arquivo (PDF ou Word)", "vi": "Tệp (PDF hoặc Word)"},
+    "com_delete_confirm": {"fr": "Supprimer", "en": "Delete", "es": "Eliminar", "pt-br": "Excluir", "vi": "Xóa"},
+    "com_new_order": {"fr": "Nouvel ordre de transport", "en": "New freight order", "es": "Nueva orden de transporte", "pt-br": "Nova ordem de transporte", "vi": "Đơn vận chuyển mới"},
+    "com_edit_order": {"fr": "Modifier", "en": "Edit", "es": "Modificar", "pt-br": "Modificar", "vi": "Sửa"},
+    "com_assign_order": {"fr": "Affecter", "en": "Assign", "es": "Asignar", "pt-br": "Atribuir", "vi": "Phân bổ"},
+    "com_desired_delivery": {"fr": "Livraison souhaitée", "en": "Desired delivery", "es": "Entrega deseada", "pt-br": "Entrega desejada", "vi": "Giao hàng mong muốn"},
+    "com_suggestion": {"fr": "Suggestion", "en": "Suggestion", "es": "Sugerencia", "pt-br": "Sugestão", "vi": "Gợi ý"},
+
+    # ═══ BACKOFFICE — ESCALE ═══
+    "esc_no_ops": {"fr": "Aucune opération d'escale", "en": "No port call operations", "es": "Sin operaciones de escala", "pt-br": "Sem operações de escala", "vi": "Không có hoạt động cảng"},
+    "esc_port": {"fr": "Port", "en": "Port", "es": "Puerto", "pt-br": "Porto", "vi": "Cảng"},
+    "esc_vessel": {"fr": "Navire", "en": "Vessel", "es": "Buque", "pt-br": "Navio", "vi": "Tàu"},
+    "esc_eta": {"fr": "ETA", "en": "ETA", "es": "ETA", "pt-br": "ETA", "vi": "ETA"},
+    "esc_etd": {"fr": "ETD", "en": "ETD", "es": "ETD", "pt-br": "ETD", "vi": "ETD"},
+    "esc_sof": {"fr": "SOF", "en": "SOF", "es": "SOF", "pt-br": "SOF", "vi": "SOF"},
+    "esc_operations": {"fr": "Opérations", "en": "Operations", "es": "Operaciones", "pt-br": "Operações", "vi": "Hoạt động"},
+
+    # ═══ BACKOFFICE — CREW ═══
+    "crew_member": {"fr": "Membre", "en": "Member", "es": "Miembro", "pt-br": "Membro", "vi": "Thành viên"},
+    "crew_role": {"fr": "Fonction", "en": "Role", "es": "Función", "pt-br": "Função", "vi": "Chức vụ"},
+    "crew_phone": {"fr": "Téléphone", "en": "Phone", "es": "Teléfono", "pt-br": "Telefone", "vi": "Điện thoại"},
+    "crew_email": {"fr": "Email", "en": "Email", "es": "Email", "pt-br": "Email", "vi": "Email"},
+    "crew_nationality": {"fr": "Nationalité", "en": "Nationality", "es": "Nacionalidad", "pt-br": "Nacionalidade", "vi": "Quốc tịch"},
+    "crew_certifications": {"fr": "Brevets", "en": "Certifications", "es": "Certificados", "pt-br": "Certificados", "vi": "Chứng chỉ"},
+    "crew_calendar": {"fr": "Calendrier", "en": "Calendar", "es": "Calendario", "pt-br": "Calendário", "vi": "Lịch"},
+    "crew_new_member": {"fr": "Nouveau membre", "en": "New member", "es": "Nuevo miembro", "pt-br": "Novo membro", "vi": "Thêm thành viên"},
+    "crew_assignments": {"fr": "Affectations", "en": "Assignments", "es": "Asignaciones", "pt-br": "Atribuições", "vi": "Phân công"},
+    "crew_no_members": {"fr": "Aucun membre d'équipage", "en": "No crew members", "es": "Sin tripulantes", "pt-br": "Sem membros", "vi": "Không có thành viên"},
+
+    # ═══ BACKOFFICE — FINANCE ═══
+    "fin_revenue": {"fr": "Recettes", "en": "Revenue", "es": "Ingresos", "pt-br": "Receitas", "vi": "Doanh thu"},
+    "fin_expenses": {"fr": "Dépenses", "en": "Expenses", "es": "Gastos", "pt-br": "Despesas", "vi": "Chi phí"},
+    "fin_balance": {"fr": "Solde", "en": "Balance", "es": "Saldo", "pt-br": "Saldo", "vi": "Số dư"},
+    "fin_invoices": {"fr": "Factures", "en": "Invoices", "es": "Facturas", "pt-br": "Faturas", "vi": "Hóa đơn"},
+    "fin_payments": {"fr": "Paiements", "en": "Payments", "es": "Pagos", "pt-br": "Pagamentos", "vi": "Thanh toán"},
+    "fin_year": {"fr": "Année", "en": "Year", "es": "Año", "pt-br": "Ano", "vi": "Năm"},
+    "fin_vessel": {"fr": "Navire", "en": "Vessel", "es": "Buque", "pt-br": "Navio", "vi": "Tàu"},
+    "fin_all_vessels": {"fr": "Tous les navires", "en": "All vessels", "es": "Todos los buques", "pt-br": "Todos os navios", "vi": "Tất cả tàu"},
+    "fin_no_data": {"fr": "Aucune donnée financière", "en": "No financial data", "es": "Sin datos financieros", "pt-br": "Sem dados financeiros", "vi": "Không có dữ liệu"},
+
+    # ═══ BACKOFFICE — PASSENGERS ═══
+    "pax_name": {"fr": "Nom", "en": "Name", "es": "Nombre", "pt-br": "Nome", "vi": "Tên"},
+    "pax_cabin": {"fr": "Cabine", "en": "Cabin", "es": "Camarote", "pt-br": "Cabine", "vi": "Phòng"},
+    "pax_embarking": {"fr": "Embarquement", "en": "Boarding", "es": "Embarque", "pt-br": "Embarque", "vi": "Lên tàu"},
+    "pax_disembarking": {"fr": "Débarquement", "en": "Disembarking", "es": "Desembarque", "pt-br": "Desembarque", "vi": "Xuống tàu"},
+    "pax_price": {"fr": "Prix", "en": "Price", "es": "Precio", "pt-br": "Preço", "vi": "Giá"},
+    "pax_paid": {"fr": "Payé", "en": "Paid", "es": "Pagado", "pt-br": "Pago", "vi": "Đã trả"},
+    "pax_balance": {"fr": "Reste dû", "en": "Balance due", "es": "Saldo pendiente", "pt-br": "Saldo devido", "vi": "Còn nợ"},
+    "pax_no_bookings": {"fr": "Aucune réservation", "en": "No bookings", "es": "Sin reservas", "pt-br": "Sem reservas", "vi": "Không có đặt chỗ"},
+    "pax_portal_link": {"fr": "Lien portail", "en": "Portal link", "es": "Enlace portal", "pt-br": "Link portal", "vi": "Liên kết cổng"},
+    "pax_documents": {"fr": "Documents", "en": "Documents", "es": "Documentos", "pt-br": "Documentos", "vi": "Tài liệu"},
+
+    # ═══ BACKOFFICE — PLANNING ═══
+    "plan_gantt": {"fr": "Gantt", "en": "Gantt", "es": "Gantt", "pt-br": "Gantt", "vi": "Gantt"},
+    "plan_list": {"fr": "Liste", "en": "List", "es": "Lista", "pt-br": "Lista", "vi": "Danh sách"},
+    "plan_new_leg": {"fr": "Nouveau leg", "en": "New leg", "es": "Nuevo tramo", "pt-br": "Novo trecho", "vi": "Chặng mới"},
+    "plan_vessel": {"fr": "Navire", "en": "Vessel", "es": "Buque", "pt-br": "Navio", "vi": "Tàu"},
+    "plan_leg_code": {"fr": "Code leg", "en": "Leg code", "es": "Código", "pt-br": "Código", "vi": "Mã chặng"},
+    "plan_route": {"fr": "Route", "en": "Route", "es": "Ruta", "pt-br": "Rota", "vi": "Tuyến"},
+    "plan_departure": {"fr": "Départ", "en": "Departure", "es": "Salida", "pt-br": "Partida", "vi": "Khởi hành"},
+    "plan_arrival": {"fr": "Arrivée", "en": "Arrival", "es": "Llegada", "pt-br": "Chegada", "vi": "Đến"},
+    "plan_status": {"fr": "Statut", "en": "Status", "es": "Estado", "pt-br": "Status", "vi": "Trạng thái"},
+    "plan_distance": {"fr": "Distance NM", "en": "Distance NM", "es": "Distancia MN", "pt-br": "Distância MN", "vi": "Khoảng cách HL"},
+    "plan_duration": {"fr": "Durée jours", "en": "Duration days", "es": "Duración días", "pt-br": "Duração dias", "vi": "Thời gian ngày"},
+    "plan_cargo": {"fr": "Cargo", "en": "Cargo", "es": "Carga", "pt-br": "Carga", "vi": "Hàng"},
+    "plan_pax": {"fr": "Pax", "en": "Pax", "es": "Pax", "pt-br": "Pax", "vi": "Khách"},
+    "plan_fill": {"fr": "Remplissage", "en": "Fill rate", "es": "Llenado", "pt-br": "Taxa", "vi": "Tỷ lệ"},
+    "plan_no_legs": {"fr": "Aucun leg", "en": "No legs", "es": "Sin tramos", "pt-br": "Sem trechos", "vi": "Không có chặng"},
+    "plan_all_vessels": {"fr": "Tous", "en": "All", "es": "Todos", "pt-br": "Todos", "vi": "Tất cả"},
+    "plan_year": {"fr": "Année", "en": "Year", "es": "Año", "pt-br": "Ano", "vi": "Năm"},
+    "plan_port_view": {"fr": "Vue ports", "en": "Port view", "es": "Vista puertos", "pt-br": "Vista portos", "vi": "Theo cảng"},
+
+    # ═══ BACKOFFICE — KPI ═══
+    "kpi_performance": {"fr": "Performance opérationnelle", "en": "Operational performance", "es": "Rendimiento operacional", "pt-br": "Performance operacional", "vi": "Hiệu suất"},
+    "kpi_claims": {"fr": "Sinistralité", "en": "Claims rate", "es": "Siniestralidad", "pt-br": "Sinistralidade", "vi": "Tỷ lệ khiếu nại"},
+    "kpi_emissions": {"fr": "Émissions CO₂", "en": "CO₂ emissions", "es": "Emisiones CO₂", "pt-br": "Emissões CO₂", "vi": "Khí thải CO₂"},
+    "kpi_no_data": {"fr": "Aucune donnée KPI", "en": "No KPI data", "es": "Sin datos KPI", "pt-br": "Sem dados KPI", "vi": "Không có dữ liệu KPI"},
+
+    # ═══ BACKOFFICE — ON BOARD ═══
+    "ob_select_vessel": {"fr": "Sélectionnez un navire", "en": "Select a vessel", "es": "Seleccione un buque", "pt-br": "Selecione um navio", "vi": "Chọn tàu"},
+    "ob_current_leg": {"fr": "Leg en cours", "en": "Current leg", "es": "Tramo actual", "pt-br": "Trecho atual", "vi": "Chặng hiện tại"},
+    "ob_no_current": {"fr": "Aucun leg en cours", "en": "No current leg", "es": "Sin tramo actual", "pt-br": "Sem trecho atual", "vi": "Không có chặng"},
+    "ob_daily_report": {"fr": "Rapport journalier", "en": "Daily report", "es": "Informe diario", "pt-br": "Relatório diário", "vi": "Báo cáo hằng ngày"},
+    "ob_sof": {"fr": "Statement of Facts", "en": "Statement of Facts", "es": "Statement of Facts", "pt-br": "Statement of Facts", "vi": "Statement of Facts"},
+    "ob_log": {"fr": "Journal de bord", "en": "Logbook", "es": "Bitácora", "pt-br": "Diário de bordo", "vi": "Nhật ký"},
+
+    # ═══ BACKOFFICE — ADMIN / SETTINGS ═══
+    "admin_users": {"fr": "Gestion des utilisateurs", "en": "User management", "es": "Gestión de usuarios", "pt-br": "Gestão de usuários", "vi": "Quản lý người dùng"},
+    "admin_vessels": {"fr": "Navires", "en": "Vessels", "es": "Buques", "pt-br": "Navios", "vi": "Tàu"},
+    "admin_ports": {"fr": "Ports", "en": "Ports", "es": "Puertos", "pt-br": "Portos", "vi": "Cảng"},
+    "admin_database": {"fr": "Base de données", "en": "Database", "es": "Base de datos", "pt-br": "Banco de dados", "vi": "Cơ sở dữ liệu"},
+    "admin_general": {"fr": "Général", "en": "General", "es": "General", "pt-br": "Geral", "vi": "Chung"},
+    "admin_opex": {"fr": "OPEX", "en": "OPEX", "es": "OPEX", "pt-br": "OPEX", "vi": "OPEX"},
+    "admin_emissions": {"fr": "Émissions", "en": "Emissions", "es": "Emisiones", "pt-br": "Emissões", "vi": "Khí thải"},
+    "admin_insurance": {"fr": "Assurances", "en": "Insurance", "es": "Seguros", "pt-br": "Seguros", "vi": "Bảo hiểm"},
+    "admin_cabin_prices": {"fr": "Tarifs cabines", "en": "Cabin prices", "es": "Tarifas cabinas", "pt-br": "Tarifas cabines", "vi": "Giá phòng"},
+    "admin_export_full": {"fr": "Export complet", "en": "Full export", "es": "Exportación completa", "pt-br": "Exportação completa", "vi": "Xuất toàn bộ"},
+    "admin_export_selective": {"fr": "Export sélectif", "en": "Selective export", "es": "Exportación selectiva", "pt-br": "Exportação seletiva", "vi": "Xuất chọn lọc"},
+    "admin_export_files": {"fr": "Export fichiers", "en": "Export files", "es": "Exportar archivos", "pt-br": "Exportar arquivos", "vi": "Xuất tệp"},
+    "admin_purge": {"fr": "Vider sélection", "en": "Purge selection", "es": "Vaciar selección", "pt-br": "Limpar seleção", "vi": "Xóa chọn"},
+    "admin_reset": {"fr": "Réinitialiser", "en": "Reset", "es": "Reiniciar", "pt-br": "Reiniciar", "vi": "Đặt lại"},
+    "admin_stats": {"fr": "Stats BDD", "en": "DB Stats", "es": "Estadísticas BD", "pt-br": "Estatísticas BD", "vi": "Thống kê CSDL"},
+    "admin_cleanup": {"fr": "Nettoyage", "en": "Cleanup", "es": "Limpieza", "pt-br": "Limpeza", "vi": "Dọn dẹp"},
+    "admin_danger_zone": {"fr": "Zone de danger", "en": "Danger zone", "es": "Zona de peligro", "pt-br": "Zona de perigo", "vi": "Vùng nguy hiểm"},
+    "admin_new_user": {"fr": "Nouvel utilisateur", "en": "New user", "es": "Nuevo usuario", "pt-br": "Novo usuário", "vi": "Người dùng mới"},
+
     # ═══ DOCUMENT GENERATION ═══
     "doc_choose_lang": {"fr": "Choisir la langue du document", "en": "Choose document language",
                         "es": "Elegir idioma del documento", "pt-br": "Escolher idioma do documento",
@@ -150,365 +407,203 @@ TRANSLATIONS = {
                                 "es": "Solo francés o inglés", "pt-br": "Apenas francês ou inglês",
                                 "vi": "Chỉ tiếng Pháp hoặc tiếng Anh"},
 
-    # ═══ CLIENT GUIDE ═══
-    "guide_link_text": {
-        "fr": "Comment remplir ce formulaire ?",
-        "en": "How to fill this form?"},
-    "guide_title": {
-        "fr": "Guide de saisie — Packing List",
-        "en": "Packing List — Submission Guide"},
-    "guide_subtitle": {
-        "fr": "Tout ce que vous devez savoir pour remplir votre packing list",
-        "en": "Everything you need to know to complete your packing list"},
-    "guide_back_to_form": {
-        "fr": "Retour au formulaire",
-        "en": "Back to form"},
-    "guide_toc": {
-        "fr": "Sommaire",
-        "en": "Table of contents"},
-    "guide_tip": {"fr": "Conseil", "en": "Tip"},
-    "guide_important": {"fr": "Important", "en": "Important"},
-    "guide_warning": {"fr": "Attention", "en": "Warning"},
-    "guide_field": {"fr": "Champ", "en": "Field"},
-    "guide_required": {"fr": "Requis", "en": "Required"},
-    "guide_description": {"fr": "Description", "en": "Description"},
-    "guide_example": {"fr": "Exemple", "en": "Example"},
-    "guide_optional": {"fr": "Optionnel", "en": "Optional"},
-    "guide_recommended": {"fr": "Recommandé", "en": "Recommended"},
-    "guide_deadline": {"fr": "Échéance", "en": "Deadline"},
-    "guide_action": {"fr": "Action", "en": "Action"},
-    "guide_days": {"fr": "jours", "en": "days"},
-    "guide_situation": {"fr": "Situation", "en": "Situation"},
-    "guide_fee": {"fr": "Frais (EUR)", "en": "Fee (EUR)"},
-    "guide_phone": {"fr": "Téléphone", "en": "Phone"},
-    "guide_footer": {
-        "fr": "Décarboner le fret maritime",
-        "en": "Decarbonizing maritime freight"},
+    # ═══ CARGO CLIENT PORTAL ═══
+    "cp_packing_list": {"fr": "Packing List", "en": "Packing List", "es": "Lista de empaque", "pt-br": "Lista de embalagem", "vi": "Danh sách đóng gói"},
+    "cp_vessel": {"fr": "Le Navire", "en": "The Vessel", "es": "El Buque", "pt-br": "O Navio", "vi": "Tàu"},
+    "cp_voyage": {"fr": "Le Voyage", "en": "The Voyage", "es": "El Viaje", "pt-br": "A Viagem", "vi": "Chuyến đi"},
+    "cp_documents": {"fr": "Documentation", "en": "Documents", "es": "Documentación", "pt-br": "Documentação", "vi": "Tài liệu"},
+    "cp_messages": {"fr": "Parlez avec nous", "en": "Contact us", "es": "Contáctenos", "pt-br": "Fale conosco", "vi": "Liên hệ"},
+    "cp_about_vessel": {"fr": "À propos du", "en": "About", "es": "Sobre el", "pt-br": "Sobre o", "vi": "Giới thiệu"},
+    "cp_vessel_desc_fr": {"fr": "fait partie de la flotte TOWT de voiliers-cargos modernes, conçus pour décarboner le fret maritime grâce à la propulsion vélique."},
+    "cp_vessel_desc_en": {"en": "is part of the TOWT fleet of modern cargo sailing vessels, designed to decarbonize maritime freight using wind propulsion."},
+    "cp_vessel_desc_es": {"es": "es parte de la flota TOWT de veleros de carga modernos, diseñados para descarbonizar el flete marítimo mediante propulsión eólica."},
+    "cp_vessel_desc_ptbr": {"pt-br": "faz parte da frota TOWT de veleiros de carga modernos, projetados para descarbonizar o frete marítimo usando propulsão eólica."},
+    "cp_vessel_desc_vi": {"vi": "là một phần của đội tàu buồm chở hàng hiện đại TOWT, được thiết kế để giảm carbon trong vận tải biển bằng năng lượng gió."},
+    "cp_flag": {"fr": "Pavillon", "en": "Flag", "es": "Bandera", "pt-br": "Bandeira", "vi": "Cờ"},
+    "cp_deadweight": {"fr": "Port en lourd", "en": "Deadweight", "es": "Peso muerto", "pt-br": "Porte bruto", "vi": "Trọng tải"},
+    "cp_capacity": {"fr": "Capacité palettes", "en": "Pallet capacity", "es": "Capacidad paletas", "pt-br": "Capacidade paletes", "vi": "Sức chứa pallet"},
+    "cp_speed": {"fr": "Vitesse de croisière", "en": "Cruising speed", "es": "Velocidad de crucero", "pt-br": "Velocidade de cruzeiro", "vi": "Tốc độ hành trình"},
+    "cp_knots": {"fr": "nœuds", "en": "knots", "es": "nudos", "pt-br": "nós", "vi": "hải lý/giờ"},
+    "cp_route": {"fr": "Trajet", "en": "Route", "es": "Ruta", "pt-br": "Rota", "vi": "Tuyến"},
+    "cp_schedule": {"fr": "Calendrier", "en": "Schedule", "es": "Calendario", "pt-br": "Calendário", "vi": "Lịch trình"},
+    "cp_etd": {"fr": "Départ estimé", "en": "Estimated departure", "es": "Salida estimada", "pt-br": "Partida estimada", "vi": "Khởi hành dự kiến"},
+    "cp_eta": {"fr": "Arrivée estimée", "en": "Estimated arrival", "es": "Llegada estimada", "pt-br": "Chegada estimada", "vi": "Đến dự kiến"},
+    "cp_atd": {"fr": "Départ réel", "en": "Actual departure", "es": "Salida real", "pt-br": "Partida real", "vi": "Khởi hành thực tế"},
+    "cp_ata": {"fr": "Arrivée réelle", "en": "Actual arrival", "es": "Llegada real", "pt-br": "Chegada real", "vi": "Đến thực tế"},
+    "cp_distance": {"fr": "Distance", "en": "Distance", "es": "Distancia", "pt-br": "Distância", "vi": "Khoảng cách"},
+    "cp_crew": {"fr": "Équipage embarqué", "en": "Crew on board", "es": "Tripulación a bordo", "pt-br": "Tripulação a bordo", "vi": "Thủy thủ đoàn"},
+    "cp_leg_code": {"fr": "Code leg", "en": "Leg code", "es": "Código tramo", "pt-br": "Código trecho", "vi": "Mã chặng"},
+    "cp_contractual_docs": {"fr": "Documentation contractuelle", "en": "Contractual documents", "es": "Documentación contractual", "pt-br": "Documentação contratual", "vi": "Tài liệu hợp đồng"},
+    "cp_terms_title": {"fr": "Conditions générales de transport", "en": "General conditions of transport", "es": "Condiciones generales de transporte", "pt-br": "Condições gerais de transporte", "vi": "Điều kiện vận chuyển chung"},
+    "cp_conversation": {"fr": "Fil de discussion", "en": "Conversation", "es": "Conversación", "pt-br": "Conversa", "vi": "Cuộc trò chuyện"},
+    "cp_no_messages": {"fr": "Aucun message pour l'instant. Envoyez un message pour démarrer la conversation !", "en": "No messages yet. Send a message to start the conversation!", "es": "No hay mensajes todavía. ¡Envíe un mensaje para iniciar la conversación!", "pt-br": "Nenhuma mensagem ainda. Envie uma mensagem para iniciar a conversa!", "vi": "Chưa có tin nhắn. Gửi tin nhắn để bắt đầu cuộc trò chuyện!"},
+    "cp_write_msg": {"fr": "Écrivez votre message…", "en": "Write your message…", "es": "Escriba su mensaje…", "pt-br": "Escreva sua mensagem…", "vi": "Viết tin nhắn…"},
+    "cp_send": {"fr": "Envoyer", "en": "Send", "es": "Enviar", "pt-br": "Enviar", "vi": "Gửi"},
+    "cp_contact_email": {"fr": "Pour les urgences, contactez-nous à", "en": "For urgent matters, contact us at", "es": "Para asuntos urgentes, contáctenos en", "pt-br": "Para assuntos urgentes, entre em contato em", "vi": "Trường hợp khẩn cấp, liên hệ"},
+    "cp_delete_batch_confirm": {"fr": "Supprimer ce batch ?", "en": "Delete this batch?", "es": "¿Eliminar este lote?", "pt-br": "Excluir este lote?", "vi": "Xóa lô hàng này?"},
+    "cp_no_voyage_info": {"fr": "Aucune information de voyage disponible pour le moment.", "en": "No voyage information available yet.", "es": "No hay información de viaje disponible todavía.", "pt-br": "Nenhuma informação de viagem disponível no momento.", "vi": "Chưa có thông tin chuyến đi."},
+    "cp_full_itinerary": {"fr": "Itinéraire complet", "en": "Full itinerary", "es": "Itinerario completo", "pt-br": "Itinerário completo", "vi": "Lịch trình đầy đủ"},
+    "cp_your_cargo": {"fr": "Votre cargo à bord", "en": "Your cargo on board", "es": "Su carga a bordo", "pt-br": "Sua carga a bordo", "vi": "Hàng hóa của bạn trên tàu"},
+    # ═══ BACKOFFICE — QUICK ACCESS CARDS ═══
+    "qa_planning_title": {"fr": "Planification", "en": "Planning", "es": "Planificación", "pt-br": "Planejamento", "vi": "Kế hoạch"},
+    "qa_planning_desc": {"fr": "Routes, escales, planning", "en": "Routes, port calls, planning", "es": "Rutas, escalas, planificación", "pt-br": "Rotas, escalas, planejamento", "vi": "Tuyến, cảng, kế hoạch"},
+    "qa_commercial_title": {"fr": "Commercial", "en": "Commercial", "es": "Comercial", "pt-br": "Comercial", "vi": "Thương mại"},
+    "qa_commercial_desc": {"fr": "Commandes, affectations", "en": "Orders, assignments", "es": "Pedidos, asignaciones", "pt-br": "Pedidos, atribuições", "vi": "Đơn hàng, phân bổ"},
+    "qa_escale_title": {"fr": "Escale", "en": "Port call", "es": "Escala", "pt-br": "Escala", "vi": "Ghé cảng"},
+    "qa_escale_desc": {"fr": "Opérations portuaires", "en": "Port operations", "es": "Operaciones portuarias", "pt-br": "Operações portuárias", "vi": "Hoạt động cảng"},
+    "qa_finance_title": {"fr": "Finances", "en": "Finance", "es": "Finanzas", "pt-br": "Finanças", "vi": "Tài chính"},
+    "qa_finance_desc": {"fr": "Revenus, dépenses, marges", "en": "Revenue, expenses, margins", "es": "Ingresos, gastos, márgenes", "pt-br": "Receitas, despesas, margens", "vi": "Thu, chi, lợi nhuận"},
 
-    # Section titles
-    "guide_s1_title": {
-        "fr": "Présentation générale",
-        "en": "Overview"},
-    "guide_s2_title": {
-        "fr": "Les étapes à suivre",
-        "en": "Steps to follow"},
-    "guide_s3_title": {
-        "fr": "Référence des champs",
-        "en": "Field reference"},
-    "guide_s4_title": {
-        "fr": "Fonctionnement des batchs",
-        "en": "How batches work"},
-    "guide_s5_title": {
-        "fr": "Exigences d'emballage",
-        "en": "Packaging requirements"},
-    "guide_s6_title": {
-        "fr": "Délais à respecter",
-        "en": "Key deadlines"},
-    "guide_s7_title": {
-        "fr": "Barème des frais",
-        "en": "Fee schedule"},
-    "guide_s8_title": {
-        "fr": "Expéditions vers les États-Unis",
-        "en": "Shipments to the United States"},
-    "guide_s9_title": {
-        "fr": "Questions fréquentes",
-        "en": "Frequently asked questions"},
-    "guide_s10_title": {
-        "fr": "Contact",
-        "en": "Contact"},
+    "cp_key_features": {"fr": "Caractéristiques principales", "en": "Key features", "es": "Características principales", "pt-br": "Características principais", "vi": "Đặc điểm chính"},
 
-    # S1 - Overview
-    "guide_s1_p1": {
-        "fr": "Ce formulaire en ligne vous permet de renseigner les informations relatives à votre expédition. Ces données servent à préparer les documents essentiels : Bill of Lading (connaissement), manifeste cargo, étiquettes et documents douaniers.",
-        "en": "This online form allows you to provide all the information related to your shipment. This data is used to prepare essential documents: Bill of Lading, cargo manifest, labels, and customs documents."},
-    "guide_s1_p2": {
-        "fr": "Les champs marqués d'un astérisque (*) sont obligatoires. Plus vos informations sont complètes et exactes, plus le traitement de votre dossier sera rapide.",
-        "en": "Fields marked with an asterisk (*) are mandatory. The more complete and accurate your information, the faster your file will be processed."},
-    "guide_s1_tip": {
-        "fr": "Vous pouvez enregistrer votre saisie à tout moment et y revenir plus tard avec le même lien.",
-        "en": "You can save your entry at any time and come back later using the same link."},
+    # ═══ CO2 / MRV / DECARBONATION (NEW) ═══
+    "co2_decarbonation": {"fr": "Décarbonation", "en": "Decarbonation", "es": "Descarbonización", "pt-br": "Descarbonização", "vi": "Giảm carbon"},
+    "co2_for_shipment": {"fr": "Décarbonation pour cette expédition — Transport à la voile vs conventionnel",
+                         "en": "Decarbonation for this shipment — Sailing vs conventional transport",
+                         "es": "Descarbonización para este envío — Transporte a vela vs convencional",
+                         "pt-br": "Descarbonização para esta remessa — Transporte à vela vs convencional",
+                         "vi": "Giảm carbon cho lô hàng này — Vận tải buồm so với thông thường"},
+    "co2_avoided_tonnes": {"fr": "tonnes CO₂ décarbonées", "en": "tonnes CO₂ decarbonized",
+                           "es": "toneladas CO₂ descarbonizadas", "pt-br": "toneladas CO₂ descarbonizadas",
+                           "vi": "tấn CO₂ giảm"},
+    "nav_mrv": {"fr": "MRV Fuel", "en": "MRV Fuel", "es": "MRV Combustible", "pt-br": "MRV Combustível", "vi": "MRV Nhiên liệu"},
 
-    # S2 - Steps
-    "guide_step1_title": {
-        "fr": "Vérifiez les informations voyage",
-        "en": "Check the voyage information"},
-    "guide_step1_desc": {
-        "fr": "En haut de chaque batch, les informations voyage sont pré-remplies par TOWT (navire, port de chargement, destination, date ETD). Vérifiez qu'elles correspondent à votre commande.",
-        "en": "At the top of each batch, voyage information is pre-filled by TOWT (vessel, loading port, destination, ETD date). Verify that it matches your order."},
-    "guide_step2_title": {
-        "fr": "Renseignez l'expéditeur et le destinataire",
-        "en": "Fill in shipper and consignee details"},
-    "guide_step2_desc": {
-        "fr": "Indiquez le nom client, le nom de l'expéditeur (shipper), son adresse complète, ainsi que l'adresse du destinataire (consignee). Ces informations figureront sur le Bill of Lading.",
-        "en": "Enter the customer name, shipper name and full address, as well as the consignee address. This information will appear on the Bill of Lading."},
-    "guide_step3_title": {
-        "fr": "Décrivez la marchandise",
-        "en": "Describe the goods"},
-    "guide_step3_desc": {
-        "fr": "Sélectionnez le type de palette, renseignez la nature des marchandises, le nombre de palettes, et indiquez si les produits sont bio ou classés IMO (marchandises dangereuses).",
-        "en": "Select the pallet type, describe the nature of goods, enter the number of pallets, and indicate if the products are organic or IMO classified (dangerous goods)."},
-    "guide_step4_title": {
-        "fr": "Indiquez les dimensions et le poids",
-        "en": "Enter dimensions and weight"},
-    "guide_step4_desc": {
-        "fr": "Renseignez la longueur, largeur et hauteur de chaque palette (en cm) ainsi que le poids brut (en kg). La hauteur maximale autorisée est de 190 cm.",
-        "en": "Enter the length, width and height of each pallet (in cm) as well as the gross weight (in kg). The maximum allowed height is 190 cm."},
-    "guide_step5_title": {
-        "fr": "Enregistrez et ajoutez des batchs si nécessaire",
-        "en": "Save and add batches if needed"},
-    "guide_step5_desc": {
-        "fr": "Cliquez sur « Enregistrer » pour sauvegarder. Si votre expédition contient plusieurs lots de marchandises différentes, ajoutez un batch par lot via le bouton « Ajouter un batch ».",
-        "en": "Click 'Save' to save your data. If your shipment contains multiple different lots of goods, add one batch per lot using the 'Add a batch' button."},
+    # MRV page titles & buttons
+    "mrv_title": {"fr": "MRV — Rapport carburant", "en": "MRV — Fuel Reporting", "es": "MRV — Informe combustible", "pt-br": "MRV — Relatório combustível", "vi": "MRV — Báo cáo nhiên liệu"},
+    "mrv_export_dnv": {"fr": "Export DNV CSV", "en": "Export DNV CSV", "es": "Exportar DNV CSV", "pt-br": "Exportar DNV CSV", "vi": "Xuất DNV CSV"},
+    "mrv_carbon_report": {"fr": "Rapport carbone", "en": "Carbon Report", "es": "Informe carbono", "pt-br": "Relatório carbono", "vi": "Báo cáo carbon"},
+    "mrv_recalculate": {"fr": "Recalculer", "en": "Recalculate", "es": "Recalcular", "pt-br": "Recalcular", "vi": "Tính lại"},
 
-    # S3 - Field descriptions
-    "guide_s3_intro": {
-        "fr": "Voici le détail de chaque champ du formulaire. Les champs obligatoires (*) doivent être remplis pour que votre packing list soit considérée comme complète.",
-        "en": "Here is the detail of each form field. Mandatory fields (*) must be filled for your packing list to be considered complete."},
-    "guide_f_customer_name_desc": {
-        "fr": "Votre raison sociale ou nom commercial tel qu'il apparaît dans le contrat.",
-        "en": "Your company name or trade name as it appears in the contract."},
-    "guide_f_freight_forwarder_desc": {
-        "fr": "Nom du transitaire en charge de l'acheminement terrestre, s'il y en a un.",
-        "en": "Name of the freight forwarder handling land transport, if applicable."},
-    "guide_f_code_transitaire_desc": {
-        "fr": "Code ou référence interne de votre transitaire.",
-        "en": "Internal code or reference of your freight forwarder."},
-    "guide_f_shipper_name_desc": {
-        "fr": "Nom complet de l'expéditeur. Figurera sur le Bill of Lading.",
-        "en": "Full shipper name. Will appear on the Bill of Lading."},
-    "guide_f_shipper_address_desc": {
-        "fr": "Adresse complète de l'expéditeur : rue, code postal, ville, pays.",
-        "en": "Full shipper address: street, postal code, city, country."},
-    "guide_f_po_number_desc": {
-        "fr": "Numéro de commande (Purchase Order) de votre client, si applicable.",
-        "en": "Your client's Purchase Order number, if applicable."},
-    "guide_f_batch_id_desc": {
-        "fr": "Votre référence interne pour identifier ce lot de marchandises.",
-        "en": "Your internal reference to identify this lot of goods."},
-    "guide_f_notify_desc": {
-        "fr": "Personne ou société à notifier à l'arrivée de la marchandise (souvent le transitaire au port d'arrivée).",
-        "en": "Person or company to notify upon cargo arrival (often the forwarder at the destination port)."},
-    "guide_f_consignee_desc": {
-        "fr": "Nom et adresse complète du destinataire final. Figurera sur le Bill of Lading.",
-        "en": "Full name and address of the final consignee. Will appear on the Bill of Lading."},
-    "guide_f_pallet_type_desc": {
-        "fr": "EPAL (80×120 cm, standard européen), USPAL (100×120 cm, standard US), PORTPAL ou Autre.",
-        "en": "EPAL (80×120 cm, European standard), USPAL (100×120 cm, US standard), PORTPAL or Other."},
-    "guide_f_goods_desc": {
-        "fr": "Description précise de la nature des marchandises transportées.",
-        "en": "Precise description of the nature of the transported goods."},
-    "guide_f_goods_example": {
-        "fr": "Vin rouge AOC, café vert arabica, huile d'olive bio...",
-        "en": "Red wine AOC, green arabica coffee, organic olive oil..."},
-    "guide_f_bio_desc": {
-        "fr": "Indiquez si vos produits sont certifiés bio/organiques.",
-        "en": "Indicate if your products are certified organic."},
-    "guide_f_qty_desc": {
-        "fr": "Nombre de palettes dans ce batch. Le total de tous les batchs doit correspondre à la quantité commandée.",
-        "en": "Number of pallets in this batch. The total across all batches should match the ordered quantity."},
-    "guide_f_cases_desc": {
-        "fr": "Nombre total de colis/cartons sur les palettes de ce batch.",
-        "en": "Total number of cases/cartons on the pallets in this batch."},
-    "guide_f_units_desc": {
-        "fr": "Nombre d'unités par colis (ex : 6 bouteilles par carton).",
-        "en": "Number of units per case (e.g., 6 bottles per carton)."},
-    "guide_f_imo_desc": {
-        "fr": "Si votre marchandise est classée dangereuse (IMDG), sélectionnez la classe IMO. Sinon, laissez vide ou choisissez « Non-Dangerous Goods ».",
-        "en": "If your goods are classified as dangerous (IMDG), select the IMO class. Otherwise, leave empty or select 'Non-Dangerous Goods'."},
-    "guide_f_value_desc": {
-        "fr": "Valeur déclarée de la marchandise en dollars US (pour les déclarations douanières).",
-        "en": "Declared cargo value in US dollars (for customs declarations)."},
-    "guide_f_length_desc": {
-        "fr": "Longueur de la palette chargée, en centimètres.",
-        "en": "Length of the loaded pallet, in centimeters."},
-    "guide_f_width_desc": {
-        "fr": "Largeur de la palette chargée, en centimètres.",
-        "en": "Width of the loaded pallet, in centimeters."},
-    "guide_f_height_desc": {
-        "fr": "Hauteur totale (palette + marchandise), en centimètres. Maximum : 190 cm.",
-        "en": "Total height (pallet + goods), in centimeters. Maximum: 190 cm."},
-    "guide_f_weight_desc": {
-        "fr": "Poids brut par palette (marchandise + palette + emballage), en kilogrammes.",
-        "en": "Gross weight per pallet (goods + pallet + packaging), in kilograms."},
-    "guide_s3_height_warning": {
-        "fr": "La hauteur maximale autorisée par palette est de 190 cm. Les palettes dépassant cette hauteur pourront être refusées au chargement.",
-        "en": "The maximum allowed height per pallet is 190 cm. Pallets exceeding this height may be refused at loading."},
+    # MRV summary cards
+    "mrv_total_consumption": {"fr": "Consommation MDO totale", "en": "Total MDO Consumption", "es": "Consumo MDO total", "pt-br": "Consumo MDO total", "vi": "Tổng tiêu thụ MDO"},
+    "mrv_total_co2": {"fr": "Émissions CO₂ totales", "en": "Total CO₂ Emissions", "es": "Emisiones CO₂ totales", "pt-br": "Emissões CO₂ totais", "vi": "Tổng phát thải CO₂"},
+    "mrv_events_count": {"fr": "Événements MRV", "en": "MRV Events", "es": "Eventos MRV", "pt-br": "Eventos MRV", "vi": "Sự kiện MRV"},
+    "mrv_data_quality": {"fr": "Qualité des données", "en": "Data Quality", "es": "Calidad de datos", "pt-br": "Qualidade dos dados", "vi": "Chất lượng dữ liệu"},
+    "mrv_errors": {"fr": "Erreurs", "en": "Errors", "es": "Errores", "pt-br": "Erros", "vi": "Lỗi"},
+    "mrv_warnings": {"fr": "Alertes", "en": "Warnings", "es": "Alertas", "pt-br": "Alertas", "vi": "Cảnh báo"},
+    "mrv_no_data": {"fr": "Aucune donnée", "en": "No data", "es": "Sin datos", "pt-br": "Sem dados", "vi": "Không có dữ liệu"},
 
-    # S4 - Batches
-    "guide_s4_p1": {
-        "fr": "Un « batch » représente un lot homogène de marchandises. Si toutes vos palettes contiennent le même type de produit vers le même destinataire, un seul batch suffit.",
-        "en": "A 'batch' represents a homogeneous lot of goods. If all your pallets contain the same type of product going to the same consignee, a single batch is sufficient."},
-    "guide_s4_li1": {
-        "fr": "Utilisez plusieurs batchs si vous avez des marchandises différentes (ex : vin et café).",
-        "en": "Use multiple batches if you have different goods (e.g., wine and coffee)."},
-    "guide_s4_li2": {
-        "fr": "Utilisez plusieurs batchs si vous avez des destinataires différents.",
-        "en": "Use multiple batches if you have different consignees."},
-    "guide_s4_li3": {
-        "fr": "Le total des palettes de tous les batchs doit correspondre au nombre commandé.",
-        "en": "The total pallets across all batches must match the ordered quantity."},
-    "guide_s4_tip": {
-        "fr": "Vous pouvez supprimer un batch tant qu'il en reste au moins un. Les informations voyage sont automatiquement copiées dans chaque nouveau batch.",
-        "en": "You can delete a batch as long as at least one remains. Voyage information is automatically copied to each new batch."},
+    # MRV table headers
+    "mrv_leg": {"fr": "Leg", "en": "Leg", "es": "Tramo", "pt-br": "Trecho", "vi": "Chặng"},
+    "mrv_route": {"fr": "Route", "en": "Route", "es": "Ruta", "pt-br": "Rota", "vi": "Tuyến"},
+    "mrv_consumption_mt": {"fr": "Consommation (mt)", "en": "Consumption (mt)", "es": "Consumo (mt)", "pt-br": "Consumo (mt)", "vi": "Tiêu thụ (mt)"},
+    "mrv_co2_mt": {"fr": "CO₂ (mt)", "en": "CO₂ (mt)", "es": "CO₂ (mt)", "pt-br": "CO₂ (mt)", "vi": "CO₂ (mt)"},
+    "mrv_quality": {"fr": "Qualité", "en": "Quality", "es": "Calidad", "pt-br": "Qualidade", "vi": "Chất lượng"},
+    "mrv_view": {"fr": "Voir", "en": "View", "es": "Ver", "pt-br": "Ver", "vi": "Xem"},
+    "mrv_no_legs": {"fr": "Aucun leg pour", "en": "No legs for", "es": "Sin tramos para", "pt-br": "Nenhum trecho para", "vi": "Không có chặng cho"},
+    "mrv_in": {"fr": "en", "en": "in", "es": "en", "pt-br": "em", "vi": "trong"},
 
-    # S5 - Packaging
-    "guide_s5_general_title": {
-        "fr": "Exigences générales",
-        "en": "General requirements"},
-    "guide_s5_li1": {
-        "fr": "L'emballage doit être de qualité maritime : résistant à l'humidité et aux chocs.",
-        "en": "Packaging must be maritime-grade: resistant to moisture and shocks."},
-    "guide_s5_li2": {
-        "fr": "Cerclage robuste obligatoire pour maintenir la marchandise sur la palette.",
-        "en": "Robust strapping is mandatory to secure goods on the pallet."},
-    "guide_s5_li3": {
-        "fr": "Les marchandises en vrac (breakbulk) doivent être conditionnées en big bags.",
-        "en": "Bulk goods (breakbulk) must be packed in big bags."},
-    "guide_s5_li4": {
-        "fr": "Les marchandises classées IMO doivent respecter le Code IMDG.",
-        "en": "IMO-classified goods must comply with the IMDG Code."},
-    "guide_s5_pallet_title": {
-        "fr": "Palettisation",
-        "en": "Palletization"},
-    "guide_s5_pli1": {
-        "fr": "Double filmage obligatoire, y compris la base de la palette.",
-        "en": "Double film wrapping is mandatory, including the pallet base."},
-    "guide_s5_pli2": {
-        "fr": "Les étiquettes TOWT doivent être apposées sur chaque palette (fournies par TOWT).",
-        "en": "TOWT labels must be affixed to each pallet (provided by TOWT)."},
-    "guide_s5_pli3": {
-        "fr": "Marchandises de haute valeur : filmage noir opaque + ruban inviolable.",
-        "en": "High-value goods: opaque black film + tamper-evident tape."},
-    "guide_s5_label_title": {
-        "fr": "Étiquetage",
-        "en": "Labeling"},
-    "guide_s5_lli1": {
-        "fr": "Chaque palette doit porter une étiquette avec : numéro de lot, description des marchandises, poids, destination.",
-        "en": "Each pallet must bear a label with: lot number, goods description, weight, destination."},
-    "guide_s5_lli2": {
-        "fr": "Les étiquettes TOWT vous seront envoyées par email avant la date de réception en entrepôt.",
-        "en": "TOWT labels will be sent to you by email before the warehouse reception date."},
-    "guide_s5_wood_warning": {
-        "fr": "Tout emballage en bois doit être conforme à la norme ISPM15 (traitement thermique) et porter le cachet IPPC. Le non-respect peut entraîner un refus en douane.",
-        "en": "All wood packaging must comply with ISPM15 standards (heat treatment) and bear the IPPC stamp. Non-compliance may result in customs refusal."},
+    # MRV parameters
+    "mrv_parameters": {"fr": "Paramètres MRV", "en": "MRV Parameters", "es": "Parámetros MRV", "pt-br": "Parâmetros MRV", "vi": "Tham số MRV"},
+    "mrv_avg_density": {"fr": "Densité moyenne MDO (t/m³)", "en": "Avg MDO Density (t/m³)", "es": "Densidad MDO promedio (t/m³)", "pt-br": "Densidade MDO média (t/m³)", "vi": "Mật độ MDO trung bình (t/m³)"},
+    "mrv_deviation": {"fr": "Déviation admissible MDO (mt)", "en": "MDO Admissible Deviation (mt)", "es": "Desviación admisible MDO (mt)", "pt-br": "Desvio admissível MDO (mt)", "vi": "Sai lệch cho phép MDO (mt)"},
+    "mrv_co2_factor": {"fr": "Facteur émission CO₂ (t CO₂/t fuel)", "en": "CO₂ Emission Factor (t CO₂/t fuel)", "es": "Factor emisión CO₂ (t CO₂/t fuel)", "pt-br": "Fator emissão CO₂ (t CO₂/t fuel)", "vi": "Hệ số phát thải CO₂ (t CO₂/t fuel)"},
+    "mrv_save_params": {"fr": "Enregistrer les paramètres", "en": "Save Parameters", "es": "Guardar parámetros", "pt-br": "Salvar parâmetros", "vi": "Lưu tham số"},
 
-    # S6 - Deadlines
-    "guide_s6_d1": {
-        "fr": "Soumettre la packing list complète, la facture commerciale et les instructions d'expédition.",
-        "en": "Submit the complete packing list, commercial invoice, and shipping instructions."},
-    "guide_s6_d2": {
-        "fr": "Début de réception en entrepôt. Livrer la marchandise au port désigné (sur rendez-vous).",
-        "en": "Warehouse reception starts. Deliver goods to the designated port (by appointment)."},
-    "guide_s6_d3": {
-        "fr": "Date limite de réception. Toute la marchandise et les documents doivent être prêts.",
-        "en": "Reception deadline. All goods and documents must be ready."},
-    "guide_s6_warning": {
-        "fr": "Si la marchandise n'est pas prête à temps, le navire pourra partir sans elle. Le fret sera facturé comme « dead freight » et des frais supplémentaires s'appliqueront.",
-        "en": "If the goods are not ready on time, the vessel may depart without them. Freight will be invoiced as 'dead freight' and additional charges will apply."},
-    "guide_s6_after_title": {
-        "fr": "Après votre soumission",
-        "en": "After your submission"},
-    "guide_s6_after1": {
-        "fr": "Vos données sont intégrées dans le système sous 24h.",
-        "en": "Your data is integrated into the system within 24 hours."},
-    "guide_s6_after2": {
-        "fr": "Un brouillon de Bill of Lading est émis sous 72h après réception des données complètes et correctes.",
-        "en": "A draft Bill of Lading is issued within 72 hours of receiving complete and correct data."},
-    "guide_s6_after3": {
-        "fr": "Le Bill of Lading final est émis après le départ du navire.",
-        "en": "The final Bill of Lading is issued after the vessel's departure."},
+    # MRV leg detail
+    "mrv_quality_summary": {"fr": "Résumé qualité", "en": "Quality Summary", "es": "Resumen calidad", "pt-br": "Resumo qualidade", "vi": "Tóm tắt chất lượng"},
+    "mrv_pending": {"fr": "En attente", "en": "Pending", "es": "Pendiente", "pt-br": "Pendente", "vi": "Đang chờ"},
+    "mrv_co2_factor_label": {"fr": "Facteur CO₂", "en": "CO₂ Factor", "es": "Factor CO₂", "pt-br": "Fator CO₂", "vi": "Hệ số CO₂"},
+    "mrv_density_label": {"fr": "Densité MDO", "en": "MDO Density", "es": "Densidad MDO", "pt-br": "Densidade MDO", "vi": "Mật độ MDO"},
+    "mrv_admissible_deviation": {"fr": "Déviation admissible", "en": "Admissible Deviation", "es": "Desviación admisible", "pt-br": "Desvio admissível", "vi": "Sai lệch cho phép"},
+    "mrv_total_consumption_label": {"fr": "Consommation totale", "en": "Total Consumption", "es": "Consumo total", "pt-br": "Consumo total", "vi": "Tổng tiêu thụ"},
+    "mrv_co2_emissions": {"fr": "Émissions CO₂", "en": "CO₂ Emissions", "es": "Emisiones CO₂", "pt-br": "Emissões CO₂", "vi": "Phát thải CO₂"},
 
-    # S7 - Fees
-    "guide_s7_intro": {
-        "fr": "Afin de garantir un traitement fluide, les situations suivantes entraînent des frais supplémentaires :",
-        "en": "To ensure smooth processing, the following situations incur additional charges:"},
-    "guide_fee_bl": {
-        "fr": "Émission d'un BL original",
-        "en": "Issuance of one original BL"},
-    "guide_fee_amend1": {
-        "fr": "1ère modification du brouillon BL",
-        "en": "First BL draft amendment"},
-    "guide_fee_amend2": {
-        "fr": "Modifications suivantes du BL (chacune)",
-        "en": "Subsequent BL amendments (each)"},
-    "guide_fee_resubmit": {
-        "fr": "Re-soumission de la packing list (erreurs)",
-        "en": "Packing list resubmission (errors)"},
-    "guide_fee_urgent": {
-        "fr": "Traitement urgent (< 72h avant départ)",
-        "en": "Urgent processing (< 72h before departure)"},
-    "guide_fee_late": {
-        "fr": "Soumission très tardive (après la date limite)",
-        "en": "Very late submission (after deadline)"},
-    "guide_fee_reissue": {
-        "fr": "Ré-émission du BL (après émission)",
-        "en": "BL re-issuance (post-issuance)"},
-    "guide_fee_courier_dom": {
-        "fr": "Courrier — national",
-        "en": "Courier — domestic"},
-    "guide_fee_courier_intl": {
-        "fr": "Courrier — international",
-        "en": "Courier — cross-border"},
-    "guide_fee_manifest": {
-        "fr": "Modification manifeste/doc. cargo avancé (douanes)",
-        "en": "Advanced manifest/cargo doc amendment (customs)"},
-    "guide_s7_tip": {
-        "fr": "Soumettez vos informations complètes et correctes du premier coup pour éviter tous ces frais !",
-        "en": "Submit your information complete and correct the first time to avoid all these fees!"},
+    # MRV SOF suggestions
+    "mrv_sof_suggestions": {"fr": "Événements SOF à lier comme événements MRV", "en": "SOF Events to link as MRV events", "es": "Eventos SOF para vincular como eventos MRV", "pt-br": "Eventos SOF para vincular como eventos MRV", "vi": "Sự kiện SOF để liên kết thành sự kiện MRV"},
+    "mrv_no_events": {"fr": "Aucun événement MRV enregistré pour ce leg.", "en": "No MRV events recorded for this leg yet.", "es": "No hay eventos MRV para este tramo.", "pt-br": "Nenhum evento MRV para este trecho.", "vi": "Chưa có sự kiện MRV cho chặng này."},
+    "mrv_use_sof": {"fr": "Utilisez les suggestions SOF ci-dessus pour commencer.", "en": "Use the SOF event suggestions above to get started.", "es": "Use las sugerencias SOF para comenzar.", "pt-br": "Use as sugestões SOF acima para começar.", "vi": "Sử dụng các gợi ý SOF ở trên để bắt đầu."},
 
-    # S8 - US
-    "guide_s8_intro": {
-        "fr": "Les expéditions à destination des États-Unis sont soumises à des obligations réglementaires supplémentaires.",
-        "en": "Shipments to the United States are subject to additional regulatory requirements."},
-    "guide_s8_ams": {
-        "fr": "L'AMS est déposé par TOWT après la fin du chargement. Aucune action de votre part n'est requise pour l'AMS.",
-        "en": "The AMS is filed by TOWT after loading completion. No action is required from you for the AMS."},
-    "guide_s8_isf": {
-        "fr": "L'ISF (10+2) doit être déposé par votre transitaire ou vous-même. Il comprend : vendeur, acheteur, fabricant, destinataire, description des marchandises, code HTSUS, pays d'origine, etc.",
-        "en": "The ISF (10+2) must be filed by your freight forwarder or yourself. It includes: seller, buyer, manufacturer, consignee, goods description, HTSUS code, country of origin, etc."},
-    "guide_s8_warning": {
-        "fr": "Le non-respect des obligations ISF peut entraîner des pénalités de la part des douanes américaines (CBP). Assurez-vous que votre transitaire est informé.",
-        "en": "Failure to comply with ISF requirements may result in penalties from US Customs (CBP). Make sure your freight forwarder is informed."},
+    # MRV event form
+    "mrv_add_event": {"fr": "Ajouter un événement MRV", "en": "Add MRV Event", "es": "Añadir evento MRV", "pt-br": "Adicionar evento MRV", "vi": "Thêm sự kiện MRV"},
+    "mrv_edit_event": {"fr": "Modifier l'événement MRV", "en": "Edit MRV Event", "es": "Editar evento MRV", "pt-br": "Editar evento MRV", "vi": "Sửa sự kiện MRV"},
+    "mrv_event_info": {"fr": "Informations événement", "en": "Event Information", "es": "Información del evento", "pt-br": "Informações do evento", "vi": "Thông tin sự kiện"},
+    "mrv_event_type": {"fr": "Type d'événement", "en": "Event Type", "es": "Tipo de evento", "pt-br": "Tipo de evento", "vi": "Loại sự kiện"},
+    "mrv_date_utc": {"fr": "Date UTC", "en": "Date UTC", "es": "Fecha UTC", "pt-br": "Data UTC", "vi": "Ngày UTC"},
+    "mrv_time_utc": {"fr": "Heure UTC", "en": "Time UTC", "es": "Hora UTC", "pt-br": "Hora UTC", "vi": "Giờ UTC"},
+    "mrv_distance_prev": {"fr": "Distance du précéd. (NM)", "en": "Distance from prev. (NM)", "es": "Distancia del anterior (NM)", "pt-br": "Distância do anterior (NM)", "vi": "Khoảng cách từ trước (NM)"},
 
-    # S9 - FAQ
-    "guide_faq1_q": {
-        "fr": "Puis-je modifier mes informations après avoir enregistré ?",
-        "en": "Can I modify my information after saving?"},
-    "guide_faq1_a": {
-        "fr": "Oui, tant que la packing list n'a pas été verrouillée par l'exploitation TOWT. Une fois verrouillée, vous devez contacter exploitation@towt.eu pour toute modification.",
-        "en": "Yes, as long as the packing list has not been locked by TOWT operations. Once locked, you must contact exploitation@towt.eu for any changes."},
-    "guide_faq2_q": {
-        "fr": "Que signifient les zones grisées en haut de chaque batch ?",
-        "en": "What do the grey areas at the top of each batch mean?"},
-    "guide_faq2_a": {
-        "fr": "Ce sont les informations voyage pré-remplies par TOWT (navire, ports, dates). Elles ne sont pas modifiables. Si une erreur s'y trouve, contactez TOWT.",
-        "en": "These are voyage details pre-filled by TOWT (vessel, ports, dates). They cannot be edited. If there is an error, contact TOWT."},
-    "guide_faq3_q": {
-        "fr": "Combien de batchs puis-je créer ?",
-        "en": "How many batches can I create?"},
-    "guide_faq3_a": {
-        "fr": "Autant que nécessaire. Créez un batch par lot homogène de marchandises ou par destinataire différent. Le total des palettes doit correspondre à votre commande.",
-        "en": "As many as needed. Create one batch per homogeneous lot of goods or per different consignee. The total pallets must match your order."},
-    "guide_faq4_q": {
-        "fr": "Que se passe-t-il si je ne remplis pas tous les champs obligatoires ?",
-        "en": "What happens if I don't fill all mandatory fields?"},
-    "guide_faq4_a": {
-        "fr": "Votre packing list sera considérée comme incomplète. L'émission du brouillon de Bill of Lading sera retardée et des frais de traitement supplémentaires pourront s'appliquer.",
-        "en": "Your packing list will be considered incomplete. The draft Bill of Lading issuance will be delayed and additional processing fees may apply."},
-    "guide_faq5_q": {
-        "fr": "Mon lien ne fonctionne plus, que faire ?",
-        "en": "My link no longer works, what should I do?"},
-    "guide_faq5_a": {
-        "fr": "Contactez exploitation@towt.eu en indiquant votre référence de commande. Un nouveau lien pourra vous être envoyé.",
-        "en": "Contact exploitation@towt.eu with your order reference. A new link can be sent to you."},
+    # MRV DO counters
+    "mrv_do_counters": {"fr": "Compteurs DO (totaux cumulés)", "en": "DO Counters (running totals)", "es": "Contadores DO (totales acumulados)", "pt-br": "Contadores DO (totais acumulados)", "vi": "Bộ đếm DO (tổng cộng dồn)"},
+    "mrv_port_me": {"fr": "Moteur principal bâbord", "en": "Port Main Engine", "es": "Motor principal babor", "pt-br": "Motor principal bombordo", "vi": "Máy chính mạn trái"},
+    "mrv_stbd_me": {"fr": "Moteur principal tribord", "en": "Starboard Main Engine", "es": "Motor principal estribor", "pt-br": "Motor principal estibordo", "vi": "Máy chính mạn phải"},
+    "mrv_fwd_gen": {"fr": "Générateur avant", "en": "FWD Generator", "es": "Generador proa", "pt-br": "Gerador proa", "vi": "Máy phát phía trước"},
+    "mrv_aft_gen": {"fr": "Générateur arrière", "en": "AFT Generator", "es": "Generador popa", "pt-br": "Gerador popa", "vi": "Máy phát phía sau"},
 
-    # S10 - Contact
-    "guide_s10_p1": {
-        "fr": "Pour toute question relative à votre packing list ou à votre expédition, contactez le service exploitation TOWT :",
-        "en": "For any questions about your packing list or shipment, contact the TOWT operations department:"},
-    "guide_s10_p2": {
-        "fr": "Des mises à jour sur l'ETD/ETA de votre voyage sont envoyées chaque semaine à partir de 4 semaines avant le départ.",
-        "en": "Weekly ETD/ETA updates for your voyage are sent starting 4 weeks before departure."},
+    # MRV fuel & cargo
+    "mrv_fuel_cargo": {"fr": "Carburant & cargaison", "en": "Fuel & Cargo", "es": "Combustible y carga", "pt-br": "Combustível e carga", "vi": "Nhiên liệu & hàng hóa"},
+    "mrv_rob": {"fr": "ROB déclaré (mt)", "en": "ROB Declared (mt)", "es": "ROB declarado (mt)", "pt-br": "ROB declarado (mt)", "vi": "ROB khai báo (mt)"},
+    "mrv_cargo": {"fr": "Cargo MRV (mt)", "en": "Cargo MRV (mt)", "es": "Carga MRV (mt)", "pt-br": "Carga MRV (mt)", "vi": "Hàng MRV (mt)"},
+    "mrv_bunkering_qty": {"fr": "Quantité soutage (mt)", "en": "Bunkering Qty (mt)", "es": "Cantidad búnker (mt)", "pt-br": "Qtd abastecimento (mt)", "vi": "Lượng tiếp nhiên liệu (mt)"},
+    "mrv_bunkering_date": {"fr": "Date de soutage", "en": "Bunkering Date", "es": "Fecha búnker", "pt-br": "Data abastecimento", "vi": "Ngày tiếp nhiên liệu"},
+
+    # MRV position
+    "mrv_position": {"fr": "Position (depuis AIS/GPS)", "en": "Position (from AIS/GPS)", "es": "Posición (desde AIS/GPS)", "pt-br": "Posição (de AIS/GPS)", "vi": "Vị trí (từ AIS/GPS)"},
+    "mrv_lat_deg": {"fr": "Lat degrés", "en": "Lat Degrees", "es": "Lat grados", "pt-br": "Lat graus", "vi": "Vĩ độ"},
+    "mrv_lat_min": {"fr": "Lat minutes", "en": "Lat Minutes", "es": "Lat minutos", "pt-br": "Lat minutos", "vi": "Phút vĩ độ"},
+    "mrv_lon_deg": {"fr": "Lon degrés", "en": "Lon Degrees", "es": "Lon grados", "pt-br": "Lon graus", "vi": "Kinh độ"},
+    "mrv_lon_min": {"fr": "Lon minutes", "en": "Lon Minutes", "es": "Lon minutos", "pt-br": "Lon minutos", "vi": "Phút kinh độ"},
+
+    # MRV table column headers (leg detail)
+    "mrv_me_cons": {"fr": "Cons. ME", "en": "ME Cons.", "es": "Cons. MP", "pt-br": "Cons. MP", "vi": "Tiêu thụ MC"},
+    "mrv_ae_cons": {"fr": "Cons. AE", "en": "AE Cons.", "es": "Cons. MA", "pt-br": "Cons. MA", "vi": "Tiêu thụ MP"},
+    "mrv_total": {"fr": "Total", "en": "Total", "es": "Total", "pt-br": "Total", "vi": "Tổng"},
+    "mrv_rob_calc": {"fr": "ROB calc.", "en": "ROB Calc.", "es": "ROB calc.", "pt-br": "ROB calc.", "vi": "ROB tính"},
+    "mrv_dist_nm": {"fr": "Dist (NM)", "en": "Dist (NM)", "es": "Dist (NM)", "pt-br": "Dist (NM)", "vi": "KC (NM)"},
+    "mrv_event": {"fr": "Événement", "en": "Event", "es": "Evento", "pt-br": "Evento", "vi": "Sự kiện"},
+    "mrv_confirm_delete": {"fr": "Supprimer cet événement MRV ?", "en": "Delete this MRV event?", "es": "¿Eliminar este evento MRV?", "pt-br": "Excluir este evento MRV?", "vi": "Xóa sự kiện MRV này?"},
+
+    # MRV event types (translated labels)
+    "mrv_type_departure": {"fr": "Départ", "en": "Departure", "es": "Salida", "pt-br": "Partida", "vi": "Khởi hành"},
+    "mrv_type_arrival": {"fr": "Arrivée", "en": "Arrival", "es": "Llegada", "pt-br": "Chegada", "vi": "Đến nơi"},
+    "mrv_type_at_sea": {"fr": "En mer", "en": "At Sea", "es": "En el mar", "pt-br": "No mar", "vi": "Trên biển"},
+    "mrv_type_begin_anchoring": {"fr": "Mouillage / À quai", "en": "Begin Anchoring/Drifting", "es": "Fondeo / En muelle", "pt-br": "Fundeio / Atracado", "vi": "Bắt đầu neo"},
+    "mrv_type_end_anchoring": {"fr": "Fin de mouillage", "en": "End Anchoring/Drifting", "es": "Fin fondeo", "pt-br": "Fim fundeio", "vi": "Kết thúc neo"},
+
+    # ═══ CARGO FORM / EXCEL (NEW) ═══
+    "error_no_file": {"fr": "Aucun fichier sélectionné.", "en": "No file selected.",
+                      "es": "Ningún archivo seleccionado.", "pt-br": "Nenhum arquivo selecionado.",
+                      "vi": "Chưa chọn tệp nào."},
+    "error_invalid_file": {"fr": "Fichier Excel invalide. Veuillez utiliser le template TOWT.",
+                           "en": "Invalid Excel file. Please use the TOWT template.",
+                           "es": "Archivo Excel no válido. Utilice la plantilla TOWT.",
+                           "pt-br": "Arquivo Excel inválido. Use o modelo TOWT.",
+                           "vi": "Tệp Excel không hợp lệ. Vui lòng sử dụng mẫu TOWT."},
+    "error_invalid_format": {"fr": "Format invalide. Veuillez utiliser le template Packing List TOWT.",
+                             "en": "Invalid format. Please use the TOWT Packing List template.",
+                             "es": "Formato no válido. Utilice la plantilla TOWT.",
+                             "pt-br": "Formato inválido. Use o modelo de Packing List TOWT.",
+                             "vi": "Định dạng không hợp lệ. Vui lòng sử dụng mẫu Packing List TOWT."},
+    "download_template": {"fr": "Télécharger template Excel", "en": "Download Excel template",
+                          "es": "Descargar plantilla Excel", "pt-br": "Baixar modelo Excel",
+                          "vi": "Tải mẫu Excel"},
+    "import_excel": {"fr": "Importer Excel", "en": "Import Excel", "es": "Importar Excel", "pt-br": "Importar Excel", "vi": "Nhập Excel"},
+    "import_excel_title": {"fr": "Importer le template Excel", "en": "Import Excel Template",
+                           "es": "Importar plantilla Excel", "pt-br": "Importar modelo Excel",
+                           "vi": "Nhập mẫu Excel"},
+    "import_excel_desc": {"fr": "Envoyez votre template Packing List rempli. Les données seront mises à jour.",
+                          "en": "Upload your filled Packing List template. Existing batch data will be updated.",
+                          "es": "Suba su plantilla de Packing List completada. Los datos se actualizarán.",
+                          "pt-br": "Envie seu modelo de Packing List preenchido. Os dados serão atualizados.",
+                          "vi": "Tải lên mẫu Packing List đã điền. Dữ liệu lô hàng sẽ được cập nhật."},
+    "confirm_delete_batch": {"fr": "Supprimer ce batch ?", "en": "Delete this batch?",
+                             "es": "¿Eliminar este lote?", "pt-br": "Excluir este lote?",
+                             "vi": "Xóa lô hàng này?"},
+
+    # ═══ STRUCTURED ADDRESS FIELDS (NEW) ═══
+    "f_description_of_goods": {"fr": "Description des marchandises", "en": "Description of the goods",
+                               "es": "Descripción de las mercancías", "pt-br": "Descrição das mercadorias",
+                               "vi": "Mô tả hàng hóa"},
+    "f_address": {"fr": "Adresse", "en": "Address", "es": "Dirección", "pt-br": "Endereço", "vi": "Địa chỉ"},
+    "f_postal_code": {"fr": "Code postal", "en": "Postal code", "es": "Código postal", "pt-br": "CEP", "vi": "Mã bưu chính"},
+    "f_city": {"fr": "Ville", "en": "City", "es": "Ciudad", "pt-br": "Cidade", "vi": "Thành phố"},
+    "f_country": {"fr": "Pays", "en": "Country", "es": "País", "pt-br": "País", "vi": "Quốc gia"},
+    "f_name": {"fr": "Nom", "en": "Name", "es": "Nombre", "pt-br": "Nome", "vi": "Tên"},
+    "f_notify_party": {"fr": "Notify Party", "en": "Notify Party", "es": "Parte notificada", "pt-br": "Parte notificada", "vi": "Bên thông báo"},
+    "f_consignee": {"fr": "Consignee (Destinataire)", "en": "Consignee", "es": "Consignatario", "pt-br": "Consignatário", "vi": "Người nhận hàng"},
+    "f_shipper": {"fr": "Shipper (Expéditeur)", "en": "Shipper", "es": "Expedidor", "pt-br": "Embarcador", "vi": "Người gửi hàng"},
+    "nav_passengers": {"fr": "Passagers", "en": "Passengers", "es": "Pasajeros", "pt-br": "Passageiros", "vi": "Hành khách"},
+    "nav_onboard": {"fr": "On Board", "en": "On Board", "es": "A bordo", "pt-br": "A bordo", "vi": "Trên tàu"},
 }
 
 

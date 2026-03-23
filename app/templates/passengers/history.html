@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}my_TOWT — Historique {{ booking.reference }}{% endblock %}
+{% block page_title %}📜 Historique — {{ booking.reference }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/passengers/{{ booking.id }}" class="btn btn-secondary btn-sm"><i data-lucide="arrow-left"></i> Retour</a>
+{% endblock %}
+
+{% block content %}
+<div class="history-page">
+    <div class="history-card">
+        <h3 style="margin:0 0 16px;font-size:15px;">Historique des modifications</h3>
+        {% if logs %}
+        <div class="history-timeline">
+            {% for log in logs %}
+            <div class="ht-item">
+                <div class="ht-dot {% if log.action == 'status_change' %}dot-status{% elif log.action == 'payment_added' %}dot-payment{% elif log.action == 'doc_status_change' %}dot-doc{% else %}dot-edit{% endif %}"></div>
+                <div class="ht-content">
+                    <div class="ht-header">
+                        <span class="ht-action-badge ht-{{ log.action }}">
+                            {% if log.action == 'status_change' %}🔄 Statut
+                            {% elif log.action == 'pax_updated' %}✏️ Modification
+                            {% elif log.action == 'payment_added' %}💶 Paiement
+                            {% elif log.action == 'doc_status_change' %}📄 Document
+                            {% else %}{{ log.action }}{% endif %}
+                        </span>
+                        <span class="ht-time">{{ log.changed_at.strftime('%d/%m/%Y %H:%M') if log.changed_at else '' }}</span>
+                    </div>
+                    <div class="ht-body">
+                        {% if log.passenger_id and log.passenger_id in pax_map %}
+                        <span class="ht-pax">👤 {{ pax_map[log.passenger_id] }}</span>
+                        {% endif %}
+                        {% if log.field_name %}
+                        <span class="ht-field">{{ log.field_name }}</span>
+                        {% endif %}
+                        {% if log.old_value and log.new_value %}
+                        <span class="ht-change"><span class="ht-old">{{ log.old_value }}</span> → <span class="ht-new">{{ log.new_value }}</span></span>
+                        {% elif log.new_value %}
+                        <span class="ht-new">{{ log.new_value }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="ht-by">par {{ log.changed_by }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color:#aaa;font-size:13px;text-align:center;padding:20px;">Aucune modification enregistrée.</p>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .history-card{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:20px;max-width:800px;}
+    .history-timeline{display:flex;flex-direction:column;gap:0;position:relative;padding-left:20px;}
+    .history-timeline::before{content:'';position:absolute;left:9px;top:8px;bottom:8px;width:2px;background:#e8e8e8;}
+    .ht-item{display:flex;gap:12px;padding:10px 0;position:relative;}
+    .ht-dot{width:20px;height:20px;border-radius:50%;border:3px solid white;flex-shrink:0;z-index:1;margin-left:-20px;}
+    .dot-status{background:#2563EB;box-shadow:0 0 0 2px #2563EB;}
+    .dot-payment{background:#16a34a;box-shadow:0 0 0 2px #16a34a;}
+    .dot-doc{background:#D97706;box-shadow:0 0 0 2px #D97706;}
+    .dot-edit{background:#8B5CF6;box-shadow:0 0 0 2px #8B5CF6;}
+    .ht-content{flex:1;min-width:0;}
+    .ht-header{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+    .ht-action-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:100px;}
+    .ht-status_change{background:rgba(37,99,235,0.1);color:#2563EB;}
+    .ht-pax_updated{background:rgba(139,92,246,0.1);color:#7C3AED;}
+    .ht-payment_added{background:rgba(22,163,106,0.1);color:#16a34a;}
+    .ht-doc_status_change{background:rgba(217,119,6,0.1);color:#D97706;}
+    .ht-time{font-size:10px;color:#aaa;}
+    .ht-body{margin-top:4px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .ht-pax{font-weight:500;color:#555;}
+    .ht-field{font-family:'Poppins',sans-serif;font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:4px;color:#666;}
+    .ht-change{font-size:12px;}
+    .ht-old{color:#DC2626;text-decoration:line-through;}
+    .ht-new{color:#16a34a;font-weight:500;}
+    .ht-by{font-size:10px;color:#aaa;margin-top:2px;}
+</style>
+{% endblock %}

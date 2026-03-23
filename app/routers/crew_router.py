@@ -9,10 +9,12 @@ from datetime import datetime, date, timedelta
 
 from app.database import get_db
 from app.auth import get_current_user
+from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.crew import CrewMember, CrewAssignment, CREW_ROLES, REQUIRED_ROLES
+from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/crew", tags=["crew"])
 
@@ -33,7 +35,7 @@ async def crew_list(
     request: Request,
     role: Optional[str] = Query(None),
     vessel: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(CrewMember).options(
@@ -110,7 +112,7 @@ async def crew_list(
 
 # ─── CREATE MEMBER ───────────────────────────────────────────
 @router.get("/members/create", response_class=HTMLResponse)
-async def member_create_form(request: Request, user: User = Depends(get_current_user)):
+async def member_create_form(request: Request, user: User = Depends(require_permission("crew", "M"))):
     return templates.TemplateResponse("crew/member_form.html", {
         "request": request, "user": user,
         "edit_member": None, "crew_roles": CREW_ROLES, "error": None,
@@ -124,7 +126,7 @@ async def member_create_submit(
     role: str = Form(...),
     phone: Optional[str] = Form(None), email: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     member = CrewMember(
@@ -134,6 +136,7 @@ async def member_create_submit(
     )
     db.add(member)
     await db.flush()
+    await log_activity(db, user, "crew", "create", "CrewMember", member.id, f"Marin {member.first_name} {member.last_name}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
     return RedirectResponse(url="/crew", status_code=303)
@@ -143,7 +146,7 @@ async def member_create_submit(
 @router.get("/members/{mid}/edit", response_class=HTMLResponse)
 async def member_edit_form(
     mid: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(CrewMember).where(CrewMember.id == mid))
@@ -163,7 +166,7 @@ async def member_edit_submit(
     role: str = Form(...),
     phone: Optional[str] = Form(None), email: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(CrewMember).where(CrewMember.id == mid))
@@ -177,6 +180,7 @@ async def member_edit_submit(
     member.email = email
     member.notes = notes.strip() if notes else None
     await db.flush()
+    await log_activity(db, user, "crew", "update", "CrewMember", mid, f"Modification marin {member.first_name} {member.last_name}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
     return RedirectResponse(url="/crew", status_code=303)
@@ -186,15 +190,17 @@ async def member_edit_submit(
 @router.delete("/members/{mid}", response_class=HTMLResponse)
 async def member_delete(
     mid: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "S")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(CrewMember).where(CrewMember.id == mid))
     member = result.scalar_one_or_none()
     if not member:
         raise HTTPException(status_code=404)
+    name = f"{member.first_name} {member.last_name}"
     await db.delete(member)
     await db.flush()
+    await log_activity(db, user, "crew", "delete", "CrewMember", mid, f"Suppression marin {name}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
     return RedirectResponse(url="/crew", status_code=303)
@@ -204,7 +210,7 @@ async def member_delete(
 @router.get("/members/{mid}/assign", response_class=HTMLResponse)
 async def assign_form(
     mid: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(CrewMember).where(CrewMember.id == mid))
@@ -226,7 +232,7 @@ async def assign_submit(
     embark_date: str = Form(...),
     disembark_date: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     assignment = CrewAssignment(
@@ -238,6 +244,7 @@ async def assign_submit(
     )
     db.add(assignment)
     await db.flush()
+    await log_activity(db, user, "crew", "assign", "CrewAssignment", assignment.id, f"Affectation marin")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
     return RedirectResponse(url="/crew", status_code=303)
@@ -246,7 +253,7 @@ async def assign_submit(
 @router.delete("/assignments/{aid}", response_class=HTMLResponse)
 async def assignment_delete(
     aid: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "S")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(CrewAssignment).where(CrewAssignment.id == aid))
@@ -255,6 +262,7 @@ async def assignment_delete(
         raise HTTPException(status_code=404)
     await db.delete(assignment)
     await db.flush()
+    await log_activity(db, user, "crew", "delete", "CrewAssignment", aid, "Suppression affectation")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
     return RedirectResponse(url="/crew", status_code=303)
@@ -301,7 +309,7 @@ async def crew_for_vessel_api(
 async def member_calendar(
     mid: int, request: Request,
     year: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("crew", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     current_year = year or date.today().year

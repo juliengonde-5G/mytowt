@@ -1,0 +1,54 @@
+{% extends "passengers/portal_base.html" %}
+{% block portal_title %}{% if lang == 'en' %}Pre-boarding Questionnaire{% else %}Questionnaire pré-embarquement{% endif %}{% endblock %}
+
+{% block portal_content %}
+<h1>📝 {% if lang == 'en' %}Pre-boarding Questionnaire{% else %}Questionnaire pré-embarquement{% endif %}</h1>
+
+{% for pax in booking.passengers %}
+<div class="card">
+    <h2>👤 {{ pax.full_name }}</h2>
+
+    {% set form = pax_forms.get(pax.id) %}
+    {% if form and form.signed %}
+    <div class="q-done">✅ {% if lang == 'en' %}Questionnaire completed on {{ form.signed_at.strftime('%d/%m/%Y') if form.signed_at else '' }}.{% else %}Questionnaire complété le {{ form.signed_at.strftime('%d/%m/%Y') if form.signed_at else '' }}.{% endif %}</div>
+    
+    <div style="margin-top:16px;padding:16px;background:#f8fafb;border-radius:8px;">
+        <h3 style="font-size:13px;margin-bottom:10px;">{% if lang == 'en' %}Your answers{% else %}Vos réponses{% endif %}</h3>
+        <div class="info-grid">
+            {% if form.sailed_before %}<div class="info-item"><span class="label">{% if lang == 'en' %}Sailing experience{% else %}Expérience maritime{% endif %}</span><span class="value">{{ form.sailed_before }}</span></div>{% endif %}
+            {% if form.seasick %}<div class="info-item"><span class="label">{% if lang == 'en' %}Seasickness{% else %}Mal de mer{% endif %}</span><span class="value">{{ form.seasick }}</span></div>{% endif %}
+            {% if form.can_swim_50m %}<div class="info-item"><span class="label">{% if lang == 'en' %}Swimming{% else %}Natation{% endif %}</span><span class="value">{{ form.can_swim_50m }}</span></div>{% endif %}
+            {% if form.dietary_requirements %}<div class="info-item"><span class="label">{% if lang == 'en' %}Diet{% else %}Régime{% endif %}</span><span class="value">{{ form.dietary_requirements }}</span></div>{% endif %}
+        </div>
+    </div>
+    {% else %}
+    <form method="POST" action="/passenger/{{ token }}/pax/{{ pax.id }}/questionnaire">
+        <h3 style="font-size:12px;">{% if lang == 'en' %}Maritime experience{% else %}Expérience maritime{% endif %}</h3>
+        <div class="fg"><label>{% if lang == 'en' %}Have you sailed before?{% else %}Avez-vous déjà voyagé en voilier/bateau ?{% endif %}</label>
+            <div class="q-radio"><label><input type="radio" name="sailed_before" value="yes"> {% if lang == 'en' %}Yes{% else %}Oui{% endif %}</label><label><input type="radio" name="sailed_before" value="no"> {% if lang == 'en' %}No{% else %}Non{% endif %}</label></div>
+        </div>
+        <div class="fg"><label>{% if lang == 'en' %}Prone to seasickness?{% else %}Sujet au mal de mer ?{% endif %}</label>
+            <div class="q-radio"><label><input type="radio" name="seasick" value="yes"> {% if lang == 'en' %}Yes{% else %}Oui{% endif %}</label><label><input type="radio" name="seasick" value="no"> {% if lang == 'en' %}No{% else %}Non{% endif %}</label><label><input type="radio" name="seasick" value="sometimes"> {% if lang == 'en' %}Sometimes{% else %}Occasionnellement{% endif %}</label></div>
+        </div>
+        <div class="fg"><label>{% if lang == 'en' %}Willing to help with maneuvers?{% else %}Prêt à participer aux manœuvres ?{% endif %}</label>
+            <div class="q-radio"><label><input type="radio" name="willing_maneuvers" value="yes"> {% if lang == 'en' %}Yes{% else %}Oui{% endif %}</label><label><input type="radio" name="willing_maneuvers" value="no"> {% if lang == 'en' %}No{% else %}Non{% endif %}</label></div>
+        </div>
+        <h3 style="font-size:12px;">{% if lang == 'en' %}Health & Safety{% else %}Santé & sécurité{% endif %}</h3>
+        <div class="fg full"><label>{% if lang == 'en' %}Chronic conditions?{% else %}Problèmes médicaux chroniques ?{% endif %}</label><textarea name="chronic_conditions" class="fi" rows="2"></textarea></div>
+        <div class="fg full"><label>{% if lang == 'en' %}Allergies?{% else %}Allergies ?{% endif %}</label><textarea name="allergies" class="fi" rows="2"></textarea></div>
+        <div class="fg full"><label>{% if lang == 'en' %}Daily medication?{% else %}Traitement médical quotidien ?{% endif %}</label><textarea name="daily_medication" class="fi" rows="2"></textarea></div>
+        <div class="fg"><label>{% if lang == 'en' %}Can you swim 50m?{% else %}Savez-vous nager 50 m ?{% endif %}</label>
+            <div class="q-radio"><label><input type="radio" name="can_swim_50m" value="yes"> {% if lang == 'en' %}Yes{% else %}Oui{% endif %}</label><label><input type="radio" name="can_swim_50m" value="no"> {% if lang == 'en' %}No{% else %}Non{% endif %}</label></div>
+        </div>
+        <h3 style="font-size:12px;">{% if lang == 'en' %}Dietary preferences{% else %}Préférences alimentaires{% endif %}</h3>
+        <div class="fg full"><label>{% if lang == 'en' %}Dietary requirements{% else %}Régime particulier{% endif %}</label><textarea name="dietary_requirements" class="fi" rows="2"></textarea></div>
+        <div class="fg full"><label>{% if lang == 'en' %}Intolerances{% else %}Intolérances{% endif %}</label><textarea name="intolerances" class="fi" rows="2"></textarea></div>
+        <div style="margin-top:12px;padding:10px;background:rgba(9,85,97,0.03);border-radius:6px;font-size:11px;color:#555;">
+            {% if lang == 'en' %}I acknowledge having received the safety instructions, commit to respecting them and will inform the crew of any changes regarding my health or special needs.{% else %}Je reconnais avoir reçu les consignes de sécurité, m'engage à les respecter et informe l'équipage de toute modification concernant ma santé ou mes besoins particuliers.{% endif %}
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top:12px;">{% if lang == 'en' %}Sign & Submit{% else %}Signer & Envoyer{% endif %}</button>
+    </form>
+    {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

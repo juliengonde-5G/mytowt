@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.utils.activity import log_activity, get_client_ip
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional
@@ -12,6 +13,7 @@ import math
 
 from app.database import get_db
 from app.auth import get_current_user, AuthRequired
+from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg, LegStatus
@@ -147,7 +149,7 @@ async def planning_home(
     request: Request,
     vessel: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("planning", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     current_year = year or datetime.now().year
@@ -219,7 +221,7 @@ async def planning_home(
 async def port_conflicts(
     request: Request,
     port: Optional[str] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("planning", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     port_obj = None
@@ -255,7 +257,7 @@ async def leg_create_form(
     request: Request,
     vessel: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("planning", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     vessels_result = await db.execute(select(Vessel).where(Vessel.is_active == True).order_by(Vessel.code))
@@ -339,7 +341,7 @@ async def leg_create_submit(
     elongation_coeff: Optional[str] = Form(None),
     port_stay_days: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("planning", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     _vessel_id = parse_int(vessel_id)
@@ -420,6 +422,12 @@ async def leg_create_submit(
     db.add(leg)
     await db.flush()
 
+    await log_activity(db, user=user, action="create", module="planning",
+                       entity_type="leg", entity_id=leg.id,
+                       entity_label=leg.leg_code,
+                       detail=f"{leg.departure_port_locode} → {leg.arrival_port_locode}",
+                       ip_address=get_client_ip(request))
+
     # Resequence all legs
     await resequence_and_recalc(db, _vessel_id, _year)
 
@@ -433,7 +441,7 @@ async def leg_create_submit(
 async def leg_edit_form(
     leg_id: int,
     request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("planning", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -480,7 +488,7 @@ async def leg_edit_submit(
     port_stay_days: Optional[str] = Form(None),
     status: str = Form("planned"),
     notes: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("planning", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Leg).where(Leg.id == leg_id))
@@ -561,7 +569,7 @@ async def leg_edit_submit(
 async def leg_delete(
     leg_id: int,
     request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("planning", "S")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == leg_id))
@@ -572,6 +580,11 @@ async def leg_delete(
     vessel_code = leg.vessel.code
     vessel_id = leg.vessel_id
     year = leg.year
+    leg_code = leg.leg_code
+
+    await log_activity(db, user=user, action="delete", module="planning",
+                       entity_type="leg", entity_id=leg_id, entity_label=leg_code,
+                       ip_address=get_client_ip(request))
 
     await db.delete(leg)
     await db.flush()
@@ -587,7 +600,7 @@ async def leg_delete(
 async def export_csv(
     vessel: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("planning", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Leg).options(
@@ -638,7 +651,7 @@ async def export_csv(
 async def gantt_data(
     vessel: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("planning", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Leg).options(
@@ -681,7 +694,7 @@ async def gantt_data(
 async def map_data(
     vessel: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("planning", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Leg).options(
@@ -728,7 +741,7 @@ async def pdf_commercial(
     year: Optional[int] = Query(None),
     lang: Optional[str] = Query("fr"),
     legs_ids: Optional[str] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("planning", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     """Generate printable commercial support PDF (HTML → print)."""

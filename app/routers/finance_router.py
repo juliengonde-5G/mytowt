@@ -11,11 +11,13 @@ import io
 
 from app.database import get_db
 from app.auth import get_current_user
+from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.order import Order, OrderAssignment
 from app.models.finance import LegFinance, PortConfig, OpexParameter
+from app.utils.activity import log_activity
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 
@@ -143,7 +145,7 @@ async def finance_home(
     request: Request,
     vessel: Optional[str] = Query(None),
     year: Optional[int] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("finance", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     current_year = year or datetime.now().year
@@ -239,7 +241,7 @@ async def finance_home(
 @router.get("/legs/{leg_id}/edit", response_class=HTMLResponse)
 async def finance_edit_form(
     leg_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("finance", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     leg_result = await db.execute(
@@ -282,7 +284,7 @@ async def finance_edit_submit(
     ops_cost_forecast: str = Form("0"),
     ops_cost_actual: str = Form("0"),
     notes: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("finance", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     fin = await get_or_create_finance(db, leg_id)
@@ -299,6 +301,7 @@ async def finance_edit_submit(
     fin.notes = notes.strip() if notes else None
     fin.compute()
     await db.flush()
+    await log_activity(db, user, "finance", "update", "LegFinance", leg_id, "Modification finances")
 
     leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == leg_id))
     leg = leg_result.scalar_one_or_none()
@@ -312,7 +315,7 @@ async def finance_edit_submit(
 @router.get("/ports", response_class=HTMLResponse)
 async def port_config_list(
     request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("finance", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -329,7 +332,7 @@ async def port_config_list(
 async def port_search_api(
     q: str = Query(""),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("finance", "C")),
 ):
     from app.models.port import Port
     if len(q) < 2:
@@ -348,7 +351,7 @@ async def port_search_api(
 @router.get("/ports/{locode}/edit", response_class=HTMLResponse)
 async def port_config_edit_form(
     locode: str, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("finance", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.port import Port
@@ -370,7 +373,7 @@ async def port_config_edit_submit(
     cost_per_palette: str = Form("0"),
     daily_quay_cost: str = Form("0"),
     notes: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("finance", "M")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(PortConfig).where(PortConfig.port_locode == locode))
@@ -391,6 +394,7 @@ async def port_config_edit_submit(
         )
         db.add(config)
     await db.flush()
+    await log_activity(db, user, "finance", "update_port", "PortConfig", None, f"Config port {locode}")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/finance/ports"})
     return RedirectResponse(url="/finance/ports", status_code=303)
@@ -399,7 +403,7 @@ async def port_config_edit_submit(
 # ─── EXPORT CSV ──────────────────────────────────────────────
 @router.get("/export/csv", response_class=StreamingResponse)
 async def export_finance_csv(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("finance", "C")),
     db: AsyncSession = Depends(get_db),
 ):
     legs_result = await db.execute(

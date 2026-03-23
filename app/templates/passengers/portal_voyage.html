@@ -1,0 +1,248 @@
+{% extends "passengers/portal_base.html" %}
+{% block portal_title %}{% if lang == 'en' %}The Voyage{% else %}Le Voyage{% endif %}{% endblock %}
+
+{% block portal_content %}
+<h1>🗺️ {% if lang == 'en' %}The Voyage{% else %}Le Voyage{% endif %}</h1>
+
+{% if leg %}
+<!-- ROUTE -->
+<div class="card">
+    <h2>{% if lang == 'en' %}Route{% else %}Trajet{% endif %}</h2>
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div style="text-align:center;flex:1;min-width:120px;">
+            <div style="font-size:24px;">🏗️</div>
+            <div style="font-size:16px;font-weight:700;color:#095561;">{{ leg.departure_port.name }}</div>
+            <div style="font-size:11px;color:#888;">{{ leg.departure_port.locode }} — {{ leg.departure_port.country_code }}</div>
+        </div>
+        <div style="flex:0;font-size:28px;color:#095561;">→</div>
+        <div style="text-align:center;flex:1;min-width:120px;">
+            <div style="font-size:24px;">⚓</div>
+            <div style="font-size:16px;font-weight:700;color:#095561;">{{ leg.arrival_port.name }}</div>
+            <div style="font-size:11px;color:#888;">{{ leg.arrival_port.locode }} — {{ leg.arrival_port.country_code }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- SCHEDULE - ESTIMATED vs ACTUAL -->
+<div class="card">
+    <h2>📅 {% if lang == 'en' %}Schedule{% else %}Calendrier{% endif %}</h2>
+    <div class="schedule-compare">
+        <div class="schedule-row schedule-header">
+            <div class="schedule-col"></div>
+            <div class="schedule-col">{% if lang == 'en' %}Estimated{% else %}Prévisionnel{% endif %}</div>
+            <div class="schedule-col">{% if lang == 'en' %}Actual{% else %}Réel{% endif %}</div>
+            <div class="schedule-col">{% if lang == 'en' %}Gap{% else %}Écart{% endif %}</div>
+        </div>
+        <div class="schedule-row">
+            <div class="schedule-col schedule-label">🏗️ {% if lang == 'en' %}Departure{% else %}Départ{% endif %}</div>
+            <div class="schedule-col">{{ leg.etd.strftime('%d/%m/%Y %H:%M') if leg.etd else '—' }}</div>
+            <div class="schedule-col {% if leg.atd %}schedule-actual{% endif %}">{{ leg.atd.strftime('%d/%m/%Y %H:%M') if leg.atd else '—' }}</div>
+            <div class="schedule-col">
+                {% if leg.etd and leg.atd %}
+                    {% set diff_dep = ((leg.atd - leg.etd).total_seconds() / 3600)|round(1) %}
+                    <span class="schedule-gap {% if diff_dep > 0 %}gap-late{% else %}gap-early{% endif %}">
+                        {{ '+' if diff_dep > 0 else '' }}{{ '%.0f'|format(diff_dep) }}h
+                    </span>
+                {% else %}—{% endif %}
+            </div>
+        </div>
+        <div class="schedule-row">
+            <div class="schedule-col schedule-label">⚓ {% if lang == 'en' %}Arrival{% else %}Arrivée{% endif %}</div>
+            <div class="schedule-col">{{ leg.eta.strftime('%d/%m/%Y %H:%M') if leg.eta else '—' }}</div>
+            <div class="schedule-col {% if leg.ata %}schedule-actual{% endif %}">{{ leg.ata.strftime('%d/%m/%Y %H:%M') if leg.ata else '—' }}</div>
+            <div class="schedule-col">
+                {% if leg.eta and leg.ata %}
+                    {% set diff_arr = ((leg.ata - leg.eta).total_seconds() / 3600)|round(1) %}
+                    <span class="schedule-gap {% if diff_arr > 0 %}gap-late{% else %}gap-early{% endif %}">
+                        {{ '+' if diff_arr > 0 else '' }}{{ '%.0f'|format(diff_arr) }}h
+                    </span>
+                {% else %}—{% endif %}
+            </div>
+        </div>
+        {% if leg.distance_nm %}
+        <div class="schedule-row" style="border-top:2px solid #f0f0f0;margin-top:4px;padding-top:8px;">
+            <div class="schedule-col schedule-label">📏 Distance</div>
+            <div class="schedule-col">{{ '%.0f'|format(leg.computed_distance or leg.distance_nm) }} NM</div>
+            <div class="schedule-col" id="gps-distance">—</div>
+            <div class="schedule-col" id="gps-distance-gap">—</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- GPS POSITION MAP -->
+<div class="card">
+    <h2>🛰️ {% if lang == 'en' %}Vessel Position{% else %}Position du navire{% endif %}</h2>
+    <div id="voyage-map-stats" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;"></div>
+    <div id="voyage-map" style="height:400px;border-radius:10px;border:1px solid #e2e8f0;background:#e8f0f6;"></div>
+    <div id="voyage-map-empty" style="display:none;text-align:center;padding:32px;color:#999;">
+        <div style="font-size:36px;margin-bottom:8px;">📡</div>
+        {% if lang == 'en' %}
+        GPS tracking data will appear here once the vessel is at sea.
+        {% else %}
+        Les données de suivi GPS apparaîtront ici une fois le navire en mer.
+        {% endif %}
+    </div>
+    <div id="voyage-map-loading" style="text-align:center;padding:20px;color:#999;font-size:13px;">
+        ⏳ {% if lang == 'en' %}Loading GPS data…{% else %}Chargement des données GPS…{% endif %}
+    </div>
+</div>
+
+<!-- CREW -->
+{% if crew_list %}
+<div class="card">
+    <h2>👥 {% if lang == 'en' %}Crew on board{% else %}Équipage embarqué{% endif %}</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;">
+        {% for ca in crew_list %}
+        <div class="crew-card">
+            <div>
+                <div class="crew-role">{{ ca.role|replace('_',' ')|capitalize }}</div>
+                <div class="crew-name">{{ ca.member.first_name }} {{ ca.member.last_name[0] }}.</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="card" style="text-align:center;color:#888;padding:40px;">
+    {% if lang == 'en' %}No voyage information available yet.{% else %}Aucune information de voyage disponible pour le moment.{% endif %}
+</div>
+{% endif %}
+
+<style>
+    .schedule-compare{display:flex;flex-direction:column;gap:4px;}
+    .schedule-row{display:grid;grid-template-columns:140px 1fr 1fr 80px;gap:8px;align-items:center;padding:6px 0;}
+    .schedule-header{font-size:10px;text-transform:uppercase;color:#888;font-weight:600;border-bottom:2px solid #f0f0f0;padding-bottom:8px;}
+    .schedule-col{font-size:13px;color:#555;}
+    .schedule-label{font-weight:600;color:#333;font-size:12px;}
+    .schedule-actual{color:#16a34a;font-weight:600;}
+    .schedule-gap{display:inline-block;padding:2px 8px;border-radius:100px;font-size:11px;font-weight:600;}
+    .gap-late{background:#fef3c7;color:#D97706;}
+    .gap-early{background:rgba(34,197,94,0.1);color:#16a34a;}
+    .voy-stat{background:#f8fafb;border-radius:8px;padding:10px 14px;text-align:center;flex:1;min-width:100px;}
+    .voy-stat-val{display:block;font-size:18px;font-weight:700;color:#095561;}
+    .voy-stat-label{font-size:10px;color:#888;text-transform:uppercase;}
+    @media(max-width:600px){
+        .schedule-row{grid-template-columns:100px 1fr 1fr 60px;}
+        .schedule-col{font-size:11px;}
+    }
+</style>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+{% if leg %}
+<script>
+(function(){
+    const legId = {{ leg.id }};
+    const mapEl = document.getElementById('voyage-map');
+    const statsEl = document.getElementById('voyage-map-stats');
+    const emptyEl = document.getElementById('voyage-map-empty');
+    const loadEl = document.getElementById('voyage-map-loading');
+    const distEl = document.getElementById('gps-distance');
+    const distGapEl = document.getElementById('gps-distance-gap');
+    const estimatedDist = {{ leg.computed_distance or leg.distance_nm or 0 }};
+
+    fetch('/api/tracking/leg/' + legId + '/track')
+        .then(r => r.json())
+        .then(data => {
+            loadEl.style.display = 'none';
+
+            if (!data.points || !data.points.length) {
+                mapEl.style.display = 'none';
+                emptyEl.style.display = 'block';
+                return;
+            }
+
+            // Stats
+            statsEl.innerHTML = `
+                <div class="voy-stat"><span class="voy-stat-val">${data.gps_distance_nm} NM</span><span class="voy-stat-label">{% if lang == 'en' %}GPS Distance{% else %}Distance GPS{% endif %}</span></div>
+                <div class="voy-stat"><span class="voy-stat-val">${data.avg_sog} kn</span><span class="voy-stat-label">{% if lang == 'en' %}Avg Speed{% else %}Vitesse moy.{% endif %}</span></div>
+                <div class="voy-stat"><span class="voy-stat-val">${data.max_sog} kn</span><span class="voy-stat-label">{% if lang == 'en' %}Max Speed{% else %}Vitesse max{% endif %}</span></div>
+                <div class="voy-stat"><span class="voy-stat-val">${data.point_count}</span><span class="voy-stat-label">{% if lang == 'en' %}GPS Points{% else %}Points GPS{% endif %}</span></div>
+            `;
+
+            // Update distance comparison in schedule
+            if (distEl) {
+                distEl.textContent = data.gps_distance_nm + ' NM';
+                distEl.classList.add('schedule-actual');
+            }
+            if (distGapEl && estimatedDist > 0) {
+                const gap = data.gps_distance_nm - estimatedDist;
+                const pct = ((gap / estimatedDist) * 100).toFixed(0);
+                distGapEl.innerHTML = '<span class="schedule-gap ' + (gap > 0 ? 'gap-late' : 'gap-early') + '">' +
+                    (gap > 0 ? '+' : '') + gap.toFixed(0) + ' NM (' + (gap > 0 ? '+' : '') + pct + '%)</span>';
+            }
+
+            // Map
+            const map = L.map('voyage-map', {scrollWheelZoom: true}).setView([data.points[0].lat, data.points[0].lon], 5);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap', maxZoom: 18
+            }).addTo(map);
+
+            const bounds = [];
+            for (let i = 1; i < data.points.length; i++) {
+                const p0 = data.points[i - 1], p1 = data.points[i];
+                const sog = p1.sog !== null ? p1.sog : (p0.sog !== null ? p0.sog : 0);
+                let color;
+                if (sog < 0.5) color = '#9ca3af';
+                else if (sog < 3) color = '#f59e0b';
+                else if (sog < 6) color = '#22c55e';
+                else if (sog < 9) color = '#3b82f6';
+                else color = '#8b5cf6';
+                L.polyline([[p0.lat, p0.lon], [p1.lat, p1.lon]], {color, weight: 3, opacity: 0.85}).addTo(map);
+                bounds.push([p1.lat, p1.lon]);
+            }
+            bounds.push([data.points[0].lat, data.points[0].lon]);
+
+            // Markers
+            const first = data.points[0], last = data.points[data.points.length - 1];
+            L.circleMarker([first.lat, first.lon], {radius: 8, color: '#16a34a', fillColor: '#22c55e', fillOpacity: 1, weight: 2})
+                .bindPopup('<strong>🟢 {{ leg.departure_port.name }}</strong><br>' + fmtD(first.recorded_at)).addTo(map);
+            L.circleMarker([last.lat, last.lon], {radius: 8, color: '#dc2626', fillColor: '#ef4444', fillOpacity: 1, weight: 2})
+                .bindPopup('<strong>🔴 {% if lang == "en" %}Latest position{% else %}Dernière position{% endif %}</strong><br>' + fmtD(last.recorded_at) + '<br>SOG: ' + (last.sog !== null ? last.sog.toFixed(1) + ' kn' : '—')).addTo(map);
+
+            // Vessel icon at last position
+            const vesselLabel = L.marker([last.lat, last.lon], {
+                icon: L.divIcon({
+                    className: '',
+                    html: '<div style="background:rgba(9,85,97,0.9);color:#fff;font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;white-space:nowrap;font-family:Poppins,sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);">🚢 {{ vessel.name if vessel else "" }}</div>',
+                    iconSize: [0, 0], iconAnchor: [-14, 8],
+                }), interactive: false,
+            }).addTo(map);
+
+            // Legend
+            const legend = L.control({position: 'bottomright'});
+            legend.onAdd = function() {
+                const div = L.DomUtil.create('div', '');
+                div.style.cssText = 'background:#fff;padding:6px 10px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.2);font-size:10px;line-height:1.7;';
+                div.innerHTML = '<strong>{% if lang == "en" %}Speed{% else %}Vitesse{% endif %}</strong><br>' +
+                    dot('#9ca3af') + '< 0.5 kn<br>' + dot('#f59e0b') + '0.5–3<br>' +
+                    dot('#22c55e') + '3–6<br>' + dot('#3b82f6') + '6–9<br>' + dot('#8b5cf6') + '> 9 kn';
+                return div;
+            };
+            legend.addTo(map);
+
+            map.fitBounds(bounds, {padding: [30, 30]});
+        })
+        .catch(err => {
+            console.error('Voyage GPS error:', err);
+            loadEl.style.display = 'none';
+            mapEl.style.display = 'none';
+            emptyEl.style.display = 'block';
+        });
+
+    function dot(c) {
+        return '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + c + ';vertical-align:middle;margin-right:3px;"></span>';
+    }
+    function fmtD(iso) {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        return d.toLocaleDateString('{{ "en-GB" if lang == "en" else "fr-FR" }}', {day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' + d.toLocaleTimeString('{{ "en-GB" if lang == "en" else "fr-FR" }}', {hour:'2-digit',minute:'2-digit'});
+    }
+})();
+</script>
+{% endif %}
+{% endblock %}

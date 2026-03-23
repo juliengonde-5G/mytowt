@@ -1,9 +1,52 @@
-"""Models for On Board module: SOF events, notifications, cargo documents."""
+"""Models for On Board module: SOF events, notifications, cargo documents, ETA shifts."""
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, Date, func
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
+
+
+# ─── ETA SHIFT REASONS ────────────────────────────────────────
+ETA_SHIFT_REASONS = [
+    ("weather", "Conditions météo / Weather conditions"),
+    ("mechanical", "Problème mécanique / Mechanical issue"),
+    ("port_congestion", "Congestion portuaire / Port congestion"),
+    ("cargo_ops", "Opérations cargo prolongées / Extended cargo ops"),
+    ("crew", "Raison liée à l'équipage / Crew-related"),
+    ("routing", "Changement de route / Routing change"),
+    ("speed_adjustment", "Ajustement de vitesse / Speed adjustment"),
+    ("port_stay_change", "Durée d'escale modifiée / Port stay change"),
+    ("other", "Autre / Other"),
+]
+
+
+class ETAShift(Base):
+    """Records every ETA/ETD modification with justification and full history."""
+    __tablename__ = "eta_shifts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    leg_id = Column(Integer, ForeignKey("legs.id", ondelete="CASCADE"), nullable=False)
+    vessel_id = Column(Integer, ForeignKey("vessels.id", ondelete="CASCADE"), nullable=False)
+
+    # What changed
+    field_changed = Column(String(10), nullable=False)  # "eta" or "etd"
+    old_value = Column(DateTime(timezone=True), nullable=True)
+    new_value = Column(DateTime(timezone=True), nullable=True)
+    shift_hours = Column(Float, nullable=False)  # positive = delay, negative = advance
+
+    # Justification (mandatory)
+    reason = Column(String(50), nullable=False)  # code from ETA_SHIFT_REASONS
+    justification = Column(Text, nullable=False)  # free text detail
+
+    # Who and when
+    created_by = Column(String(200), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Snapshot of cascading impact
+    legs_affected = Column(Integer, default=0)  # number of downstream legs recalculated
+
+    leg = relationship("Leg", backref="eta_shifts")
+    vessel = relationship("Vessel")
 
 
 # ─── SOF EVENT TYPES ────────────────────────────────────────
@@ -35,6 +78,9 @@ SOF_EVENT_TYPES = [
     ("PAX_DISEMBARK", "Passengers disembarked / Débarquement passagers"),
     ("PAX_SAFETY_DRILL", "Passenger safety drill / Exercice sécurité passagers"),
     ("PAX_MUSTER", "Passenger muster / Appel passagers"),
+    # ─── CLAIMS ───
+    ("CLAIM_DECLARED", "Claim declared / Sinistre déclaré"),
+    ("CLAIM_UPDATED", "Claim updated / Sinistre mis à jour"),
 ]
 
 # ─── CARGO DOCUMENT TYPES ───────────────────────────────────
@@ -102,3 +148,32 @@ class CargoDocument(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     leg = relationship("Leg", backref="cargo_documents")
+
+
+# ─── ATTACHMENT CATEGORIES ─────────────────────────────────────
+ATTACHMENT_CATEGORIES = [
+    ("photo", "Photo"),
+    ("document", "Document"),
+    ("report", "Rapport / Report"),
+    ("certificate", "Certificat / Certificate"),
+    ("other", "Autre / Other"),
+]
+
+
+class OnboardAttachment(Base):
+    """File or photo attachment for a leg (onboard module)."""
+    __tablename__ = "onboard_attachments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    leg_id = Column(Integer, ForeignKey("legs.id", ondelete="CASCADE"), nullable=False)
+    category = Column(String(30), nullable=False, default="document")  # from ATTACHMENT_CATEGORIES
+    title = Column(String(300), nullable=False)
+    filename = Column(String(300), nullable=False)  # original filename
+    file_path = Column(String(500), nullable=False)  # server path
+    file_size = Column(Integer, nullable=True)  # bytes
+    mime_type = Column(String(100), nullable=True)
+    description = Column(Text, nullable=True)
+    uploaded_by = Column(String(200), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    leg = relationship("Leg", backref="attachments")

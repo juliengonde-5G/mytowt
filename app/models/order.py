@@ -62,12 +62,21 @@ class Order(Base):
     attachment_filename = Column(String(255), nullable=True)
     attachment_path = Column(String(500), nullable=True)
 
+    # Pipedrive
+    pipedrive_deal_id = Column(Integer, nullable=True)  # Pipedrive Deal ID
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Single assignment
     leg_id = Column(Integer, ForeignKey("legs.id"), nullable=True)
     leg = relationship("Leg", foreign_keys=[leg_id])
+
+    # Rate grid linkage
+    rate_grid_id = Column(Integer, ForeignKey("rate_grids.id"), nullable=True)
+    rate_grid_line_id = Column(Integer, ForeignKey("rate_grid_lines.id"), nullable=True)
+    rate_grid = relationship("RateGrid", foreign_keys=[rate_grid_id])
+    rate_grid_line = relationship("RateGridLine", foreign_keys=[rate_grid_line_id])
 
     assignments = relationship("OrderAssignment", back_populates="order", cascade="all, delete-orphan")
 

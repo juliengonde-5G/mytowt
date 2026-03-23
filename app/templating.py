@@ -1,9 +1,34 @@
 """Shared Jinja2 templates instance with global filters."""
 from fastapi.templating import Jinja2Templates
-from app.i18n import t as translate_fn, SUPPORTED_LANGUAGES
-from app.permissions import can_view, can_edit, can_delete, has_any_access
+from app.i18n import t as _raw_t, SUPPORTED_LANGUAGES, DEFAULT_LANG
 
-templates = Jinja2Templates(directory="app/templates")
+
+class _TranslatedTemplates(Jinja2Templates):
+    """Subclass that auto-injects 'lang' into every TemplateResponse."""
+
+    def TemplateResponse(self, *args, **kwargs):
+        # Handle both positional and keyword 'context' argument
+        # FastAPI/Starlette signature: TemplateResponse(name, context, ...)
+        if len(args) >= 2:
+            context = args[1]
+        elif "context" in kwargs:
+            context = kwargs["context"]
+        else:
+            # Fallback — no context dict found, let parent handle
+            return super().TemplateResponse(*args, **kwargs)
+
+        # Auto-inject lang from user.language if not already set
+        if "lang" not in context or not context["lang"]:
+            user = context.get("user")
+            if user and hasattr(user, "language") and user.language:
+                context["lang"] = user.language
+            else:
+                context["lang"] = DEFAULT_LANG
+
+        return super().TemplateResponse(*args, **kwargs)
+
+
+templates = _TranslatedTemplates(directory="app/templates")
 
 
 def fmt_eur(val):
@@ -42,11 +67,16 @@ templates.env.filters["eur_int"] = fmt_eur_int
 templates.env.filters["flag"] = country_flag
 
 # Register i18n globals (accessible in all templates)
-templates.env.globals["t"] = translate_fn
+templates.env.globals["t"] = _raw_t
 templates.env.globals["SUPPORTED_LANGUAGES"] = SUPPORTED_LANGUAGES
 
 # Register permission helpers
+from app.permissions import can_view, can_edit, can_delete, has_any_access
 templates.env.globals["can_view"] = can_view
 templates.env.globals["can_edit"] = can_edit
 templates.env.globals["can_delete"] = can_delete
 templates.env.globals["has_any_access"] = has_any_access
+
+# Register site URL for external links (portals)
+from app.config import get_settings
+templates.env.globals["site_url"] = get_settings().SITE_URL

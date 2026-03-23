@@ -2,9 +2,10 @@
 import json
 from datetime import datetime, timezone, date
 from typing import Optional
-from fastapi import APIRouter, Request, Depends, Query, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi import APIRouter, Request, Depends, Query, Form, HTTPException, File, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.utils.activity import log_activity, get_client_ip
 from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
 
@@ -18,8 +19,8 @@ from app.models.order import Order
 from app.models.crew import CrewMember, CrewAssignment
 from app.models.packing_list import PackingList, PackingListBatch
 from app.models.onboard import (
-    SofEvent, OnboardNotification, CargoDocument,
-    SOF_EVENT_TYPES, CARGO_DOC_TYPES,
+    SofEvent, OnboardNotification, CargoDocument, ETAShift, OnboardAttachment,
+    SOF_EVENT_TYPES, CARGO_DOC_TYPES, ETA_SHIFT_REASONS, ATTACHMENT_CATEGORIES,
 )
 
 router = APIRouter(prefix="/onboard", tags=["onboard"])
@@ -61,6 +62,10 @@ async def onboard_home(
     sof_events = []
     notifications = []
     last_sof = None
+    eta_shifts = []
+    attachments = []
+
+    next_leg = None  # leg export (départ du port)
 
     if vessel_obj:
         legs_result = await db.execute(
@@ -89,6 +94,18 @@ async def onboard_home(
                     current_leg = legs[-1]
 
         if current_leg:
+            # ─── Next leg (export) ───
+            next_leg_result = await db.execute(
+                select(Leg).options(
+                    selectinload(Leg.departure_port), selectinload(Leg.arrival_port),
+                ).where(
+                    Leg.vessel_id == vessel_obj.id,
+                    Leg.year == current_year,
+                    Leg.sequence > current_leg.sequence,
+                ).order_by(Leg.sequence).limit(1)
+            )
+            next_leg = next_leg_result.scalar_one_or_none()
+
             # ─── CREW on board ───
             crew_result = await db.execute(
                 select(CrewAssignment).options(selectinload(CrewAssignment.member))
@@ -161,15 +178,35 @@ async def onboard_home(
             )
             pax_bookings = pax_result.scalars().all()
 
+            # ─── ETA SHIFTS history for this leg + all vessel legs this year ───
+            eta_shifts_result = await db.execute(
+                select(ETAShift).where(
+                    ETAShift.vessel_id == vessel_obj.id,
+                    ETAShift.leg_id.in_([l.id for l in legs]),
+                ).order_by(ETAShift.created_at.desc())
+            )
+            eta_shifts = eta_shifts_result.scalars().all()
+
+            # ─── ATTACHMENTS for this leg ───
+            attach_result = await db.execute(
+                select(OnboardAttachment).where(OnboardAttachment.leg_id == current_leg.id)
+                .order_by(OnboardAttachment.created_at.desc())
+            )
+            attachments = attach_result.scalars().all()
+
     return templates.TemplateResponse("onboard/index.html", {
         "request": request, "user": user,
         "vessels": vessels, "selected_vessel": selected_vessel, "vessel_obj": vessel_obj,
-        "legs": legs, "current_leg": current_leg,
+        "legs": legs, "current_leg": current_leg, "next_leg": next_leg,
         "crew_onboard": crew_onboard,
         "cargo_summary": cargo_summary,
         "sof_events": sof_events, "last_sof": last_sof,
         "notifications": notifications,
         "pax_bookings": pax_bookings,
+        "eta_shifts": eta_shifts if current_leg else [],
+        "eta_shift_reasons": ETA_SHIFT_REASONS,
+        "attachments": attachments if current_leg else [],
+        "attachment_categories": ATTACHMENT_CATEGORIES,
         "sof_event_types": SOF_EVENT_TYPES,
         "cargo_doc_types": CARGO_DOC_TYPES,
         "current_year": current_year,
@@ -209,6 +246,21 @@ async def sof_add_event(
     )
     db.add(evt)
     await db.flush()
+
+    # Notification EOSP / SOSP
+    if event_type in ("EOSP", "SOSP"):
+        from app.models.notification import Notification
+        leg = await db.get(Leg, leg_id)
+        vessel_obj = await db.get(Vessel, leg.vessel_id) if leg else None
+        vessel_name = vessel_obj.name if vessel_obj else ""
+        db.add(Notification(
+            type=event_type.lower(),
+            title=f"{event_type} — {leg.leg_code if leg else ''}",
+            detail=f"{vessel_name} · {label}",
+            link=f"/onboard?vessel={vessel_obj.code if vessel_obj else ''}&leg_id={leg_id}#sof",
+            leg_id=leg_id,
+        ))
+        await db.flush()
 
     # Find vessel for redirect
     leg = await db.get(Leg, leg_id)
@@ -291,6 +343,245 @@ async def dismiss_all_notifications(
     vessel_obj = await db.get(Vessel, leg.vessel_id) if leg else None
     vc = vessel_obj.code if vessel_obj else ""
     return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}", status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  ETA SHIFT — Captain declares ETA/ETD change during navigation
+# ═══════════════════════════════════════════════════════════════
+@router.post("/eta-shift", response_class=HTMLResponse)
+async def eta_shift_declare(
+    request: Request,
+    leg_id: int = Form(...),
+    new_eta: str = Form(""),
+    reason: str = Form(...),
+    justification: str = Form(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Captain declares ETA shift for current navigation leg.
+    Cascades to all subsequent legs and notifies the company."""
+    from app.models.notification import Notification
+    from app.routers.planning_router import resequence_and_recalc
+    from datetime import timedelta
+
+    leg_result = await db.execute(
+        select(Leg).options(
+            selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port),
+        ).where(Leg.id == leg_id)
+    )
+    leg = leg_result.scalar_one_or_none()
+    if not leg:
+        raise HTTPException(404, "Leg non trouvé")
+
+    # Parse new ETA
+    new_eta_dt = None
+    if new_eta and new_eta.strip():
+        try:
+            new_eta_dt = datetime.fromisoformat(new_eta)
+        except ValueError:
+            raise HTTPException(400, "Format de date invalide")
+
+    if not new_eta_dt:
+        raise HTTPException(400, "Nouvelle ETA requise")
+
+    # Validate justification
+    if not justification or not justification.strip():
+        raise HTTPException(400, "La justification est obligatoire")
+
+    old_eta = leg.eta
+    shift_hours = round((new_eta_dt - old_eta).total_seconds() / 3600, 1) if old_eta else 0
+
+    # Record the shift in history
+    shift_record = ETAShift(
+        leg_id=leg.id,
+        vessel_id=leg.vessel_id,
+        field_changed="eta",
+        old_value=old_eta,
+        new_value=new_eta_dt,
+        shift_hours=shift_hours,
+        reason=reason,
+        justification=justification.strip(),
+        created_by=user.full_name,
+    )
+    db.add(shift_record)
+
+    # Apply the new ETA
+    leg.eta = new_eta_dt
+    await db.flush()
+
+    # Cascade recalculation to all subsequent legs
+    await resequence_and_recalc(db, leg.vessel_id, leg.year)
+
+    # Count affected downstream legs
+    downstream_result = await db.execute(
+        select(func.count(Leg.id)).where(
+            Leg.vessel_id == leg.vessel_id,
+            Leg.year == leg.year,
+            Leg.sequence > leg.sequence,
+        )
+    )
+    legs_affected = downstream_result.scalar() or 0
+    shift_record.legs_affected = legs_affected
+    await db.flush()
+
+    # Create SOF event
+    direction = "retard" if shift_hours > 0 else "avance"
+    sof_evt = SofEvent(
+        leg_id=leg.id,
+        event_type="CUSTOM",
+        event_label=f"ETA modifiée : {direction} de {abs(shift_hours):.1f}h",
+        event_date=datetime.now().date(),
+        event_time=datetime.now().strftime("%H:%M"),
+        remarks=f"Raison: {reason} — {justification.strip()}",
+        created_by=user.full_name,
+    )
+    db.add(sof_evt)
+
+    # Create company-wide notification
+    vessel_name = leg.vessel.name if leg.vessel else ""
+    sign = "+" if shift_hours > 0 else ""
+    reason_label = next((l for c, l in ETA_SHIFT_REASONS if c == reason), reason)
+    detail_msg = (
+        f"{vessel_name} · {leg.leg_code} · "
+        f"ETA {old_eta.strftime('%d/%m %H:%M') if old_eta else '—'} → {new_eta_dt.strftime('%d/%m %H:%M')} "
+        f"({sign}{shift_hours:.1f}h) · {reason_label}"
+    )
+    if legs_affected > 0:
+        detail_msg += f" · {legs_affected} leg(s) suivant(s) recalculé(s)"
+
+    db.add(Notification(
+        type="eta_shift",
+        title=f"ETA modifiée — {leg.leg_code} ({sign}{shift_hours:.1f}h)",
+        detail=detail_msg,
+        link=f"/onboard?vessel={leg.vessel.code if leg.vessel else ''}&leg_id={leg.id}#eta-shifts",
+        leg_id=leg.id,
+    ))
+
+    # Onboard notification too
+    db.add(OnboardNotification(
+        leg_id=leg.id,
+        category="escale",
+        title=f"ETA modifiée : {sign}{shift_hours:.1f}h",
+        detail=f"{reason_label} — {justification.strip()}",
+    ))
+
+    await db.flush()
+
+    vc = leg.vessel.code if leg.vessel else ""
+    return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}#eta-shifts", status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  ATTACHMENTS (file/photo upload)
+# ═══════════════════════════════════════════════════════════════
+UPLOAD_DIR = "/app/uploads/onboard"
+ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".gif", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt", ".heic", ".webp"}
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+
+
+@router.post("/attachments/upload", response_class=HTMLResponse)
+async def attachment_upload(
+    request: Request,
+    leg_id: int = Form(...),
+    category: str = Form("document"),
+    title: str = Form(""),
+    description: str = Form(""),
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a file or photo attachment to a leg."""
+    import os
+    import uuid
+
+    leg = await db.get(Leg, leg_id)
+    if not leg:
+        raise HTTPException(404)
+
+    # Check leg not locked
+    if leg.status == "completed":
+        raise HTTPException(400, "L'escale est clôturée, impossible d'ajouter des fichiers")
+
+    # Validate extension
+    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"Type de fichier non autorisé : {ext}")
+
+    # Read and check size
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(400, "Fichier trop volumineux (max 20 Mo)")
+
+    # Create upload dir
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+    # Safe filename
+    safe_name = f"{leg_id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, safe_name)
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    att = OnboardAttachment(
+        leg_id=leg_id,
+        category=category,
+        title=title.strip() or file.filename or "Sans titre",
+        filename=file.filename or safe_name,
+        file_path=file_path,
+        file_size=len(content),
+        mime_type=file.content_type,
+        description=description.strip() or None,
+        uploaded_by=user.full_name,
+    )
+    db.add(att)
+    await db.flush()
+
+    vessel_obj = await db.get(Vessel, leg.vessel_id)
+    vc = vessel_obj.code if vessel_obj else ""
+    return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}#attachments", status_code=303)
+
+
+@router.get("/attachments/{att_id}/download")
+async def attachment_download(
+    att_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download an attachment file."""
+    import os
+    att = await db.get(OnboardAttachment, att_id)
+    if not att or not os.path.isfile(att.file_path):
+        raise HTTPException(404)
+
+    with open(att.file_path, "rb") as f:
+        content = f.read()
+
+    return Response(
+        content=content,
+        media_type=att.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{att.filename}"'},
+    )
+
+
+@router.delete("/attachments/{att_id}", response_class=HTMLResponse)
+async def attachment_delete(
+    att_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an attachment."""
+    import os
+    att = await db.get(OnboardAttachment, att_id)
+    if att:
+        # Check leg not locked
+        leg = await db.get(Leg, att.leg_id)
+        if leg and leg.status == "completed":
+            raise HTTPException(400, "L'escale est clôturée")
+        if os.path.isfile(att.file_path):
+            os.remove(att.file_path)
+        await db.delete(att)
+        await db.flush()
+    return HTMLResponse(content="", status_code=200)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -748,6 +1039,12 @@ async def cargo_doc_form(
         if doc and doc.data_json:
             doc_data = json.loads(doc.data_json)
 
+    # Determine current port based on leg status
+    if leg.ata:
+        current_port = leg.arrival_port.name if leg.arrival_port else ""
+    else:
+        current_port = leg.departure_port.name if leg.departure_port else ""
+
     # Pre-fill from leg data
     prefill = {
         "vessel_name": leg.vessel.name if leg.vessel else "",
@@ -757,6 +1054,7 @@ async def cargo_doc_form(
         "port_dep_locode": leg.departure_port.locode if leg.departure_port else "",
         "port_arr": leg.arrival_port.name if leg.arrival_port else "",
         "port_arr_locode": leg.arrival_port.locode if leg.arrival_port else "",
+        "current_port": current_port,
         "etd": leg.etd.strftime("%Y-%m-%d") if leg.etd else "",
         "eta": leg.eta.strftime("%Y-%m-%d") if leg.eta else "",
         "date_today": date.today().strftime("%Y-%m-%d"),
@@ -769,6 +1067,16 @@ async def cargo_doc_form(
     )
     sof_events = sof_result.scalars().all()
 
+    # Load embarked crew for this vessel
+    crew_result = await db.execute(
+        select(CrewAssignment).options(selectinload(CrewAssignment.member))
+        .where(
+            CrewAssignment.vessel_id == leg.vessel_id,
+            CrewAssignment.status == "active",
+        ).order_by(CrewAssignment.member_id)
+    )
+    crew_onboard = crew_result.scalars().all()
+
     doc_label = next((l for c, l in CARGO_DOC_TYPES if c == doc_type), doc_type)
 
     return templates.TemplateResponse("onboard/doc_form.html", {
@@ -776,6 +1084,7 @@ async def cargo_doc_form(
         "leg": leg, "doc_type": doc_type, "doc_label": doc_label,
         "doc": doc, "doc_data": doc_data, "prefill": prefill,
         "sof_events": sof_events,
+        "crew_onboard": crew_onboard,
         "active_module": "captain",
         "lang": user.language or "fr",
     })
@@ -808,6 +1117,20 @@ async def cargo_doc_save(
             created_by=user.full_name,
         )
         db.add(doc)
+        await db.flush()
+
+        # ─── Add SOF event on document creation ───
+        sof_evt = SofEvent(
+            leg_id=leg_id,
+            event_type="CUSTOM",
+            event_label=f"📄 Document créé : {doc_label}",
+            event_date=date.today(),
+            event_time=datetime.now().strftime("%H:%M"),
+            remarks=f"Créé par {user.full_name} — /onboard/doc/{doc.id}/export/pdf",
+            created_by=user.full_name,
+        )
+        db.add(sof_evt)
+
     await db.flush()
 
     # Redirect back to the document form so export buttons become available
