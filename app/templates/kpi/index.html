@@ -322,7 +322,7 @@ function loadLegTrack(legId) {
             `;
             if (trackMap) { trackMap.remove(); trackMap = null; }
             trackMap = L.map('modal-track-map', {scrollWheelZoom: true}).setView([data.points[0].lat, data.points[0].lon], 6);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {attribution:'© OSM © CARTO', maxZoom:19}).addTo(trackMap);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:18}).addTo(trackMap);
             const bounds = [];
             for (let i = 1; i < data.points.length; i++) {
                 const p0 = data.points[i-1], p1 = data.points[i];

@@ -10,7 +10,7 @@ import secrets
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, Date, Numeric, func
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from app.database import Base
 
 
@@ -113,7 +113,8 @@ class PassengerBooking(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     leg_id = Column(Integer, ForeignKey("legs.id", ondelete="SET NULL"), nullable=False)
     vessel_id = Column(Integer, ForeignKey("vessels.id"), nullable=False)
-    cabin_number = Column(Integer, nullable=False)  # 1-4
+    cabin_number = Column(Integer, nullable=True)  # Legacy: single cabin
+    cabin_numbers = Column(String(50), nullable=True)  # Comma-separated: "1,3"
 
     reference = Column(String(20), unique=True, nullable=False)
     status = Column(String(20), nullable=False, default="draft")
@@ -136,18 +137,37 @@ class PassengerBooking(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    leg = relationship("Leg", backref="passenger_bookings")
+    leg = relationship("Leg", backref=backref("passenger_bookings", passive_deletes=True))
     vessel = relationship("Vessel")
     passengers = relationship("Passenger", back_populates="booking", cascade="all, delete-orphan")
     payments = relationship("PassengerPayment", back_populates="booking", cascade="all, delete-orphan")
 
     @property
+    def cabin_list(self):
+        """Return list of cabin numbers from cabin_numbers or legacy cabin_number."""
+        if self.cabin_numbers:
+            return [int(x) for x in self.cabin_numbers.split(",") if x.strip()]
+        if self.cabin_number:
+            return [self.cabin_number]
+        return []
+
+    @property
     def cabin_type(self):
-        return "double" if self.cabin_number <= 2 else "twin"
+        nums = self.cabin_list
+        if not nums:
+            return "double"
+        return "double" if nums[0] <= 2 else "twin"
 
     @property
     def cabin_label(self):
-        return CABIN_TYPE_LABELS.get(self.cabin_type, self.cabin_type)
+        nums = self.cabin_list
+        if len(nums) <= 1:
+            return CABIN_TYPE_LABELS.get(self.cabin_type, self.cabin_type)
+        types = []
+        for n in nums:
+            t = "double" if n <= 2 else "twin"
+            types.append(CABIN_TYPE_LABELS.get(t, t))
+        return ", ".join(types)
 
     @property
     def pax_names(self):

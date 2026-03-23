@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.utils.activity import log_activity, get_client_ip
@@ -14,12 +14,16 @@ import math
 from app.database import get_db
 from app.auth import get_current_user, AuthRequired
 from app.permissions import require_permission
+from app.config import get_settings
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg, LegStatus
 from app.models.port import Port
+from app.models.shared_link import SharedLink
+from app.models.notification import Notification
 
 router = APIRouter(prefix="/planning", tags=["planning"])
+share_router = APIRouter(prefix="/share", tags=["share"])
 
 # ─── DEFAULTS ─────────────────────────────────────────────────
 DEFAULT_SPEED = 8.0        # knots
@@ -102,7 +106,8 @@ async def get_previous_leg(db: AsyncSession, vessel_id: int, year: int, current_
 
 
 async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int):
-    """Resequence all legs for a vessel/year by ETD, update codes, and recalculate dates chain."""
+    """Resequence all legs for a vessel/year by ETD, update codes, and recalculate dates chain.
+    Manually-set ETDs are preserved unless they conflict with the previous leg's ETA."""
     result = await db.execute(
         select(Leg)
         .options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
@@ -110,6 +115,12 @@ async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int):
         .order_by(Leg.etd.asc().nulls_last(), Leg.id.asc())
     )
     legs = result.scalars().all()
+
+    # First pass: set temporary unique codes to avoid UNIQUE constraint violations
+    # when reordering causes leg_code swaps (e.g. leg A gets B's old code before B is updated)
+    for leg in legs:
+        leg.leg_code = f"_RESEQ_{leg.id}"
+    await db.flush()
 
     for i, leg in enumerate(legs):
         leg.sequence = i + 1
@@ -124,10 +135,17 @@ async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int):
             prev_leg = legs[i - 1]
             prev_eta = prev_leg.ata or prev_leg.eta  # Use actual if available
             if prev_eta and not leg.atd:
-                # ETD = previous ETA + port stay duration
-                leg.etd = prev_eta + timedelta(days=leg.port_stay_days or DEFAULT_PORT_STAY_DAYS)
+                computed_etd = prev_eta + timedelta(days=leg.port_stay_days or DEFAULT_PORT_STAY_DAYS)
+                # Only overwrite ETD if leg has no ETD yet, or if existing ETD
+                # is BEFORE prev leg's ETA (inconsistent — must be corrected)
+                # Compare as naive to avoid offset-naive vs offset-aware errors
+                etd_naive = leg.etd.replace(tzinfo=None) if leg.etd and leg.etd.tzinfo else leg.etd
+                prev_eta_naive = prev_eta.replace(tzinfo=None) if prev_eta.tzinfo else prev_eta
+                if not leg.etd or etd_naive < prev_eta_naive:
+                    leg.etd = computed_etd
+                    leg.etd_manual = False
 
-        # Recalculate ETA from ETD
+        # Recalculate ETA from ETD (always, including on the edited leg)
         if leg.etd and leg.distance_nm and not leg.ata:
             speed = leg.speed_knots or DEFAULT_SPEED
             elong = leg.elongation_coeff or DEFAULT_ELONGATION
@@ -197,7 +215,7 @@ async def planning_home(
                 leg.status = "in_progress"
                 status_changed = True
         else:
-            if leg.status not in ("planned", "in_progress"):
+            if leg.status != "planned":
                 leg.status = "planned"
                 status_changed = True
     if status_changed:
@@ -384,6 +402,7 @@ async def leg_create_submit(
     distance = haversine_nm(dep_port.latitude, dep_port.longitude, arr_port.latitude, arr_port.longitude)
 
     # If not first leg, compute ETD from previous leg's ETA + port stay
+    _etd_manual = _etd is not None  # User provided ETD explicitly
     if not _etd and sequence > 1:
         prev_leg = await get_previous_leg(db, _vessel_id, _year, sequence)
         if prev_leg:
@@ -410,6 +429,7 @@ async def leg_create_submit(
         computed_distance=_computed_dist,
         estimated_duration_hours=_duration,
         port_stay_days=_port_stay,
+        etd_manual=_etd_manual,
         notes=notes if notes and notes.strip() else None,
         leg_code="TEMP",
     )
@@ -427,6 +447,16 @@ async def leg_create_submit(
                        entity_label=leg.leg_code,
                        detail=f"{leg.departure_port_locode} → {leg.arrival_port_locode}",
                        ip_address=get_client_ip(request))
+
+    # Notification
+    db.add(Notification(
+        type="planning_create",
+        title=f"Nouvelle traversée — {leg.leg_code}",
+        detail=f"{vessel_obj.name} · {dep_port.locode} → {arr_port.locode} · {_year}",
+        link=f"/planning?vessel={vessel_obj.code}&year={_year}",
+        leg_id=leg.id,
+    ))
+    await db.flush()
 
     # Resequence all legs
     await resequence_and_recalc(db, _vessel_id, _year)
@@ -533,6 +563,7 @@ async def leg_edit_submit(
     leg.departure_port_locode = dep_port.locode
     leg.arrival_port_locode = arr_port.locode
     leg.etd = parse_datetime(etd)
+    leg.etd_manual = parse_datetime(etd) is not None
     leg.eta = parse_datetime(eta)
     leg.ata = parse_datetime(ata)
     leg.atd = parse_datetime(atd)
@@ -552,6 +583,16 @@ async def leg_edit_submit(
     if leg.etd and not leg.eta and leg.distance_nm:
         leg.eta = compute_eta(leg.etd, leg.distance_nm, _speed, _elongation)
 
+    await db.flush()
+
+    # Notification
+    db.add(Notification(
+        type="planning_update",
+        title=f"Traversée modifiée — {leg.leg_code}",
+        detail=f"{vessel_obj.name} · {dep_port.locode} → {arr_port.locode} · {_year}",
+        link=f"/planning?vessel={vessel_obj.code}&year={_year}",
+        leg_id=leg.id,
+    ))
     await db.flush()
 
     # Resequence and recalculate chain
@@ -578,13 +619,24 @@ async def leg_delete(
         raise HTTPException(status_code=404)
 
     vessel_code = leg.vessel.code
+    vessel_name = leg.vessel.name
     vessel_id = leg.vessel_id
     year = leg.year
     leg_code = leg.leg_code
+    dep = leg.departure_port_locode
+    arr = leg.arrival_port_locode
 
     await log_activity(db, user=user, action="delete", module="planning",
                        entity_type="leg", entity_id=leg_id, entity_label=leg_code,
                        ip_address=get_client_ip(request))
+
+    # Notification (before delete, no leg_id FK since leg is being removed)
+    db.add(Notification(
+        type="planning_delete",
+        title=f"Traversée supprimée — {leg_code}",
+        detail=f"{vessel_name} · {dep} → {arr} · {year}",
+        link=f"/planning?vessel={vessel_code}&year={year}",
+    ))
 
     await db.delete(leg)
     await db.flush()
@@ -872,4 +924,288 @@ async def pdf_commercial(
         "selected_origin": origin,
         "lang": lang or "fr",
         "now": datetime.now(tz.utc),
+        "is_shared": False,
     })
+
+
+# ─── SHARE LINK GENERATION ─────────────────────────────────
+def _build_share_label(vessel_name, origin, destination, year, lang):
+    """Build a human-readable label for the shared link."""
+    parts = []
+    if vessel_name:
+        parts.append(vessel_name)
+    if origin:
+        parts.append(f"from {origin}" if lang == "en" else f"dep. {origin}")
+    if destination:
+        parts.append(f"to {destination}" if lang == "en" else f"vers {destination}")
+    parts.append(str(year))
+    return " · ".join(parts) if parts else f"Tous les départs {year}"
+
+
+@router.post("/pdf/commercial/share")
+async def generate_share_link(
+    request: Request,
+    year: int = Form(...),
+    vessel: Optional[str] = Form(None),
+    origin: Optional[str] = Form(None),
+    destination: Optional[str] = Form(None),
+    legs_ids: Optional[str] = Form(None),
+    lang: str = Form("fr"),
+    user: User = Depends(require_permission("planning", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a share link stored in DB and return the public URL."""
+    _vessel = vessel.strip() if vessel and vessel.strip() else None
+    _origin = origin.strip().upper() if origin and origin.strip() else None
+    _destination = destination.strip().upper() if destination and destination.strip() else None
+    _legs_ids = legs_ids.strip() if legs_ids and legs_ids.strip() else None
+
+    # Resolve vessel name for label
+    vessel_name = None
+    if _vessel:
+        v_r = await db.execute(select(Vessel).where(Vessel.code == int(_vessel)))
+        v = v_r.scalar_one_or_none()
+        if v:
+            vessel_name = v.name
+
+    # Resolve port names for label
+    origin_name = _origin
+    dest_name = _destination
+    if _origin:
+        p_r = await db.execute(select(Port).where(Port.locode == _origin))
+        p = p_r.scalar_one_or_none()
+        if p:
+            origin_name = p.name
+    if _destination:
+        p_r = await db.execute(select(Port).where(Port.locode == _destination))
+        p = p_r.scalar_one_or_none()
+        if p:
+            dest_name = p.name
+
+    label = _build_share_label(vessel_name, origin_name, dest_name, year, lang)
+
+    link = SharedLink(
+        created_by_id=user.id,
+        created_by_name=user.username,
+        label=label,
+        year=year,
+        vessel_code=_vessel,
+        origin_locode=_origin,
+        destination_locode=_destination,
+        legs_ids=_legs_ids,
+        lang=lang,
+    )
+    db.add(link)
+    await db.flush()
+
+    settings = get_settings()
+    share_url = f"{settings.SITE_URL}/share/commercial/{link.token}"
+
+    await log_activity(db, user=user, action="create", module="planning",
+                       entity_type="shared_link", entity_id=link.id,
+                       entity_label=label, ip_address=get_client_ip(request))
+
+    return JSONResponse({"url": share_url, "token": link.token})
+
+
+# ─── SHARED LINKS HISTORY ──────────────────────────────────
+@router.get("/shared-links", response_class=HTMLResponse)
+async def shared_links_history(
+    request: Request,
+    user: User = Depends(require_permission("planning", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all generated share links."""
+    result = await db.execute(
+        select(SharedLink).order_by(SharedLink.created_at.desc())
+    )
+    links = result.scalars().all()
+
+    settings = get_settings()
+
+    return templates.TemplateResponse("planning/shared_links.html", {
+        "request": request,
+        "user": user,
+        "links": links,
+        "site_url": settings.SITE_URL,
+        "active_module": "planning",
+    })
+
+
+@router.post("/shared-links/{link_id}/toggle")
+async def toggle_shared_link(
+    link_id: int,
+    request: Request,
+    user: User = Depends(require_permission("planning", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Activate or deactivate a shared link."""
+    result = await db.execute(select(SharedLink).where(SharedLink.id == link_id))
+    link = result.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404)
+
+    link.is_active = not link.is_active
+    await db.flush()
+
+    action = "update"
+    detail = f"{'Activé' if link.is_active else 'Désactivé'}"
+    await log_activity(db, user=user, action=action, module="planning",
+                       entity_type="shared_link", entity_id=link.id,
+                       entity_label=link.label, detail=detail,
+                       ip_address=get_client_ip(request))
+
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/planning/shared-links"})
+    return RedirectResponse(url="/planning/shared-links", status_code=303)
+
+
+@router.delete("/shared-links/{link_id}")
+async def delete_shared_link(
+    link_id: int,
+    request: Request,
+    user: User = Depends(require_permission("planning", "S")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a shared link permanently."""
+    result = await db.execute(select(SharedLink).where(SharedLink.id == link_id))
+    link = result.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404)
+
+    await log_activity(db, user=user, action="delete", module="planning",
+                       entity_type="shared_link", entity_id=link.id,
+                       entity_label=link.label,
+                       ip_address=get_client_ip(request))
+
+    await db.delete(link)
+    await db.flush()
+
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/planning/shared-links"})
+    return RedirectResponse(url="/planning/shared-links", status_code=303)
+
+
+# ─── PUBLIC SHARED COMMERCIAL SUPPORT ───────────────────────
+async def _render_commercial_support(db, request, link, effective_lang):
+    """Shared logic to render the commercial support page from SharedLink params."""
+    from datetime import timezone as tz
+
+    current_year = link.year
+    vessel_code = int(link.vessel_code) if link.vessel_code else None
+
+    vessels_result = await db.execute(select(Vessel).where(Vessel.is_active == True).order_by(Vessel.code))
+    vessels = vessels_result.scalars().all()
+
+    query = (
+        select(Leg)
+        .options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
+        .where(Leg.year == current_year, Leg.status != "cancelled")
+    )
+
+    if vessel_code:
+        v_result = await db.execute(select(Vessel).where(Vessel.code == vessel_code))
+        v = v_result.scalar_one_or_none()
+        if v:
+            query = query.where(Leg.vessel_id == v.id)
+
+    if link.destination_locode:
+        query = query.where(Leg.arrival_port_locode == link.destination_locode)
+    if link.origin_locode:
+        query = query.where(Leg.departure_port_locode == link.origin_locode)
+
+    result = await db.execute(query.order_by(Leg.vessel_id, Leg.sequence))
+    legs = result.scalars().all()
+
+    selected_leg_ids = set()
+    if link.legs_ids:
+        selected_leg_ids = set(int(x) for x in link.legs_ids.split(",") if x.strip().isdigit())
+        legs = [l for l in legs if l.id in selected_leg_ids]
+
+    legs_by_vessel = {}
+    for leg in legs:
+        vname = leg.vessel.name
+        legs_by_vessel.setdefault(vname, []).append(leg)
+
+    legs_by_route = {}
+    for leg in legs:
+        route = f"{leg.departure_port.name} → {leg.arrival_port.name}"
+        legs_by_route.setdefault(route, []).append(leg)
+
+    legs_by_dest = {}
+    for leg in legs:
+        legs_by_dest.setdefault(leg.arrival_port.name, []).append(leg)
+
+    all_destinations = sorted(set(
+        (leg.arrival_port_locode, leg.arrival_port.name) for leg in legs
+    ), key=lambda x: x[1]) if legs else []
+
+    all_origins = sorted(set(
+        (leg.departure_port_locode, leg.departure_port.name) for leg in legs
+    ), key=lambda x: x[1]) if legs else []
+
+    # Build title
+    title_parts = []
+    if vessel_code:
+        vname = next((v.name for v in vessels if v.code == vessel_code), "")
+        if vname:
+            title_parts.append(vname)
+    if link.origin_locode:
+        oname = next((o[1] for o in all_origins if o[0] == link.origin_locode), link.origin_locode)
+        title_parts.append(f"from {oname}" if effective_lang == "en" else f"au départ de {oname}")
+    if link.destination_locode:
+        dname = next((d[1] for d in all_destinations if d[0] == link.destination_locode), link.destination_locode)
+        title_parts.append(f"to {dname}" if effective_lang == "en" else f"vers {dname}")
+
+    if title_parts:
+        prefix = "Commercial support" if effective_lang == "en" else "Support commercial"
+        title = f"{prefix} — {' · '.join(title_parts)}"
+    else:
+        title = "Commercial support — All departures" if effective_lang == "en" else "Support commercial — Tous les départs"
+
+    return templates.TemplateResponse("planning/pdf_commercial.html", {
+        "request": request,
+        "title": title,
+        "template_type": "all",
+        "legs": legs,
+        "legs_by_vessel": legs_by_vessel,
+        "legs_by_route": legs_by_route,
+        "legs_by_dest": legs_by_dest,
+        "vessels": vessels,
+        "all_destinations": all_destinations,
+        "all_origins": all_origins,
+        "all_legs_for_selector": [],
+        "selected_leg_ids": selected_leg_ids,
+        "current_year": current_year,
+        "selected_vessel": vessel_code,
+        "selected_destination": link.destination_locode,
+        "selected_origin": link.origin_locode,
+        "lang": effective_lang,
+        "now": datetime.now(tz.utc),
+        "is_shared": True,
+    })
+
+
+@share_router.get("/commercial/{token}", response_class=HTMLResponse)
+async def shared_commercial(
+    token: str,
+    request: Request,
+    lang: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Public endpoint — no auth required. Renders the commercial support from a DB-stored token."""
+    result = await db.execute(
+        select(SharedLink).where(SharedLink.token == token)
+    )
+    link = result.scalar_one_or_none()
+
+    if not link or not link.is_active:
+        raise HTTPException(status_code=404, detail="Lien invalide, désactivé ou expiré.")
+
+    # Track view
+    link.view_count = (link.view_count or 0) + 1
+    link.last_viewed_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    effective_lang = lang or link.lang or "fr"
+    return await _render_commercial_support(db, request, link, effective_lang)

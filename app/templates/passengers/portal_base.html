@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TOWT — {% block portal_title %}{% if lang == 'en' %}Your crossing{% else %}Votre traversée{% endif %}{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/img/favicon_mytowt.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -127,7 +128,7 @@
     <div class="portal-header">
         <div class="portal-logo">
             <button class="mobile-nav-toggle" onclick="toggleSidebar()">☰</button>
-            <img src="/static/img/logo_towt.png" alt="TOWT">
+            <img src="/static/img/logo_towt_white.png" alt="TOWT">
             <div>
                 <div class="portal-logo-text">TOWT</div>
                 <div class="portal-logo-sub">Transoceanic Wind Transport</div>
@@ -136,8 +137,8 @@
         <div class="portal-header-right">
             <span class="portal-ref">{{ booking.reference }}</span>
             <div class="lang-toggle">
-                <a href="/passenger/{{ token }}{{ page_suffix|default('') }}?lang=fr" class="lang-btn {% if lang == 'fr' %}active{% endif %}">🇫🇷</a>
-                <a href="/passenger/{{ token }}{{ page_suffix|default('') }}?lang=en" class="lang-btn {% if lang == 'en' %}active{% endif %}">🇬🇧</a>
+                <a href="/boarding/{{ token }}{{ page_suffix|default('') }}?lang=fr" class="lang-btn {% if lang == 'fr' %}active{% endif %}">🇫🇷</a>
+                <a href="/boarding/{{ token }}{{ page_suffix|default('') }}?lang=en" class="lang-btn {% if lang == 'en' %}active{% endif %}">🇬🇧</a>
             </div>
         </div>
     </div>
@@ -148,50 +149,50 @@
         <!-- SIDEBAR -->
         <div class="portal-sidebar" id="portalSidebar">
             <nav class="portal-nav">
-                <a href="/passenger/{{ token }}?lang={{ lang }}" class="{% if active_page == 'home' %}active{% endif %}">
+                <a href="/boarding/{{ token }}?lang={{ lang }}" class="{% if active_page == 'home' %}active{% endif %}">
                     <span class="nav-icon">🏠</span>
                     {% if lang == 'en' %}Home{% else %}Accueil{% endif %}
                 </a>
                 <div class="portal-nav-divider"></div>
-                <a href="/passenger/{{ token }}/admin?lang={{ lang }}" class="{% if active_page == 'admin' %}active{% endif %}">
+                <a href="/boarding/{{ token }}/admin?lang={{ lang }}" class="{% if active_page == 'admin' %}active{% endif %}">
                     <span class="nav-icon">📋</span>
                     {% if lang == 'en' %}Administration{% else %}Administratif{% endif %}
                 </a>
-                <a href="/passenger/{{ token }}/passenger-docs?lang={{ lang }}" class="{% if active_page == 'passenger-docs' %}active{% endif %}">
+                <a href="/boarding/{{ token }}/passenger-docs?lang={{ lang }}" class="{% if active_page == 'passenger-docs' %}active{% endif %}">
                     <span class="nav-icon">📄</span>
                     {% if lang == 'en' %}Passenger Documents{% else %}Documents Passager{% endif %}
                 </a>
-                <a href="/passenger/{{ token }}/questionnaire?lang={{ lang }}" class="{% if active_page == 'questionnaire' %}active{% endif %}">
+                <a href="/boarding/{{ token }}/questionnaire?lang={{ lang }}" class="{% if active_page == 'questionnaire' %}active{% endif %}">
                     <span class="nav-icon">📝</span>
                     {% if lang == 'en' %}Pre-boarding Questionnaire{% else %}Questionnaire pré-embarquement{% endif %}
                 </a>
                 <div class="portal-nav-divider"></div>
-                <a href="/passenger/{{ token }}/vessel?lang={{ lang }}" class="{% if active_page == 'vessel' %}active{% endif %}">
+                <a href="/boarding/{{ token }}/vessel?lang={{ lang }}" class="{% if active_page == 'vessel' %}active{% endif %}">
                     <span class="nav-icon">🚢</span>
                     {% if lang == 'en' %}The Vessel{% else %}Le Navire{% endif %}
                 </a>
-                <a href="/passenger/{{ token }}/voyage?lang={{ lang }}" class="{% if active_page == 'voyage' %}active{% endif %}">
+                <a href="/boarding/{{ token }}/voyage?lang={{ lang }}" class="{% if active_page == 'voyage' %}active{% endif %}">
                     <span class="nav-icon">🗺️</span>
                     {% if lang == 'en' %}The Voyage{% else %}Le Voyage{% endif %}
                 </a>
-                <a href="/passenger/{{ token }}/life?lang={{ lang }}" class="{% if active_page == 'life' %}active{% endif %}">
+                <a href="/boarding/{{ token }}/life?lang={{ lang }}" class="{% if active_page == 'life' %}active{% endif %}">
                     <span class="nav-icon">⚓</span>
                     {% if lang == 'en' %}Life on Board{% else %}La Vie à bord{% endif %}
                 </a>
-                <a href="/passenger/{{ token }}/destination?lang={{ lang }}" class="{% if active_page == 'destination' %}active{% endif %}">
+                <a href="/boarding/{{ token }}/destination?lang={{ lang }}" class="{% if active_page == 'destination' %}active{% endif %}">
                     <span class="nav-icon">🌍</span>
                     {% if lang == 'en' %}Your Destination{% else %}Votre Destination{% endif %}
                 </a>
-                <a href="/passenger/{{ token }}/safety?lang={{ lang }}" class="{% if active_page == 'safety' %}active{% endif %}">
+                <a href="/boarding/{{ token }}/safety?lang={{ lang }}" class="{% if active_page == 'safety' %}active{% endif %}">
                     <span class="nav-icon">🛟</span>
                     {% if lang == 'en' %}Safety on Board{% else %}Sécurité à bord{% endif %}
                 </a>
                 <div class="portal-nav-divider"></div>
-                <a href="/passenger/{{ token }}/documents?lang={{ lang }}" class="{% if active_page == 'docs' %}active{% endif %}">
+                <a href="/boarding/{{ token }}/documents?lang={{ lang }}" class="{% if active_page == 'docs' %}active{% endif %}">
                     <span class="nav-icon">📚</span>
                     Documentation
                 </a>
-                <a href="/passenger/{{ token }}/messages?lang={{ lang }}" class="{% if active_page == 'messages' %}active{% endif %}">
+                <a href="/boarding/{{ token }}/messages?lang={{ lang }}" class="{% if active_page == 'messages' %}active{% endif %}">
                     <span class="nav-icon">💬</span>
                     {% if lang == 'en' %}Talk to us{% else %}Parlez avec nous{% endif %}
                     {% if unread_messages %}<span class="nav-badge">{{ unread_messages }}</span>{% endif %}

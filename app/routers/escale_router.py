@@ -88,9 +88,15 @@ def parse_datetime(val):
         return None
 
 
-def get_quay_bounds(leg):
+def get_quay_bounds(leg, next_leg=None):
+    """Compute the stopover period at the arrival port.
+    Start = ATA/ETA of arriving leg (when vessel arrives at port).
+    End = ATD/ETD of next departing leg (when vessel leaves port).
+    """
     quay_start = leg.ata or leg.eta
-    quay_end = leg.atd
+    quay_end = None
+    if next_leg:
+        quay_end = next_leg.atd or next_leg.etd
     if not quay_end and quay_start:
         quay_end = quay_start + timedelta(days=leg.port_stay_days or 3)
     return quay_start, quay_end
@@ -111,6 +117,17 @@ def is_leg_terminated(leg):
 
 def is_leg_locked(leg):
     return leg.status == "completed"
+
+
+async def fetch_next_leg(db: AsyncSession, leg: Leg):
+    """Fetch the next leg for the same vessel (departing from this leg's arrival port)."""
+    result = await db.execute(
+        select(Leg)
+        .where(Leg.vessel_id == leg.vessel_id, Leg.sequence > leg.sequence)
+        .order_by(Leg.sequence)
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
 
 
 async def update_finance_actual_duration(db: AsyncSession, leg: Leg):
@@ -305,7 +322,7 @@ async def escale_home(
                 vessel_status = "a_quai"
                 port_status = "pilote_arrivee"
 
-            qs, qe = get_quay_bounds(selected_leg)
+            qs, qe = get_quay_bounds(selected_leg, next_leg)
             if qs:
                 quay_start_str = qs.strftime('%Y-%m-%dT%H:%M')
             if qe:
@@ -410,14 +427,27 @@ async def update_port_status(
 # === LOCK / UNLOCK ===
 @router.post("/legs/{lid}/lock", response_class=HTMLResponse)
 async def lock_leg(lid: int, request: Request, user: User = Depends(require_permission("escale", "M")), db: AsyncSession = Depends(get_db)):
+    from datetime import date as date_cls, datetime as dt_cls
+    from app.models.onboard import SofEvent
     result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == lid))
     leg = result.scalar_one_or_none()
     if not leg:
         raise HTTPException(404)
     leg.status = "completed"
+    # Record closure in SOF
+    sof_evt = SofEvent(
+        leg_id=lid,
+        event_type="CUSTOM",
+        event_label="Escale clôturée / Port call closed",
+        event_date=date_cls.today(),
+        event_time=dt_cls.now().strftime("%H:%M"),
+        remarks=f"Clôturé par {user.full_name}",
+        created_by=user.full_name,
+    )
+    db.add(sof_evt)
     await db.flush()
     await log_activity(db, user, "escale", "lock", "Leg", lid, "Verrouillage escale")
-    url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={lid}"
+    url = f"/onboard?vessel={leg.vessel.code}&leg_id={lid}"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
     return RedirectResponse(url=url, status_code=303)
@@ -478,7 +508,8 @@ async def operation_create_form(
     quay_start_str = ""
     quay_end_str = ""
     if leg:
-        qs, qe = get_quay_bounds(leg)
+        nl = await fetch_next_leg(db, leg)
+        qs, qe = get_quay_bounds(leg, nl)
         if qs:
             quay_start_str = qs.strftime('%Y-%m-%dT%H:%M')
         if qe:
@@ -544,7 +575,8 @@ async def operation_edit_form(
     quay_start_str = ""
     quay_end_str = ""
     if leg:
-        qs, qe = get_quay_bounds(leg)
+        nl = await fetch_next_leg(db, leg)
+        qs, qe = get_quay_bounds(leg, nl)
         if qs:
             quay_start_str = qs.strftime('%Y-%m-%dT%H:%M')
         if qe:
@@ -626,7 +658,8 @@ async def docker_create_form(request: Request, leg_id: int = Query(...), user: U
     quay_start_str = ""
     quay_end_str = ""
     if leg:
-        qs, qe = get_quay_bounds(leg)
+        nl = await fetch_next_leg(db, leg)
+        qs, qe = get_quay_bounds(leg, nl)
         if qs:
             quay_start_str = qs.strftime('%Y-%m-%dT%H:%M')
         if qe:
@@ -674,7 +707,8 @@ async def docker_edit_form(ds_id: int, request: Request, user: User = Depends(re
     quay_start_str = ""
     quay_end_str = ""
     if leg:
-        qs, qe = get_quay_bounds(leg)
+        nl = await fetch_next_leg(db, leg)
+        qs, qe = get_quay_bounds(leg, nl)
         if qs:
             quay_start_str = qs.strftime('%Y-%m-%dT%H:%M')
         if qe:

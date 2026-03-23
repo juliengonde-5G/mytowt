@@ -13,7 +13,7 @@
 
     <!-- ═══ TABS ═══════════════════════════════════════════ -->
     <div class="status-tabs" style="margin-bottom:20px;display:flex;gap:6px;flex-wrap:wrap;">
-        <a href="/commercial" class="status-tab {% if active_tab == 'dashboard' %}active{% endif %}">📊 Tableau de bord</a>
+        <a href="/commercial?tab=dashboard" class="status-tab {% if active_tab == 'dashboard' %}active{% endif %}">📊 Tableau de bord</a>
         <a href="/commercial?tab=grids" class="status-tab {% if active_tab == 'grids' %}active{% endif %}">📋 Grilles tarifaires</a>
         <a href="/commercial?tab=offers" class="status-tab {% if active_tab == 'offers' %}active{% endif %}">📄 Offres</a>
         <a href="/commercial?tab=orders" class="status-tab {% if active_tab == 'orders' %}active{% endif %}">🚢 Ordres de transport</a>
@@ -173,7 +173,7 @@
                 <tbody>
                     {% for offer in offers %}
                     <tr>
-                        <td><strong style="color:var(--towt-blue);font-family:'Poppins',sans-serif;">{{ offer.reference }}</strong></td>
+                        <td><a href="/commercial/pricing/grids/{{ offer.rate_grid_id }}" style="color:var(--towt-blue);font-weight:600;font-family:'Poppins',sans-serif;text-decoration:none;">{{ offer.reference }}</a></td>
                         <td>{{ offer.client.name if offer.client else '—' }}</td>
                         <td>
                             {% if offer.rate_grid %}
@@ -204,6 +204,9 @@
                                 <form method="post" action="/commercial/pricing/offers/{{ offer.id }}/status" style="margin:0;"><input type="hidden" name="status" value="rejected"><button type="submit" class="btn btn-sm" style="font-size:10px;background:#e74c3c;color:#fff;">Refusée</button></form>
                                 <form method="post" action="/commercial/pricing/offers/{{ offer.id }}/status" style="margin:0;"><input type="hidden" name="status" value="expired"><button type="submit" class="btn btn-sm" style="font-size:10px;background:#95a5a6;color:#fff;">Échue</button></form>
                                 {% endif %}
+                                {% if offer.status in ('accepted', 'sent') %}
+                                <a href="/commercial/pricing/offers/{{ offer.id }}/create-order" class="btn btn-sm" style="font-size:10px;background:var(--towt-blue);color:#fff;" title="Générer ordre de transport"><i data-lucide="package" style="width:11px;height:11px;"></i> Ordre</a>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
@@ -223,11 +226,47 @@
     <!-- ═══ ORDERS TAB ═════════════════════════════════════ -->
     {% elif active_tab == 'orders' %}
     <div class="orders-tab">
+        {% set base_params = "tab=orders&vessel=" ~ selected_vessel ~ "&year=" ~ current_year %}
+        <!-- Vessel / Year / Leg filter -->
+        <div class="planning-filters">
+            <div class="vessel-tabs">
+                {% for v in vessels %}
+                <a href="/commercial?tab=orders&vessel={{ v.code }}&year={{ current_year }}" class="vessel-tab {% if selected_vessel == v.code %}active{% endif %}">
+                    <i data-lucide="ship"></i> {{ v.name }}
+                </a>
+                {% endfor %}
+            </div>
+            <div class="year-selector">
+                {% for y in years %}
+                <a href="/commercial?tab=orders&vessel={{ selected_vessel }}&year={{ y }}" class="year-btn {% if current_year == y %}active{% endif %}">{{ y }}</a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="leg-selector">
+            <a href="/commercial?{{ base_params }}{% if selected_status %}&status={{ selected_status }}{% endif %}" class="leg-chip {% if not leg_id %}active{% endif %}">
+                <strong>Tous</strong>
+            </a>
+            {% for leg in legs %}
+            {% set terminated = leg.atd is not none %}
+            {% set locked = leg.status == 'completed' %}
+            <a href="/commercial?{{ base_params }}&leg_id={{ leg.id }}{% if selected_status %}&status={{ selected_status }}{% endif %}"
+               class="leg-chip {% if leg_id == leg.id %}active{% endif %} {% if terminated %}terminated{% endif %} {% if locked %}locked{% endif %}">
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <strong>{{ leg.leg_code }}</strong>
+                    {% if locked %}<i data-lucide="lock" style="width:10px;height:10px;color:#aaa;"></i>{% endif %}
+                </div>
+                <span>{{ leg.departure_port.country_code|flag }} {{ leg.departure_port.locode }} → {{ leg.arrival_port.country_code|flag }} {{ leg.arrival_port.locode }}</span>
+            </a>
+            {% endfor %}
+            {% if not legs %}<span style="color:#888;font-size:13px;">Aucune traversée</span>{% endif %}
+        </div>
+
         <!-- Order status filter -->
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
-            <a href="/commercial?tab=orders" class="status-tab {% if not selected_status %}active{% endif %}" style="font-size:11px;">Tous</a>
+            <a href="/commercial?{{ base_params }}{% if leg_id %}&leg_id={{ leg_id }}{% endif %}" class="status-tab {% if not selected_status %}active{% endif %}" style="font-size:11px;">Tous</a>
             {% for k, v in statuses.items() %}
-            <a href="/commercial?tab=orders&status={{ k }}" class="status-tab {% if selected_status == k %}active{% endif %}" style="font-size:11px;">{{ v }}</a>
+            <a href="/commercial?{{ base_params }}&status={{ k }}{% if leg_id %}&leg_id={{ leg_id }}{% endif %}" class="status-tab {% if selected_status == k %}active{% endif %}" style="font-size:11px;">{{ v }}</a>
             {% endfor %}
         </div>
 

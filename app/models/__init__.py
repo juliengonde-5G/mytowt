@@ -8,7 +8,7 @@ from app.models.finance import PortConfig, OpexParameter, LegFinance, InsuranceC
 from app.models.emission_parameter import EmissionParameter
 from app.models.kpi import LegKPI
 from app.models.crew import CrewMember, CrewAssignment
-from app.models.packing_list import PackingList, PackingListBatch, PackingListAudit
+from app.models.packing_list import PackingList, PackingListBatch, PackingListAudit, PackingListDocument
 from app.models.onboard import SofEvent, OnboardNotification, CargoDocument
 from app.models.passenger import (
     Passenger, PassengerBooking, PassengerPayment, PassengerDocument,
@@ -22,6 +22,7 @@ from app.models.commercial import Client, RateGrid, RateGridLine, RateOffer
 from app.models.notification import Notification
 from app.models.portal_message import PortalMessage
 from app.models.vessel_position import VesselPosition
+from app.models.hold import HoldAssignment, HoldPlanConfirmation
 
 __all__ = [
     "User", "Port", "Vessel", "Leg",
@@ -30,7 +31,7 @@ __all__ = [
     "PortConfig", "OpexParameter", "LegFinance", "InsuranceContract",
     "EmissionParameter", "LegKPI",
     "CrewMember", "CrewAssignment",
-    "PackingList", "PackingListBatch", "PackingListAudit",
+    "PackingList", "PackingListBatch", "PackingListAudit", "PackingListDocument",
     "SofEvent", "OnboardNotification", "CargoDocument",
     "Passenger", "PassengerBooking", "PassengerPayment", "PassengerDocument",
     "CabinPriceGrid", "PreBoardingForm", "PassengerAuditLog",
@@ -42,4 +43,5 @@ __all__ = [
     "Notification",
     "PortalMessage",
     "VesselPosition",
+    "HoldAssignment", "HoldPlanConfirmation",
 ]

@@ -14,10 +14,45 @@
     <div class="pax-stat"><span class="pax-stat-val">{{ stats.embarked }}</span><span class="pax-stat-lbl">Embarqués</span></div>
 </div>
 
+{% set base_params = "vessel=" ~ selected_vessel ~ "&year=" ~ current_year %}
+<div class="planning-filters">
+    <div class="vessel-tabs">
+        {% for v in vessels %}
+        <a href="/passengers?vessel={{ v.code }}&year={{ current_year }}" class="vessel-tab {% if selected_vessel == v.code %}active{% endif %}">
+            <i data-lucide="ship"></i> {{ v.name }}
+        </a>
+        {% endfor %}
+    </div>
+    <div class="year-selector">
+        {% for y in years %}
+        <a href="/passengers?vessel={{ selected_vessel }}&year={{ y }}" class="year-btn {% if current_year == y %}active{% endif %}">{{ y }}</a>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="leg-selector">
+    <a href="/passengers?{{ base_params }}{% if selected_status %}&status={{ selected_status }}{% endif %}" class="leg-chip {% if not leg_id %}active{% endif %}">
+        <strong>Tous</strong>
+    </a>
+    {% for leg in legs %}
+    {% set terminated = leg.atd is not none %}
+    {% set locked = leg.status == 'completed' %}
+    <a href="/passengers?{{ base_params }}&leg_id={{ leg.id }}{% if selected_status %}&status={{ selected_status }}{% endif %}"
+       class="leg-chip {% if leg_id == leg.id %}active{% endif %} {% if terminated %}terminated{% endif %} {% if locked %}locked{% endif %}">
+        <div style="display:flex;align-items:center;gap:4px;">
+            <strong>{{ leg.leg_code }}</strong>
+            {% if locked %}<i data-lucide="lock" style="width:10px;height:10px;color:#aaa;"></i>{% endif %}
+        </div>
+        <span>{{ leg.departure_port.country_code|flag }} {{ leg.departure_port.locode }} → {{ leg.arrival_port.country_code|flag }} {{ leg.arrival_port.locode }}</span>
+    </a>
+    {% endfor %}
+    {% if not legs %}<span style="color:#888;font-size:13px;">Aucune traversée</span>{% endif %}
+</div>
+
 <div class="pax-filters">
-    <a href="/passengers" class="pax-filter-btn {% if not selected_status %}active{% endif %}">Toutes</a>
+    <a href="/passengers?{{ base_params }}{% if leg_id %}&leg_id={{ leg_id }}{% endif %}" class="pax-filter-btn {% if not selected_status %}active{% endif %}">Toutes</a>
     {% for code, label in booking_statuses %}
-    <a href="/passengers?status={{ code }}" class="pax-filter-btn {% if selected_status == code %}active{% endif %}">{{ label }}</a>
+    <a href="/passengers?{{ base_params }}&status={{ code }}{% if leg_id %}&leg_id={{ leg_id }}{% endif %}" class="pax-filter-btn {% if selected_status == code %}active{% endif %}">{{ label }}</a>
     {% endfor %}
 </div>
 
@@ -45,7 +80,7 @@
                 <span style="font-size:10px;color:#888;">{{ b.leg.departure_port.name }} → {{ b.leg.arrival_port.name }}</span>
                 {% endif %}
             </td>
-            <td><span class="cabin-badge cabin-{{ b.cabin_number }}">Cab. {{ b.cabin_number }} · {{ b.cabin_label }}</span></td>
+            <td><span class="cabin-badge cabin-{{ b.cabin_list[0] if b.cabin_list else 1 }}">Cab. {{ b.cabin_numbers or b.cabin_number }} · {{ b.cabin_label }}</span></td>
             <td><span class="status-pill st-{{ b.status }}">{{ b.status }}</span></td>
             <td>{{ "%.0f"|format(b.price_total|float or 0) }} €</td>
             <td>

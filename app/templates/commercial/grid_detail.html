@@ -35,6 +35,8 @@
                     </span>
                     <span style="color:#888;font-weight:500;">Navire</span>
                     <span>{{ grid.vessel.name if grid.vessel else 'Tous navires' }}</span>
+                    <span style="color:#888;font-weight:500;">Format palette</span>
+                    <span><span class="badge" style="font-size:10px;background:rgba(9,85,97,0.1);color:var(--towt-blue);">{{ grid.palette_format or 'EPAL' }}</span></span>
                     <span style="color:#888;font-weight:500;">Validité</span>
                     <span>{{ grid.valid_from }} → {{ grid.valid_to }}</span>
                     <span style="color:#888;font-weight:500;">Statut</span>
@@ -162,6 +164,9 @@
                                         <input type="hidden" name="status" value="rejected">
                                         <button type="submit" class="btn btn-sm" style="font-size:11px;background:#e74c3c;color:#fff;">Refusée</button>
                                     </form>
+                                    {% endif %}
+                                    {% if offer.status in ('accepted', 'sent') %}
+                                    <a href="/commercial/pricing/offers/{{ offer.id }}/create-order" class="btn btn-sm" style="font-size:11px;background:var(--towt-blue);color:#fff;"><i data-lucide="package" style="width:12px;height:12px;"></i> Générer ordre</a>
                                     {% endif %}
                                 </div>
                             </td>

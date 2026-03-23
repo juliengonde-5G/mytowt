@@ -13,6 +13,9 @@ NOTIFICATION_TYPES = [
     ("new_passenger_booking", "Nouvelle réservation passager"),
     ("new_claim", "Nouveau claim ouvert"),
     ("eta_shift", "Décalage ETA signalé par le commandant"),
+    ("planning_create", "Nouvelle traversée créée"),
+    ("planning_update", "Traversée modifiée"),
+    ("planning_delete", "Traversée supprimée"),
 ]
 
 NOTIFICATION_ICONS = {
@@ -24,6 +27,9 @@ NOTIFICATION_ICONS = {
     "new_passenger_booking": "🎫",
     "new_claim": "⚠️",
     "eta_shift": "🕐",
+    "planning_create": "🗺️",
+    "planning_update": "✏️",
+    "planning_delete": "🗑️",
 }
 
 

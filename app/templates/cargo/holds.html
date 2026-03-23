@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}TOWT - Plan de cales — {{ pl.order.reference }}{% endblock %}
+{% block page_title %}Plan de cales — {{ pl.order.reference }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/cargo/{{ pl.id }}" class="btn btn-secondary btn-sm"><i data-lucide="arrow-left"></i> Retour PL</a>
+<a href="/cargo/{{ pl.id }}/holds/report" class="btn btn-secondary btn-sm"><i data-lucide="file-text"></i> Rapport PDF</a>
+{% endblock %}
+
+{% block content %}
+<div class="holds-page">
+
+    <!-- Summary bar -->
+    <div class="summary-bar">
+        <div class="summary-item"><span class="summary-label">Commande</span><span class="summary-value" style="font-family:monospace;">{{ pl.order.reference }}</span></div>
+        <div class="summary-item"><span class="summary-label">Client</span><span class="summary-value">{{ pl.order.client_name }}</span></div>
+        <div class="summary-item"><span class="summary-label">Voyage</span><span class="summary-value">{{ leg.leg_code }} — {{ leg.vessel.name }}</span></div>
+        <div class="summary-item"><span class="summary-label">Route</span><span class="summary-value">{{ leg.departure_port.country_code|flag }} {{ leg.departure_port.locode }} → {{ leg.arrival_port.country_code|flag }} {{ leg.arrival_port.locode }}</span></div>
+        {% if pl.order.preferred_holds %}
+        <div class="summary-item"><span class="summary-label">Cales souhaitées</span><span class="summary-value" style="color:#D97706;">{{ pl.order.preferred_holds.replace(',', ', ') }}</span></div>
+        {% endif %}
+        {% if confirmation %}
+        <div class="summary-item"><span class="summary-label">Confirmé</span><span class="summary-value" style="color:#16a34a;">✓ {{ confirmation.confirmed_by }} · {{ confirmation.confirmed_at.strftime('%d/%m %H:%M') }}</span></div>
+        {% endif %}
+    </div>
+
+    <!-- HOLD VISUAL — Vue longitudinale -->
+    <div class="hold-visual-section">
+        <h3 style="font-size:14px;margin:0 0 16px;color:var(--towt-blue);">Plan de cales — Vue longitudinale</h3>
+        <div class="hold-ship-wrapper">
+            <div class="hold-ship-label left">← AVANT (PROUE)</div>
+            <div class="hold-ship-grid">
+                <div class="hold-col-header"></div>
+                <div class="hold-col-header">CALE AVANT</div>
+                <div class="hold-col-header">CALE ARRIÈRE</div>
+
+                <!-- SUP row -->
+                <div class="hold-row-label">SUP.</div>
+                {% for hc in ["SUP_AV", "SUP_AR"] %}
+                {% set hs = hold_summary[hc] %}
+                <div class="hold-cell {{ 'empty' if hs.total_palettes == 0 else ('low' if hs.fill_pct < 30 else ('mid' if hs.fill_pct < 60 else ('high' if hs.fill_pct < 90 else 'full'))) }}">
+                    <div class="hold-cell-pct">{{ hs.fill_pct }}%</div>
+                    <div class="hold-cell-count">{{ hs.total_palettes }}/{{ hs.capacity }}</div>
+                    {% set clients = [] %}
+                    {% for a in hs.assignments %}
+                    {% for b in pl.batches if b.id == a.batch_id and b.customer_name and b.customer_name not in clients %}
+                    {% if clients.append(b.customer_name) %}{% endif %}
+                    {% endfor %}
+                    {% endfor %}
+                    {% if clients %}<div class="hold-cell-client">{{ clients|join(', ') }}</div>{% endif %}
+                    <div class="hold-cell-bar"><div class="hold-cell-fill" style="width:{{ hs.fill_pct }}%"></div></div>
+                </div>
+                {% endfor %}
+
+                <!-- INT row -->
+                <div class="hold-row-label">INT.</div>
+                {% for hc in ["INT_AV", "INT_AR"] %}
+                {% set hs = hold_summary[hc] %}
+                <div class="hold-cell {{ 'empty' if hs.total_palettes == 0 else ('low' if hs.fill_pct < 30 else ('mid' if hs.fill_pct < 60 else ('high' if hs.fill_pct < 90 else 'full'))) }}">
+                    <div class="hold-cell-pct">{{ hs.fill_pct }}%</div>
+                    <div class="hold-cell-count">{{ hs.total_palettes }}/{{ hs.capacity }}</div>
+                    {% set clients = [] %}
+                    {% for a in hs.assignments %}
+                    {% for b in pl.batches if b.id == a.batch_id and b.customer_name and b.customer_name not in clients %}
+                    {% if clients.append(b.customer_name) %}{% endif %}
+                    {% endfor %}
+                    {% endfor %}
+                    {% if clients %}<div class="hold-cell-client">{{ clients|join(', ') }}</div>{% endif %}
+                    <div class="hold-cell-bar"><div class="hold-cell-fill" style="width:{{ hs.fill_pct }}%"></div></div>
+                </div>
+                {% endfor %}
+
+                <!-- INF row -->
+                <div class="hold-row-label">INF.</div>
+                {% for hc in ["INF_AV", "INF_AR"] %}
+                {% set hs = hold_summary[hc] %}
+                <div class="hold-cell {{ 'empty' if hs.total_palettes == 0 else ('low' if hs.fill_pct < 30 else ('mid' if hs.fill_pct < 60 else ('high' if hs.fill_pct < 90 else 'full'))) }}">
+                    <div class="hold-cell-pct">{{ hs.fill_pct }}%</div>
+                    <div class="hold-cell-count">{{ hs.total_palettes }}/{{ hs.capacity }}</div>
+                    {% set clients = [] %}
+                    {% for a in hs.assignments %}
+                    {% for b in pl.batches if b.id == a.batch_id and b.customer_name and b.customer_name not in clients %}
+                    {% if clients.append(b.customer_name) %}{% endif %}
+                    {% endfor %}
+                    {% endfor %}
+                    {% if clients %}<div class="hold-cell-client">{{ clients|join(', ') }}</div>{% endif %}
+                    <div class="hold-cell-bar"><div class="hold-cell-fill" style="width:{{ hs.fill_pct }}%"></div></div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="hold-ship-label right">ARRIÈRE (POUPE) →</div>
+        </div>
+
+        <div class="hold-legend">
+            <span class="hold-legend-item"><span class="hold-dot empty"></span> Vide</span>
+            <span class="hold-legend-item"><span class="hold-dot low"></span> &lt;30%</span>
+            <span class="hold-legend-item"><span class="hold-dot mid"></span> 30–60%</span>
+            <span class="hold-legend-item"><span class="hold-dot high"></span> 60–90%</span>
+            <span class="hold-legend-item"><span class="hold-dot full"></span> Plein</span>
+        </div>
+    </div>
+
+    <!-- BATCH ASSIGNMENT FORM -->
+    <div class="hold-assign-section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h3 style="font-size:14px;margin:0;">Affectation des batchs aux cales</h3>
+            <div style="display:flex;gap:8px;">
+                <form method="POST" action="/cargo/{{ pl.id }}/holds/suggest" style="display:inline;">
+                    <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="wand-2"></i> Suggestion auto</button>
+                </form>
+            </div>
+        </div>
+
+        <form method="POST" action="/cargo/{{ pl.id }}/holds/save">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Batch</th>
+                        <th>Client</th>
+                        <th>Marchandise</th>
+                        <th>Type palette</th>
+                        <th>Palettes</th>
+                        <th>Stackable</th>
+                        <th>Cale affectée</th>
+                        <th>Qté affectée</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for batch in pl.batches %}
+                {% set ba = batch_assignments.get(batch.id) %}
+                <tr>
+                    <td><strong>#{{ batch.batch_number }}</strong></td>
+                    <td>{{ batch.customer_name or '—' }}</td>
+                    <td>{{ batch.type_of_goods or '—' }}</td>
+                    <td>{{ batch.pallet_type or '—' }}</td>
+                    <td><strong>{{ batch.pallet_quantity or 0 }}</strong></td>
+                    <td>{{ batch.stackable or '—' }}</td>
+                    <td>
+                        <select name="hold_{{ batch.id }}" class="fi-sm">
+                            <option value="">— Non affecté —</option>
+                            {% for hc, hl in hold_codes %}
+                            <option value="{{ hc }}" {% if ba and ba.hold_code == hc %}selected{% endif %}>{{ hl }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" name="qty_{{ batch.id }}" value="{{ ba.pallet_quantity if ba else (batch.pallet_quantity or '') }}" class="fi-sm" style="width:80px;" min="0">
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+                <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Enregistrer les affectations</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- CONFIRMATION -->
+    <div class="hold-confirm-section">
+        <h3 style="font-size:14px;margin:0 0 12px;">Confirmation du plan de cales</h3>
+        {% if confirmation %}
+        <div class="hold-confirmed-badge">
+            ✓ Plan confirmé par <strong>{{ confirmation.confirmed_by }}</strong> le {{ confirmation.confirmed_at.strftime('%d/%m/%Y à %H:%M') }}
+            {% if confirmation.notes %}<br><span style="color:#666;font-size:11px;">{{ confirmation.notes }}</span>{% endif %}
+        </div>
+        {% endif %}
+        <form method="POST" action="/cargo/{{ pl.id }}/holds/confirm" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
+            <div style="flex:1;min-width:200px;">
+                <label class="field-label">Notes (optionnel)</label>
+                <input type="text" name="notes" class="form-input" placeholder="Remarques sur le plan de cales..." value="{{ confirmation.notes if confirmation else '' }}">
+            </div>
+            <button type="submit" class="btn btn-primary"><i data-lucide="check-circle"></i> {{ 'Reconfirmer' if confirmation else 'Confirmer le plan' }}</button>
+        </form>
+    </div>
+
+</div>
+
+<style>
+    .holds-page{max-width:1200px}
+    .summary-bar{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px;display:flex;gap:24px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+    .summary-item{display:flex;flex-direction:column;gap:2px}.summary-label{font-size:10px;text-transform:uppercase;font-weight:600;color:#888}.summary-value{font-size:13px;font-weight:500}
+
+    /* Hold visual */
+    .hold-visual-section{background:linear-gradient(135deg,#0a1628 0%,#162a3e 100%);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:24px;margin-bottom:16px;color:white}
+    .hold-visual-section h3{color:#7fdbca !important}
+    .hold-ship-wrapper{display:flex;align-items:center;gap:16px}
+    .hold-ship-label{font-size:11px;color:rgba(127,219,202,0.6);font-weight:600;text-transform:uppercase;writing-mode:horizontal-tb;white-space:nowrap}
+    .hold-ship-grid{display:grid;grid-template-columns:50px 1fr 1fr;gap:8px;flex:1}
+    .hold-col-header{text-align:center;font-size:12px;font-weight:700;color:#7fdbca;padding:4px 0}
+    .hold-row-label{display:flex;align-items:center;font-size:11px;font-weight:700;color:rgba(127,219,202,0.7)}
+
+    .hold-cell{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;text-align:center;min-height:80px;display:flex;flex-direction:column;justify-content:center;gap:2px;transition:all .2s}
+    .hold-cell:hover{background:rgba(255,255,255,0.1);border-color:rgba(127,219,202,0.3)}
+    .hold-cell.empty{opacity:0.5}
+    .hold-cell-pct{font-size:20px;font-weight:800;color:white}
+    .hold-cell.low .hold-cell-pct{color:#FBBF24}
+    .hold-cell.mid .hold-cell-pct{color:#60A5FA}
+    .hold-cell.high .hold-cell-pct{color:#34D399}
+    .hold-cell.full .hold-cell-pct{color:#87BD2B}
+    .hold-cell-count{font-size:11px;color:rgba(255,255,255,0.5)}
+    .hold-cell-client{font-size:10px;color:#7fdbca;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;margin:0 auto}
+    .hold-cell-bar{width:100%;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin-top:4px;overflow:hidden}
+    .hold-cell-fill{height:100%;border-radius:2px;transition:width .3s}
+    .hold-cell.empty .hold-cell-fill{background:#6B7280}
+    .hold-cell.low .hold-cell-fill{background:#FBBF24}
+    .hold-cell.mid .hold-cell-fill{background:#60A5FA}
+    .hold-cell.high .hold-cell-fill{background:#34D399}
+    .hold-cell.full .hold-cell-fill{background:#87BD2B}
+
+    .hold-legend{display:flex;gap:16px;margin-top:16px;justify-content:center}
+    .hold-legend-item{display:flex;align-items:center;gap:4px;font-size:11px;color:rgba(255,255,255,0.6)}
+    .hold-dot{width:10px;height:10px;border-radius:50%}
+    .hold-dot.empty{background:#6B7280}.hold-dot.low{background:#FBBF24}.hold-dot.mid{background:#60A5FA}.hold-dot.high{background:#34D399}.hold-dot.full{background:#87BD2B}
+
+    /* Assignment form */
+    .hold-assign-section{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:20px;margin-bottom:16px}
+    .hold-assign-section .fi-sm{padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:Poppins,system-ui,sans-serif}
+
+    /* Confirmation */
+    .hold-confirm-section{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:20px}
+    .hold-confirmed-badge{background:#ECFDF5;color:#16a34a;padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:12px;border:1px solid #A7F3D0}
+</style>
+{% endblock %}
