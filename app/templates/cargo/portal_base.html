@@ -84,6 +84,8 @@ body{font-family:'Poppins',sans-serif;background:#f4f7f8;color:#333;min-height:1
       <div class="ndiv"></div>
       <a href="/p/{{ pl.token }}/documents?lang={{ lang }}" class="{% if active_page=='docs' %}active{% endif %}"><span class="ni">📄</span>{{ t('cp_documents', lang) }}</a>
       <a href="/p/{{ pl.token }}/messages?lang={{ lang }}" class="{% if active_page=='messages' %}active{% endif %}"><span class="ni">💬</span>{{ t('cp_messages', lang) }}{% if unread_messages %}<span class="nbdg">{{ unread_messages }}</span>{% endif %}</a>
+      <div class="ndiv"></div>
+      <a href="/p/{{ pl.token }}/guide?lang={{ lang }}" class="{% if active_page=='guide' %}active{% endif %}"><span class="ni">📖</span>{{ t('cp_guide', lang) }}</a>
     </nav>
     <div class="psf">
       TOWT — Les Docks, 52 quai Frissard<br>76600 Le Havre

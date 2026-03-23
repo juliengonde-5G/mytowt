@@ -169,7 +169,7 @@
 
                     <div class="section-title">📦 {{ t('pl_goods_section', lang) }}</div>
                     <div class="form-grid">
-                        <div class="form-group"><label class="form-label">Type de palette</label>
+                        <div class="form-group"><label class="form-label">Type de palette <span style="color:#f59e0b;font-size:10px;font-style:italic;">(recommandé)</span></label>
                             <select name="{{ p }}pallet_type" class="form-select">
                                 <option value="">—</option>
                                 <option value="EPAL" {% if batch.pallet_type == 'EPAL' %}selected{% endif %}>EPAL (80×120)</option>
@@ -207,6 +207,9 @@
                         <div class="form-group"><label class="form-label">Largeur (cm) *</label><input type="text" name="{{ p }}width_cm" class="form-input" value="{{ batch.width_cm or '' }}" required><span class="field-help">Outer pallet width incl. packaging</span></div>
                         <div class="form-group"><label class="form-label">Hauteur (cm) *</label><input type="text" name="{{ p }}height_cm" class="form-input" value="{{ batch.height_cm or '' }}" required><span class="field-help">Total height from floor to top of goods, pallet included</span></div>
                         <div class="form-group"><label class="form-label">Poids brut (kg) *</label><input type="text" name="{{ p }}weight_kg" class="form-input" value="{{ batch.weight_kg or '' }}" required><span class="field-help">Gross weight per pallet: goods + pallet + wrapping</span></div>
+                    </div>
+                    <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 14px;margin-top:8px;font-size:12px;line-height:1.5;color:#92400e;">
+                        <strong>⚠️ Important :</strong> La hauteur maximale autorisée par palette est de 190 cm. Les palettes excédant cette hauteur seront soumises à validation par le Responsable Opérations et le Commandant lors du chargement. Des frais supplémentaires pourront être facturés.
                     </div>
                     {% endif %}
                 </div>

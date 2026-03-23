@@ -80,13 +80,13 @@
       <div class="fgi full"><label class="fl">{{ t('f_shipper_address', lang) }} *</label><textarea name="{{ p }}shipper_address" class="ft">{{ batch.shipper_address or '' }}</textarea></div>
       <div class="fgi"><label class="fl">{{ t('f_po_number', lang) }}</label><input type="text" name="{{ p }}po_number" class="fi" value="{{ batch.po_number or '' }}"></div>
       <div class="fgi"><label class="fl">{{ t('f_batch_id', lang) }}</label><input type="text" name="{{ p }}customer_batch_id" class="fi" value="{{ batch.customer_batch_id or '' }}"></div>
-      <div class="fgi full"><label class="fl">{{ t('f_notify_address', lang) }}</label><textarea name="{{ p }}notify_address" class="ft">{{ batch.notify_address or '' }}</textarea></div>
+      <div class="fgi full"><label class="fl">{{ t('f_notify_address', lang) }} *</label><textarea name="{{ p }}notify_address" class="ft" required>{{ batch.notify_address or '' }}</textarea></div>
       <div class="fgi full"><label class="fl">{{ t('f_consignee_address', lang) }} *</label><textarea name="{{ p }}consignee_address" class="ft">{{ batch.consignee_address or '' }}</textarea></div>
     </div>
 
     <div class="st">📦 {{ t('pl_goods_section', lang) }}</div>
     <div class="fg">
-      <div class="fgi"><label class="fl">{{ t('f_pallet_type', lang) }}</label>
+      <div class="fgi"><label class="fl">{{ t('f_pallet_type', lang) }} <span style="color:#f59e0b;font-size:10px;">({{ t('guide_recommended', lang) }})</span></label>
         <select name="{{ p }}pallet_type" class="fs" onchange="autoPalletDims(this, '{{ p }}')">
           <option value="">—</option>
           <option value="EPAL" {% if batch.pallet_type=='EPAL' %}selected{% endif %}>EPAL (80×120)</option>
@@ -128,10 +128,13 @@
 
     <div class="st">📐 {{ t('pl_dimensions_section', lang) }}</div>
     <div class="fg">
-      <div class="fgi"><label class="fl">{{ t('f_length', lang) }}</label><input type="text" name="{{ p }}length_cm" class="fi" value="{{ batch.length_cm or '' }}"></div>
-      <div class="fgi"><label class="fl">{{ t('f_width', lang) }}</label><input type="text" name="{{ p }}width_cm" class="fi" value="{{ batch.width_cm or '' }}"></div>
-      <div class="fgi"><label class="fl">{{ t('f_height', lang) }}</label><input type="text" name="{{ p }}height_cm" class="fi" value="{{ batch.height_cm or '' }}"></div>
-      <div class="fgi"><label class="fl">{{ t('f_weight', lang) }} *</label><input type="text" name="{{ p }}weight_kg" class="fi" value="{{ batch.weight_kg or '' }}"></div>
+      <div class="fgi"><label class="fl">{{ t('f_length', lang) }} *</label><input type="text" name="{{ p }}length_cm" class="fi" value="{{ batch.length_cm or '' }}" required></div>
+      <div class="fgi"><label class="fl">{{ t('f_width', lang) }} *</label><input type="text" name="{{ p }}width_cm" class="fi" value="{{ batch.width_cm or '' }}" required></div>
+      <div class="fgi"><label class="fl">{{ t('f_height', lang) }} *</label><input type="text" name="{{ p }}height_cm" class="fi" value="{{ batch.height_cm or '' }}" required></div>
+      <div class="fgi"><label class="fl">{{ t('f_weight', lang) }} *</label><input type="text" name="{{ p }}weight_kg" class="fi" value="{{ batch.weight_kg or '' }}" required></div>
+    </div>
+    <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 14px;margin-top:8px;font-size:12px;line-height:1.5;color:#92400e;">
+      <strong>⚠️</strong> {{ t('guide_height_warning', lang) }}
     </div>
     {% endif %}
   </div>

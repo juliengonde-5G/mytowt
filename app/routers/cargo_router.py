@@ -21,7 +21,7 @@ from app.models.portal_message import PortalMessage
 from app.utils.notifications import notify_cargo_progress
 from app.routers.kpi_router import compute_decarbonation, get_co2_variables
 from app.models.crew import CrewAssignment, CrewMember
-from app.i18n import get_lang_from_request
+from app.i18n import get_lang_from_request, SUPPORTED_LANGUAGES
 
 router = APIRouter(prefix="/cargo", tags=["cargo"])
 
@@ -450,7 +450,9 @@ async def bill_of_lading(
         raise HTTPException(500, detail="Template BOL non trouvé")
 
     # Use batch-specific data
-    bl_id = batch.bill_of_lading_id or f"{pl.order.reference}_B{batch.batch_number:02d}"
+    # BL format: TUAW_{voyage_id}_{bl_no}
+    voyage_id = pl.order.leg.leg_code if pl.order.leg else "NOVOY"
+    bl_id = batch.bill_of_lading_id or f"TUAW_{voyage_id}_{batch.batch_number:02d}"
 
     shipper_full = batch.shipper_name or ""
     if batch.shipper_address:
@@ -469,6 +471,9 @@ async def bill_of_lading(
         "Nombre_de_PALLET_ID": str(batch.pallet_quantity or 0) if batch.pallet_quantity else "—",
         "Maximum_de_WEIGHT_KG": str(int(batch.weight_kg or 0)) if batch.weight_kg else "—",
         "TYPE_OF_GOODS": batch.type_of_goods or "—",
+        "DESCRIPTION_OF_GOODS": batch.description_of_goods or batch.type_of_goods or "—",
+        "NUMBER_OF_OBL": "3",
+        "PACKAGES": f"{batch.pallet_quantity or 0} palettes" if batch.pallet_quantity else "—",
     }
 
     # Clone template and do replacement in document.xml
@@ -1432,6 +1437,19 @@ async def client_portal_packing(token: str, request: Request, db: AsyncSession =
         "request": request, "pl": pl, "imo_classes": IMO_CLASSES,
         "lang": lang, "active_page": "packing",
         "unread_messages": await _unread_count(pl.id, db),
+    })
+
+
+# ── Page: Guide ──────────────────────────────────────────────
+@ext_router.get("/{token}/guide", response_class=HTMLResponse)
+async def client_portal_guide(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db)
+    lang = _lang(request)
+    return templates.TemplateResponse("cargo/client_guide.html", {
+        "request": request, "pl": pl, "token": token,
+        "lang": lang, "active_page": "guide", "page_suffix": "/guide",
+        "unread_messages": await _unread_count(pl.id, db),
+        "SUPPORTED_LANGUAGES": SUPPORTED_LANGUAGES,
     })
 
 
