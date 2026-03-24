@@ -125,37 +125,69 @@ async def onboard_home(
             )
             crew_onboard = crew_result.scalars().all()
 
-            # ─── CARGO summary ───
+            # ─── CARGO summary (IMPORT = current leg, EXPORT = next leg) ───
+            # Import: cargo arriving on current leg (to be unloaded)
             orders_result = await db.execute(
                 select(Order).where(Order.leg_id == current_leg.id, Order.status != "annule")
             )
-            orders = orders_result.scalars().all()
-            order_ids = [o.id for o in orders]
+            orders_import = orders_result.scalars().all()
+            order_ids_import = [o.id for o in orders_import]
 
-            total_palettes = sum(o.quantity_palettes or 0 for o in orders)
-            total_orders = len(orders)
-
-            batches = []
-            if order_ids:
+            batches_import = []
+            if order_ids_import:
                 pl_result = await db.execute(
                     select(PackingList).options(selectinload(PackingList.batches))
-                    .where(PackingList.order_id.in_(order_ids))
+                    .where(PackingList.order_id.in_(order_ids_import))
                 )
-                pls = pl_result.scalars().all()
-                for pl in pls:
-                    batches.extend(pl.batches)
+                for pl in pl_result.scalars().all():
+                    batches_import.extend(pl.batches)
 
-            total_weight = sum(b.weight_kg or 0 for b in batches)
-            total_batch_palettes = sum(b.pallet_quantity or 0 for b in batches)
-            goods_types = list(set(b.type_of_goods for b in batches if b.type_of_goods))
+            cargo_import = {
+                "orders": len(orders_import),
+                "palettes_ordered": sum(o.quantity_palettes or 0 for o in orders_import),
+                "palettes_batches": sum(b.pallet_quantity or 0 for b in batches_import),
+                "weight_kg": sum(b.weight_kg or 0 for b in batches_import),
+                "goods_types": list(set(b.type_of_goods for b in batches_import if b.type_of_goods)),
+                "batches_count": len(batches_import),
+            }
 
+            # Export: cargo to be loaded for next leg departure
+            orders_export = []
+            batches_export = []
+            if next_leg:
+                export_result = await db.execute(
+                    select(Order).where(Order.leg_id == next_leg.id, Order.status != "annule")
+                )
+                orders_export = export_result.scalars().all()
+                order_ids_export = [o.id for o in orders_export]
+                if order_ids_export:
+                    pl_result = await db.execute(
+                        select(PackingList).options(selectinload(PackingList.batches))
+                        .where(PackingList.order_id.in_(order_ids_export))
+                    )
+                    for pl in pl_result.scalars().all():
+                        batches_export.extend(pl.batches)
+
+            cargo_export = {
+                "orders": len(orders_export),
+                "palettes_ordered": sum(o.quantity_palettes or 0 for o in orders_export),
+                "palettes_batches": sum(b.pallet_quantity or 0 for b in batches_export),
+                "weight_kg": sum(b.weight_kg or 0 for b in batches_export),
+                "goods_types": list(set(b.type_of_goods for b in batches_export if b.type_of_goods)),
+                "batches_count": len(batches_export),
+                "batches": batches_export,
+            }
+
+            # Legacy combined summary (used by hold plan)
+            all_orders = orders_import + orders_export
+            all_batches = batches_import + batches_export
             cargo_summary = {
-                "orders": total_orders,
-                "palettes_ordered": total_palettes,
-                "palettes_batches": total_batch_palettes,
-                "weight_kg": total_weight,
-                "goods_types": goods_types,
-                "batches_count": len(batches),
+                "orders": len(all_orders),
+                "palettes_ordered": sum(o.quantity_palettes or 0 for o in all_orders),
+                "palettes_batches": sum(b.pallet_quantity or 0 for b in all_batches),
+                "weight_kg": sum(b.weight_kg or 0 for b in all_batches),
+                "goods_types": list(set(b.type_of_goods for b in all_batches if b.type_of_goods)),
+                "batches_count": len(all_batches),
             }
 
             # ─── HOLD ASSIGNMENTS ───
@@ -206,9 +238,12 @@ async def onboard_home(
             sof_events = sof_result.scalars().all()
             last_sof = sof_events[-1] if sof_events else None
 
-            # ─── Notifications ───
+            # ─── Notifications (current leg + next leg for export cargo) ───
+            notif_leg_ids = [current_leg.id]
+            if next_leg:
+                notif_leg_ids.append(next_leg.id)
             notif_result = await db.execute(
-                select(OnboardNotification).where(OnboardNotification.leg_id == current_leg.id)
+                select(OnboardNotification).where(OnboardNotification.leg_id.in_(notif_leg_ids))
                 .order_by(OnboardNotification.created_at.desc())
             )
             notifications = notif_result.scalars().all()
@@ -257,6 +292,8 @@ async def onboard_home(
         "legs": legs, "current_leg": current_leg, "next_leg": next_leg,
         "crew_onboard": crew_onboard,
         "cargo_summary": cargo_summary,
+        "cargo_import": cargo_import if current_leg else {},
+        "cargo_export": cargo_export if current_leg else {},
         "sof_events": sof_events, "last_sof": last_sof,
         "notifications": notifications,
         "pax_bookings": pax_bookings,
@@ -1382,3 +1419,19 @@ async def generate_archive(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  GUIDE COMMANDANT
+# ═══════════════════════════════════════════════════════════════
+@router.get("/guide", response_class=HTMLResponse)
+async def onboard_guide(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    from app.permissions import can_view
+    if not can_view(user, "captain"):
+        raise HTTPException(status_code=403)
+    return templates.TemplateResponse("onboard/guide.html", {
+        "request": request, "user": user,
+    })

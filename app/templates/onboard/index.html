@@ -209,20 +209,78 @@
     </div>
 
     <div class="ob-card">
-        <h3>📦 Cargo <span class="ob-badge">{{ cargo_summary.get('orders', 0) }} cmd.</span></h3>
-        {% if cargo_summary.get('orders', 0) > 0 %}
-        <div class="ob-stats-grid">
-            <div class="ob-stat"><span class="ob-stat-val">{{ cargo_summary.palettes_ordered }}</span><span class="ob-stat-lbl">Pal. cmdées</span></div>
-            <div class="ob-stat"><span class="ob-stat-val">{{ cargo_summary.palettes_batches }}</span><span class="ob-stat-lbl">Pal. batchs</span></div>
-            <div class="ob-stat"><span class="ob-stat-val">{{ "%.0f"|format(cargo_summary.weight_kg) }} kg</span><span class="ob-stat-lbl">Poids total</span></div>
-            <div class="ob-stat"><span class="ob-stat-val">{{ cargo_summary.batches_count }}</span><span class="ob-stat-lbl">Batchs</span></div>
+        <h3>📦 Cargo</h3>
+        <!-- Tabs: Déchargement (import) / Chargement (export) -->
+        <div class="cargo-dir-tabs">
+            <button class="cargo-dir-tab active" onclick="switchCargoTab('import', this)">
+                ⬇️ Déchargement <span class="ob-badge">{{ cargo_import.get('orders', 0) }} cmd.</span>
+            </button>
+            <button class="cargo-dir-tab" onclick="switchCargoTab('export', this)">
+                ⬆️ Chargement <span class="ob-badge">{{ cargo_export.get('orders', 0) }} cmd.</span>
+            </button>
         </div>
-        {% if cargo_summary.goods_types %}
-        <div style="margin-top:8px;font-size:11px;color:#666;"><strong>Nature :</strong> {{ cargo_summary.goods_types|join(', ') }}</div>
-        {% endif %}
-        {% else %}
-        <p class="ob-empty">Aucune commande assignée.</p>
-        {% endif %}
+
+        <!-- IMPORT panel (unloading from current leg) -->
+        <div id="cargo-panel-import" class="cargo-dir-panel">
+            {% if cargo_import.get('orders', 0) > 0 %}
+            <div class="cargo-dir-label">
+                <span class="cargo-dir-icon import">⬇️</span>
+                Arrivée leg <strong>{{ current_leg.leg_code }}</strong> — {{ current_leg.departure_port.locode }} → {{ current_leg.arrival_port.locode }}
+            </div>
+            <div class="ob-stats-grid">
+                <div class="ob-stat"><span class="ob-stat-val">{{ cargo_import.palettes_ordered }}</span><span class="ob-stat-lbl">Pal. cmdées</span></div>
+                <div class="ob-stat"><span class="ob-stat-val">{{ cargo_import.palettes_batches }}</span><span class="ob-stat-lbl">Pal. batchs</span></div>
+                <div class="ob-stat"><span class="ob-stat-val">{{ "%.0f"|format(cargo_import.weight_kg) }} kg</span><span class="ob-stat-lbl">Poids total</span></div>
+                <div class="ob-stat"><span class="ob-stat-val">{{ cargo_import.batches_count }}</span><span class="ob-stat-lbl">Batchs</span></div>
+            </div>
+            {% if cargo_import.goods_types %}
+            <div style="margin-top:8px;font-size:11px;color:#666;"><strong>Nature :</strong> {{ cargo_import.goods_types|join(', ') }}</div>
+            {% endif %}
+            {% else %}
+            <p class="ob-empty">Aucune cargaison à décharger sur ce leg.</p>
+            {% endif %}
+        </div>
+
+        <!-- EXPORT panel (loading for next leg) -->
+        <div id="cargo-panel-export" class="cargo-dir-panel" style="display:none;">
+            {% if cargo_export.get('orders', 0) > 0 %}
+            <div class="cargo-dir-label">
+                <span class="cargo-dir-icon export">⬆️</span>
+                Départ leg <strong>{{ next_leg.leg_code }}</strong> — {{ next_leg.departure_port.locode }} → {{ next_leg.arrival_port.locode }}
+            </div>
+            <div class="ob-stats-grid">
+                <div class="ob-stat"><span class="ob-stat-val">{{ cargo_export.palettes_ordered }}</span><span class="ob-stat-lbl">Pal. cmdées</span></div>
+                <div class="ob-stat"><span class="ob-stat-val">{{ cargo_export.palettes_batches }}</span><span class="ob-stat-lbl">Pal. batchs</span></div>
+                <div class="ob-stat"><span class="ob-stat-val">{{ "%.0f"|format(cargo_export.weight_kg) }} kg</span><span class="ob-stat-lbl">Poids total</span></div>
+                <div class="ob-stat"><span class="ob-stat-val">{{ cargo_export.batches_count }}</span><span class="ob-stat-lbl">Batchs</span></div>
+            </div>
+            {% if cargo_export.goods_types %}
+            <div style="margin-top:8px;font-size:11px;color:#666;"><strong>Nature :</strong> {{ cargo_export.goods_types|join(', ') }}</div>
+            {% endif %}
+
+            {% if cargo_export.get('batches') %}
+            <details style="margin-top:10px;">
+                <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#095561;">Détail des lots à charger</summary>
+                <table class="ob-table" style="font-size:11px;margin-top:6px;">
+                    <thead><tr><th>Client</th><th>Marchandise</th><th>Pal.</th><th>Poids</th><th>Statut PL</th></tr></thead>
+                    <tbody>
+                    {% for b in cargo_export.batches %}
+                    <tr>
+                        <td>{{ b.customer_name or '—' }}</td>
+                        <td>{{ b.type_of_goods or '—' }}</td>
+                        <td>{{ b.pallet_quantity or 0 }}</td>
+                        <td>{{ "%.0f"|format(b.weight_kg or 0) }} kg</td>
+                        <td><span class="ob-badge" style="font-size:9px;">{{ b.packing_list.status if b.packing_list else '—' }}</span></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </details>
+            {% endif %}
+            {% else %}
+            <p class="ob-empty">{% if next_leg %}Aucune cargaison à charger pour le prochain leg.{% else %}Pas de leg suivant planifié.{% endif %}</p>
+            {% endif %}
+        </div>
     </div>
 
     <div class="ob-card ob-card-pax">
@@ -999,8 +1057,26 @@
     .ob-modal-close:hover{background:#f0f0f0;color:#333}
     .ob-modal-body{padding:20px}
     @media(max-width:600px){.eta-shift-grid{grid-template-columns:1fr}.doc-cat-grid{grid-template-columns:1fr}}
+
+    /* Cargo direction tabs */
+    .cargo-dir-tabs{display:flex;gap:4px;margin-bottom:12px;border-bottom:2px solid #f0f0f0;padding-bottom:0}
+    .cargo-dir-tab{background:none;border:none;padding:8px 14px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px;display:flex;align-items:center;gap:6px;transition:all .15s}
+    .cargo-dir-tab:hover{color:#095561;background:#f0f7f8;border-radius:6px 6px 0 0}
+    .cargo-dir-tab.active{color:#095561;border-bottom-color:#095561}
+    .cargo-dir-tab .ob-badge{font-size:10px}
+    .cargo-dir-label{display:flex;align-items:center;gap:8px;font-size:12px;color:#555;background:#f8fafb;padding:8px 12px;border-radius:8px;margin-bottom:10px}
+    .cargo-dir-icon{font-size:16px}
+    .cargo-dir-icon.import{color:#dc2626}
+    .cargo-dir-icon.export{color:#16a34a}
 </style>
 <script>
+// Cargo direction tab switching
+function switchCargoTab(dir, btn) {
+    document.querySelectorAll('.cargo-dir-tab').forEach(function(t){t.classList.remove('active')});
+    btn.classList.add('active');
+    document.getElementById('cargo-panel-import').style.display = dir === 'import' ? '' : 'none';
+    document.getElementById('cargo-panel-export').style.display = dir === 'export' ? '' : 'none';
+}
 // Pre-fill SOF date and time with current values
 (function(){
     var now = new Date();
