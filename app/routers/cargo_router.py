@@ -566,6 +566,106 @@ async def bill_of_lading(
     )
 
 
+# === PER-BATCH BILL OF LADING (DOCX) ===
+@router.get("/{pl_id}/bol/{batch_id}")
+async def bill_of_lading_batch(
+    pl_id: int, batch_id: int, request: Request,
+    user: User = Depends(require_permission("cargo", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a Bill of Lading DOCX for a single batch."""
+    result = await db.execute(
+        select(PackingList).options(
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.vessel),
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.departure_port),
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.arrival_port),
+            selectinload(PackingList.batches),
+        ).where(PackingList.id == pl_id)
+    )
+    pl = result.scalar_one_or_none()
+    if not pl:
+        raise HTTPException(404)
+
+    batch = next((b for b in pl.batches if b.id == batch_id), None)
+    if not batch:
+        raise HTTPException(404, "Batch non trouve")
+
+    import shutil, zipfile, os
+
+    template_path = "/app/app/static/BILL_OF_LADING_TEMPLATE.docx"
+    if not os.path.exists(template_path):
+        template_path = os.path.join(os.path.dirname(__file__), "..", "static", "BILL_OF_LADING_TEMPLATE.docx")
+    if not os.path.exists(template_path):
+        raise HTTPException(500, detail="Template BOL non trouve")
+
+    voyage_id = pl.order.leg.leg_code if pl.order.leg else ""
+    bl_number = batch.bill_of_lading_id or f"TUAW_{voyage_id}_{batch.batch_number:02d}"
+
+    def _build_addr(b, prefix):
+        if not b:
+            return ""
+        parts = filter(None, [
+            getattr(b, f"{prefix}_name", None),
+            getattr(b, f"{prefix}_address", None),
+            " ".join(filter(None, [getattr(b, f"{prefix}_postal", None), getattr(b, f"{prefix}_city", None)])),
+            getattr(b, f"{prefix}_country", None),
+        ])
+        return "\n".join(parts)
+
+    packages_str = f"{batch.pallet_quantity or 0} palettes"
+    if batch.cases_quantity:
+        packages_str += f" / {batch.cases_quantity} cases"
+
+    replacements = {
+        "SHIPPER_NAME": _build_addr(batch, "shipper"),
+        "BILL_OF_LADING_ID": bl_number,
+        "BOOKING_CONFIRMATION_TOWT": pl.order.reference or "",
+        "CONSIGNEE_ORDER_ADRESS": _build_addr(batch, "consignee"),
+        "NOTIFY_ADRESS": _build_addr(batch, "notify"),
+        "VESSEL": pl.order.leg.vessel.name if pl.order.leg and pl.order.leg.vessel else "",
+        "VOYAGE_ID": voyage_id,
+        "POL_NAME": pl.order.leg.departure_port.name if pl.order.leg and pl.order.leg.departure_port else "",
+        "POD_NAME": pl.order.leg.arrival_port.name if pl.order.leg and pl.order.leg.arrival_port else "",
+        "Maximum_de_CASES_QUANTITY": packages_str,
+        "Nombre_de_PALLET_ID": str(batch.pallet_quantity or 0),
+        "Maximum_de_WEIGHT_KG": str(int((batch.weight_kg or 0) * (batch.pallet_quantity or 1))),
+        "TYPE_OF_GOODS": batch.description_of_goods or batch.type_of_goods or "",
+        "DESCRIPTION_OF_GOODS": batch.description_of_goods or batch.type_of_goods or "",
+        "PACKAGES": packages_str,
+        "NUMBER_OF_OBL": "3",
+    }
+
+    work_dir = f"/tmp/bol_{pl.id}_{batch_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    os.makedirs(work_dir, exist_ok=True)
+    output_path = os.path.join(work_dir, "output.docx")
+    shutil.copy2(template_path, output_path)
+
+    temp_docx = os.path.join(work_dir, "temp.docx")
+    with zipfile.ZipFile(output_path, 'r') as zin:
+        with zipfile.ZipFile(temp_docx, 'w') as zout:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if item.filename == "word/document.xml":
+                    content = data.decode('utf-8')
+                    for key, val in replacements.items():
+                        safe_val = (val or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                        safe_val = safe_val.replace("\n", "</w:t><w:br/><w:t>")
+                        content = content.replace(f"\u00ab{key}\u00bb", safe_val)
+                    data = content.encode('utf-8')
+                zout.writestr(item, data)
+
+    with open(temp_docx, 'rb') as f:
+        buffer = io.BytesIO(f.read())
+    shutil.rmtree(work_dir, ignore_errors=True)
+
+    filename = f"{bl_number}_{datetime.now().strftime('%Y%m%d')}.docx"
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # === HTML BILL OF LADING VIEW ===
 @router.get("/{pl_id}/bol/view", response_class=HTMLResponse)
 async def bill_of_lading_view(

@@ -84,6 +84,9 @@ async def commercial_home(
     request: Request,
     tab: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    vessel: Optional[int] = Query(None),
+    year: Optional[int] = Query(None),
+    leg_id: Optional[int] = Query(None),
     user: User = Depends(require_permission("commercial", "C")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -126,6 +129,24 @@ async def commercial_home(
         offer_r = await db.execute(offer_q)
         offers = list(offer_r.scalars().all())
 
+    # ── Fetch vessels for filters ──
+    vessels_result = await db.execute(select(Vessel).where(Vessel.is_active == True).order_by(Vessel.code))
+    vessels = vessels_result.scalars().all()
+    current_year = year or datetime.now().year
+    years = list(range(datetime.now().year + 1, datetime.now().year - 3, -1))
+
+    # ── Fetch legs for selected vessel/year ──
+    filter_legs = []
+    if vessel:
+        v_obj = next((v for v in vessels if v.code == vessel), None)
+        if v_obj:
+            legs_r = await db.execute(
+                select(Leg).options(selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
+                .where(Leg.vessel_id == v_obj.id, Leg.year == current_year)
+                .order_by(Leg.sequence)
+            )
+            filter_legs = legs_r.scalars().all()
+
     # ── Fetch orders (dashboard + orders tabs) ──
     if active_tab in ("dashboard", "orders"):
         order_q = select(Order).options(
@@ -135,6 +156,12 @@ async def commercial_home(
         ).order_by(Order.created_at.desc())
         if status:
             order_q = order_q.where(Order.status == status)
+        if leg_id:
+            order_q = order_q.where(Order.leg_id == leg_id)
+        elif vessel:
+            v_obj = next((v for v in vessels if v.code == vessel), None)
+            if v_obj:
+                order_q = order_q.where(Order.leg_id.in_([l.id for l in filter_legs]))
         result = await db.execute(order_q)
         orders = list(result.scalars().all())
 
@@ -187,6 +214,12 @@ async def commercial_home(
         "grid_kpis": grid_kpis,
         "offers": offers,
         "kpi": kpi,
+        "vessels": vessels,
+        "selected_vessel": vessel,
+        "current_year": current_year,
+        "years": years,
+        "legs": filter_legs,
+        "leg_id": leg_id,
         "active_module": "commercial",
     })
 

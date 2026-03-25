@@ -34,6 +34,90 @@ OFFER_DIR = "app/static/uploads/rate_offers"
 OPEX_DAILY_DEFAULT = 11600
 
 
+def _generate_offer_docx(path, reference, client_name, client_contact,
+                          valid_from, valid_to, validity_date,
+                          bl_fee, booking_fee, notes, lines):
+    """Generate a DOCX rate offer document using python-docx."""
+    from docx import Document
+    from docx.shared import Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+
+    doc = Document()
+    style = doc.styles["Normal"]
+    style.font.name = "Poppins"
+    style.font.size = Pt(10)
+
+    h = doc.add_heading("TOWT — Offre tarifaire", level=1)
+    h.runs[0].font.color.rgb = RGBColor(0x09, 0x55, 0x61)
+
+    doc.add_paragraph(f"Reference : {reference}")
+    doc.add_paragraph(f"Client : {client_name}")
+    if client_contact:
+        doc.add_paragraph(f"Contact : {client_contact}")
+    doc.add_paragraph(f"Periode de validite : {valid_from} -> {valid_to}")
+    doc.add_paragraph(f"Date limite de l'offre : {validity_date}")
+    doc.add_paragraph("")
+
+    doc.add_heading("Frais", level=2)
+    doc.add_paragraph(f"BL Fee : {bl_fee:.2f} EUR")
+    doc.add_paragraph(f"Booking Fee : {booking_fee:.2f} EUR")
+    doc.add_paragraph("")
+
+    doc.add_heading("Tarifs par route (EUR / palette)", level=2)
+    if lines:
+        headers = ["POL", "POD", "Dist. (NM)", "Jours nav.",
+                    "< 10 pal.", "10-50 pal.", "51-100 pal.", "> 100 pal."]
+        table = doc.add_table(rows=1, cols=len(headers))
+        table.style = "Table Grid"
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+        hdr = table.rows[0]
+        for i, text in enumerate(headers):
+            cell = hdr.cells[i]
+            cell.text = text
+            for p in cell.paragraphs:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for run in p.runs:
+                    run.bold = True
+                    run.font.size = Pt(9)
+
+        for line in lines:
+            row = table.add_row()
+            vals = [
+                f"{line.get('pol_name', '')} ({line.get('pol_locode', '')})",
+                f"{line.get('pod_name', '')} ({line.get('pod_locode', '')})",
+                f"{line.get('distance_nm', 0):.0f}" if line.get("distance_nm") else "",
+                f"{line.get('nav_days', 0):.1f}" if line.get("nav_days") else "",
+                f"{line.get('rate_lt10', 0):.2f}" if line.get("rate_lt10") else "",
+                f"{line.get('rate_10to50', 0):.2f}" if line.get("rate_10to50") else "",
+                f"{line.get('rate_51to100', 0):.2f}" if line.get("rate_51to100") else "",
+                f"{line.get('rate_gt100', 0):.2f}" if line.get("rate_gt100") else "",
+            ]
+            for i, val in enumerate(vals):
+                cell = row.cells[i]
+                cell.text = val
+                for p in cell.paragraphs:
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    for run in p.runs:
+                        run.font.size = Pt(9)
+
+    if notes:
+        doc.add_paragraph("")
+        doc.add_heading("Notes", level=2)
+        doc.add_paragraph(notes)
+
+    doc.add_paragraph("")
+    p = doc.add_paragraph("TOWT — Transport a la Voile")
+    p.runs[0].font.size = Pt(8)
+    p.runs[0].font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+    p = doc.add_paragraph("Les Docks, 52 quai Frissard — 76600 Le Havre")
+    p.runs[0].font.size = Pt(8)
+    p.runs[0].font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+
+    doc.save(path)
+
+
 # ─── Helpers ────────────────────────────────────────────────
 def pf(val, default=None):
     if val is None or (isinstance(val, str) and val.strip() == ""):
@@ -1155,3 +1239,79 @@ async def api_rate_lookup(
     </div>
     """
     return HTMLResponse(content=html)
+
+
+# ═══════════════════════════════════════════════════════════════
+# CREATE ORDER FROM OFFER
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/offers/{oid}/create-order", response_class=HTMLResponse)
+async def offer_create_order_form(
+    oid: int, request: Request,
+    user: User = Depends(require_permission("commercial", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    offer_result = await db.execute(
+        select(RateOffer).options(
+            selectinload(RateOffer.client),
+            selectinload(RateOffer.rate_grid).selectinload(RateGrid.lines),
+        ).where(RateOffer.id == oid)
+    )
+    offer = offer_result.scalar_one_or_none()
+    if not offer:
+        raise HTTPException(404)
+
+    from app.routers.commercial_router import generate_reference
+    ref = await generate_reference(db)
+
+    from app.models.order import PALETTE_FORMATS
+    return templates.TemplateResponse("commercial/order_from_offer.html", {
+        "request": request, "user": user,
+        "offer": offer, "reference": ref,
+        "palette_formats": PALETTE_FORMATS,
+    })
+
+
+@router.post("/offers/{oid}/create-order", response_class=HTMLResponse)
+async def offer_create_order_submit(
+    oid: int, request: Request,
+    client_name: str = Form(...),
+    quantity_palettes: str = Form(...),
+    palette_format: str = Form("EPAL"),
+    unit_price: str = Form(...),
+    departure_locode: Optional[str] = Form(None),
+    arrival_locode: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    rate_grid_id: Optional[str] = Form(None),
+    rate_grid_line_id: Optional[str] = Form(None),
+    user: User = Depends(require_permission("commercial", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.routers.commercial_router import generate_reference
+    from app.models.order import Order, PALETTE_COEFF
+
+    ref = await generate_reference(db)
+    order = Order(
+        reference=ref,
+        client_name=client_name.strip(),
+        quantity_palettes=int(quantity_palettes) if quantity_palettes else 1,
+        palette_format=palette_format if palette_format in PALETTE_COEFF else "EPAL",
+        unit_price=pf(unit_price, 0),
+        departure_locode=departure_locode.strip().upper() if departure_locode and departure_locode.strip() else None,
+        arrival_locode=arrival_locode.strip().upper() if arrival_locode and arrival_locode.strip() else None,
+        description=description.strip() if description else None,
+        rate_grid_id=int(rate_grid_id) if rate_grid_id else None,
+        rate_grid_line_id=int(rate_grid_line_id) if rate_grid_line_id else None,
+    )
+    order.compute_total()
+    db.add(order)
+    await db.flush()
+
+    await log_activity(db, user=user, action="create", module="commercial",
+                       entity_type="Order", entity_id=order.id,
+                       entity_label=f"Commande {ref} depuis offre",
+                       ip_address=get_client_ip(request))
+
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/commercial?tab=orders"})
+    return RedirectResponse(url="/commercial?tab=orders", status_code=303)
