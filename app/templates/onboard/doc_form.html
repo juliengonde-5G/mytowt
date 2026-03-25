@@ -22,6 +22,7 @@
     </div>
 
     <form method="POST" action="/onboard/doc/{{ leg.id }}/{{ doc_type }}/save" id="doc-form">
+        {{ csrf_input(request) }}
         {% if doc %}<input type="hidden" name="doc_id" value="{{ doc.id }}">{% endif %}
 
         <!-- ═══ NOR - Notice of Readiness ═══ -->
@@ -34,7 +35,17 @@
                 <div class="fg"><label>Voyage No</label><input type="text" name="voyage_no" value="{{ doc_data.get('voyage_no', prefill.voyage_no) }}" class="fi" readonly></div>
                 <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.current_port) }}" class="fi"></div>
                 <div class="fg"><label>Date of Notice</label><input type="date" name="notice_date" value="{{ doc_data.get('notice_date', prefill.date_today) }}" class="fi"></div>
-                <div class="fg"><label>Time of Notice (LT)</label><input type="time" name="notice_time" value="{{ doc_data.get('notice_time', '') }}" class="fi"></div>
+                <div class="fg"><label>Time of Notice</label>
+                    <div class="tz-input-wrap">
+                        <input type="time" name="notice_time" value="{{ doc_data.get('notice_time', '') }}" class="fi">
+                        <select name="notice_time_tz" class="tz-select">
+                            {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                            <option value="{{ code }}" {% if code == doc_data.get('notice_time_tz', 'UTC') %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <span class="tz-utc-hint"></span>
+                </div>
             </div>
             <div class="fg full"><label>Cargo description</label><textarea name="cargo_desc" class="fi ta">{{ doc_data.get('cargo_desc', '') }}</textarea></div>
             <div class="fg full"><label>Position (roads/at berth/anchorage)</label><input type="text" name="position" value="{{ doc_data.get('position', '') }}" class="fi" placeholder="roads / at berth / anchorage"></div>
@@ -66,7 +77,17 @@
             <div class="fg full"><label>Reason for re-tendering</label><textarea name="reason" class="fi ta">{{ doc_data.get('reason', '') }}</textarea></div>
             <div class="doc-grid-2">
                 <div class="fg"><label>Date</label><input type="date" name="notice_date" value="{{ doc_data.get('notice_date', prefill.date_today) }}" class="fi"></div>
-                <div class="fg"><label>Time (LT)</label><input type="time" name="notice_time" value="{{ doc_data.get('notice_time', '') }}" class="fi"></div>
+                <div class="fg"><label>Time</label>
+                    <div class="tz-input-wrap">
+                        <input type="time" name="notice_time" value="{{ doc_data.get('notice_time', '') }}" class="fi">
+                        <select name="notice_time_tz" class="tz-select">
+                            {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                            <option value="{{ code }}" {% if code == doc_data.get('notice_time_tz', 'UTC') %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <span class="tz-utc-hint"></span>
+                </div>
             </div>
             <div class="fg"><label>Master name</label>
                 <select name="master_name" class="fi">
@@ -146,7 +167,17 @@
                 <div class="fg"><label>Voyage No</label><input type="text" name="voyage_no" value="{{ doc_data.get('voyage_no', prefill.voyage_no) }}" class="fi" readonly></div>
                 <div class="fg"><label>Port</label><input type="text" name="port" value="{{ doc_data.get('port', prefill.current_port) }}" class="fi"></div>
                 <div class="fg"><label>Date</label><input type="date" name="lop_date" value="{{ doc_data.get('lop_date', prefill.date_today) }}" class="fi"></div>
-                <div class="fg"><label>Time</label><input type="time" name="lop_time" value="{{ doc_data.get('lop_time', '') }}" class="fi"></div>
+                <div class="fg"><label>Time</label>
+                    <div class="tz-input-wrap">
+                        <input type="time" name="lop_time" value="{{ doc_data.get('lop_time', '') }}" class="fi">
+                        <select name="lop_time_tz" class="tz-select">
+                            {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                            <option value="{{ code }}" {% if code == doc_data.get('lop_time_tz', 'UTC') %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <span class="tz-utc-hint"></span>
+                </div>
             </div>
             <div class="fg full"><label>Subject / Description of protest</label><textarea name="subject" class="fi ta" rows="6">{{ doc_data.get('subject', '') }}</textarea></div>
             <div class="fg full"><label>Details and facts</label><textarea name="details" class="fi ta" rows="8">{{ doc_data.get('details', '') }}</textarea></div>
@@ -231,6 +262,63 @@
         {% endif %}
     </form>
 
+    <!-- ═══ PIÈCES JOINTES DU DOCUMENT ═══ -->
+    {% if doc %}
+    <div class="doc-section" id="doc-attachments">
+        <h3>📎 Photos & Documents joints <span style="font-size:12px;font-weight:400;color:#888;">({{ doc_attachments|length }})</span></h3>
+
+        {% if doc_attachments %}
+        <div class="doc-att-grid">
+            {% for att in doc_attachments %}
+            <div class="doc-att-item" id="doc-att-{{ att.id }}">
+                <div class="doc-att-icon">
+                    {% if att.mime_type and att.mime_type.startswith('image/') %}
+                    <i data-lucide="image" style="width:20px;height:20px;color:#6366F1;"></i>
+                    {% elif att.mime_type == 'application/pdf' %}
+                    <i data-lucide="file-text" style="width:20px;height:20px;color:#dc2626;"></i>
+                    {% else %}
+                    <i data-lucide="file" style="width:20px;height:20px;color:var(--towt-blue);"></i>
+                    {% endif %}
+                </div>
+                <div class="doc-att-info">
+                    <strong>{{ att.title }}</strong>
+                    <span class="doc-att-meta">
+                        {{ att.filename }} · {{ (att.file_size / 1024)|round(0)|int }} Ko
+                        · {{ att.uploaded_by }} · {{ att.created_at.strftime('%d/%m/%Y %H:%M') }}
+                    </span>
+                </div>
+                <div class="doc-att-actions">
+                    <a href="/onboard/doc/attachments/{{ att.id }}/download" class="btn-icon" title="Télécharger"><i data-lucide="download" style="width:14px;height:14px;color:var(--towt-blue);"></i></a>
+                    <button class="btn-icon" hx-delete="/onboard/doc/attachments/{{ att.id }}" hx-confirm="Supprimer ce fichier ?" hx-target="#doc-att-{{ att.id }}" hx-swap="outerHTML"><i data-lucide="trash-2" style="width:14px;height:14px;color:#dc2626;"></i></button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="font-size:12px;color:#aaa;margin:8px 0;">Aucune pièce jointe pour ce document.</p>
+        {% endif %}
+
+        <form method="POST" action="/onboard/doc/{{ doc.id }}/attachments/upload" enctype="multipart/form-data" class="doc-att-upload">
+            {{ csrf_input(request) }}
+            <div class="doc-grid-2">
+                <div class="fg">
+                    <label>Fichier (photo, PDF, document...)</label>
+                    <input type="file" name="file" required class="fi" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt,.heic,.webp">
+                </div>
+                <div class="fg">
+                    <label>Titre (optionnel)</label>
+                    <input type="text" name="title" class="fi" placeholder="ex: Photo cale avant">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-secondary btn-sm" style="margin-top:8px;"><i data-lucide="upload"></i> Ajouter une pièce jointe</button>
+        </form>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:12px;font-size:12px;color:#888;">
+        💡 Enregistrez le document d'abord pour pouvoir y joindre des photos ou fichiers.
+    </div>
+    {% endif %}
+
     {% if doc %}
     <div class="doc-export-bar">
         <span style="font-size:12px;color:#888;">Exporter ce document :</span>
@@ -256,7 +344,7 @@
     .fg{display:flex;flex-direction:column;gap:3px;margin-bottom:4px}
     .fg.full{grid-column:1/-1}
     .fg label{font-size:11px;font-weight:600;color:#666;text-transform:uppercase}
-    .fi{padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit}
+    .fi{padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:'Poppins',system-ui,sans-serif}
     .fi:focus{border-color:var(--towt-blue);outline:none}
     .fi[readonly]{background:#f8f9fa;color:#555}
     .ta{resize:vertical;min-height:60px}
@@ -264,5 +352,13 @@
     .ob-table{width:100%;border-collapse:collapse;font-size:12px}
     .ob-table th{text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;color:#888;border-bottom:2px solid #f0f0f0}
     .ob-table td{padding:6px 8px;border-bottom:1px solid #f8f8f8}
+    .doc-att-grid{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+    .doc-att-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#f8fafb;border-radius:8px;border:1px solid #eee}
+    .doc-att-icon{flex-shrink:0}
+    .doc-att-info{flex:1;min-width:0}
+    .doc-att-info strong{font-size:13px;display:block}
+    .doc-att-meta{font-size:11px;color:#888}
+    .doc-att-actions{display:flex;gap:6px;flex-shrink:0}
+    .doc-att-upload{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0}
 </style>
 {% endblock %}

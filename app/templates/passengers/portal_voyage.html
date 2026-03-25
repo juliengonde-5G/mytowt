@@ -131,6 +131,26 @@
 </style>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<style>
+    .leaflet-pane, .leaflet-tile, .leaflet-marker-icon, .leaflet-marker-shadow,
+    .leaflet-tile-container, .leaflet-pane > svg, .leaflet-pane > canvas,
+    .leaflet-zoom-box, .leaflet-image-layer, .leaflet-layer {
+        position: absolute !important;
+        left: 0;
+        top: 0;
+    }
+    .leaflet-container img {
+        max-width: none !important;
+        max-height: none !important;
+    }
+    .leaflet-tile {
+        filter: inherit;
+        visibility: inherit;
+    }
+    .leaflet-control {
+        position: relative;
+    }
+</style>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
 {% if leg %}

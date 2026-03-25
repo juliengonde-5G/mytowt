@@ -48,6 +48,7 @@
 
             <!-- Offer form -->
             <form method="post" action="/commercial/pricing/grids/{{ grid.id }}/offer/create">
+                {{ csrf_input(request) }}
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
                     <div class="form-group">
                         <label class="form-label">Référence</label>

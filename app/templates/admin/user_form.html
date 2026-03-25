@@ -14,7 +14,7 @@
               action="{{ '/admin/users/' ~ edit_user.id ~ '/edit' if edit_user else '/admin/users/create' }}"
               hx-post="{{ '/admin/users/' ~ edit_user.id ~ '/edit' if edit_user else '/admin/users/create' }}"
               hx-target="#modal-container">
-
+            {{ csrf_input(request) }}
             <div class="modal-body">
                 {% if error %}
                 <div class="form-error">

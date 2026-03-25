@@ -1,4 +1,5 @@
 """On Board module router — ex-Captain, renamed to On Board."""
+import io
 import json
 from datetime import datetime, timezone, date
 from typing import Optional
@@ -20,8 +21,10 @@ from app.models.crew import CrewMember, CrewAssignment
 from app.models.packing_list import PackingList, PackingListBatch
 from app.models.onboard import (
     SofEvent, OnboardNotification, CargoDocument, ETAShift, OnboardAttachment,
+    CargoDocumentAttachment,
     SOF_EVENT_TYPES, CARGO_DOC_TYPES, ETA_SHIFT_REASONS, ATTACHMENT_CATEGORIES,
 )
+from app.utils.timezones import get_port_timezone, utc_offset_label, TIMEZONE_CHOICES
 
 router = APIRouter(prefix="/onboard", tags=["onboard"])
 
@@ -64,6 +67,7 @@ async def onboard_home(
     last_sof = None
     eta_shifts = []
     attachments = []
+    cargo_documents = []
 
     next_leg = None  # leg export (départ du port)
 
@@ -194,6 +198,23 @@ async def onboard_home(
             )
             attachments = attach_result.scalars().all()
 
+            # ─── CARGO DOCUMENTS for closure checklist ───
+            cargo_docs_result = await db.execute(
+                select(CargoDocument).where(CargoDocument.leg_id == current_leg.id)
+                .order_by(CargoDocument.created_at)
+            )
+            cargo_documents = cargo_docs_result.scalars().all()
+
+    # ─── Port timezone for sidebar clock + time inputs ───
+    _port_tz = "UTC"
+    _port_tz_label = "Port"
+    if current_leg:
+        # Use arrival port if vessel has arrived, else departure port
+        _ref_port = current_leg.arrival_port if current_leg.ata else current_leg.departure_port
+        if _ref_port:
+            _port_tz = get_port_timezone(_ref_port.country_code, _ref_port.zone_code)
+            _port_tz_label = _ref_port.name
+
     return templates.TemplateResponse("onboard/index.html", {
         "request": request, "user": user,
         "vessels": vessels, "selected_vessel": selected_vessel, "vessel_obj": vessel_obj,
@@ -206,9 +227,15 @@ async def onboard_home(
         "eta_shifts": eta_shifts if current_leg else [],
         "eta_shift_reasons": ETA_SHIFT_REASONS,
         "attachments": attachments if current_leg else [],
+        "cargo_documents": cargo_documents if current_leg else [],
+        "port_agent_attachments": [a for a in (attachments if current_leg else []) if a.category in ("port_agent", "bl_signed", "letter_protest")],
         "attachment_categories": ATTACHMENT_CATEGORIES,
         "sof_event_types": SOF_EVENT_TYPES,
         "cargo_doc_types": CARGO_DOC_TYPES,
+        "tz_choices": TIMEZONE_CHOICES,
+        "port_timezone": _port_tz,
+        "port_tz_label": _port_tz_label,
+        "port_tz_offset": utc_offset_label(_port_tz),
         "current_year": current_year,
         "active_module": "captain",
         "lang": user.language or "fr",
@@ -226,10 +253,23 @@ async def sof_add_event(
     event_label: str = Form(""),
     event_date: str = Form(""),
     event_time: str = Form(""),
+    event_time_tz: str = Form("UTC"),
     remarks: str = Form(""),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Resolve 'port_local' timezone to actual IANA name
+    resolved_tz = event_time_tz
+    if event_time_tz == "port_local":
+        leg = await db.get(Leg, leg_id)
+        if leg:
+            from app.models.port import Port
+            dep = await db.get(Port, leg.departure_port_id) if leg.departure_port_id else None
+            arr = await db.get(Port, leg.arrival_port_id) if leg.arrival_port_id else None
+            ref_port = arr if leg.ata else dep
+            if ref_port:
+                resolved_tz = get_port_timezone(ref_port.country_code, ref_port.zone_code)
+
     # Find label from type if not custom
     label = event_label.strip()
     if not label:
@@ -241,6 +281,7 @@ async def sof_add_event(
         event_label=label,
         event_date=datetime.strptime(event_date, "%Y-%m-%d").date() if event_date else date.today(),
         event_time=event_time or None,
+        event_time_tz=resolved_tz,
         remarks=remarks or None,
         created_by=user.full_name,
     )
@@ -275,6 +316,7 @@ async def sof_edit_event(
     event_label: str = Form(""),
     event_date: str = Form(""),
     event_time: str = Form(""),
+    event_time_tz: str = Form("UTC"),
     remarks: str = Form(""),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -287,6 +329,18 @@ async def sof_edit_event(
     if event_date:
         evt.event_date = datetime.strptime(event_date, "%Y-%m-%d").date()
     evt.event_time = event_time or evt.event_time
+    # Resolve port_local timezone
+    resolved_tz = event_time_tz
+    if event_time_tz == "port_local":
+        leg = await db.get(Leg, evt.leg_id)
+        if leg:
+            from app.models.port import Port
+            dep = await db.get(Port, leg.departure_port_id) if leg.departure_port_id else None
+            arr = await db.get(Port, leg.arrival_port_id) if leg.arrival_port_id else None
+            ref_port = arr if leg.ata else dep
+            if ref_port:
+                resolved_tz = get_port_timezone(ref_port.country_code, ref_port.zone_code)
+    evt.event_time_tz = resolved_tz
     evt.remarks = remarks if remarks is not None else evt.remarks
     await db.flush()
 
@@ -512,6 +566,11 @@ async def attachment_upload(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, "Fichier trop volumineux (max 20 Mo)")
 
+    # Validate file content matches extension (magic bytes)
+    from app.utils.file_validation import validate_file_content
+    if not validate_file_content(content, ext):
+        raise HTTPException(400, "Le contenu du fichier ne correspond pas à son extension")
+
     # Create upload dir
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -574,6 +633,113 @@ async def attachment_delete(
     att = await db.get(OnboardAttachment, att_id)
     if att:
         # Check leg not locked
+        leg = await db.get(Leg, att.leg_id)
+        if leg and leg.status == "completed":
+            raise HTTPException(400, "L'escale est clôturée")
+        if os.path.isfile(att.file_path):
+            os.remove(att.file_path)
+        await db.delete(att)
+        await db.flush()
+    return HTMLResponse(content="", status_code=200)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  DOCUMENT ATTACHMENTS (photos/files linked to cargo documents)
+# ═══════════════════════════════════════════════════════════════
+DOC_UPLOAD_DIR = "/app/uploads/onboard/documents"
+
+
+@router.post("/doc/{doc_id}/attachments/upload", response_class=HTMLResponse)
+async def doc_attachment_upload(
+    doc_id: int, request: Request,
+    file: UploadFile = File(...),
+    title: str = Form(""),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a file or photo to a cargo document."""
+    import os
+    import uuid
+
+    doc = await db.get(CargoDocument, doc_id)
+    if not doc:
+        raise HTTPException(404)
+
+    leg = await db.get(Leg, doc.leg_id)
+    if leg and leg.status == "completed":
+        raise HTTPException(400, "L'escale est clôturée, impossible d'ajouter des fichiers")
+
+    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"Type de fichier non autorisé : {ext}")
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(400, "Fichier trop volumineux (max 20 Mo)")
+
+    # Validate file content matches extension (magic bytes)
+    from app.utils.file_validation import validate_file_content
+    if not validate_file_content(content, ext):
+        raise HTTPException(400, "Le contenu du fichier ne correspond pas à son extension")
+
+    os.makedirs(DOC_UPLOAD_DIR, exist_ok=True)
+    safe_name = f"doc{doc_id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = os.path.join(DOC_UPLOAD_DIR, safe_name)
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    att = CargoDocumentAttachment(
+        document_id=doc_id,
+        leg_id=doc.leg_id,
+        title=title.strip() or file.filename or "Sans titre",
+        filename=file.filename or safe_name,
+        file_path=file_path,
+        file_size=len(content),
+        mime_type=file.content_type,
+        uploaded_by=user.full_name,
+    )
+    db.add(att)
+    await db.flush()
+
+    return RedirectResponse(
+        url=f"/onboard/doc/{doc.leg_id}/{doc.doc_type}?doc_id={doc_id}#doc-attachments",
+        status_code=303,
+    )
+
+
+@router.get("/doc/attachments/{att_id}/download")
+async def doc_attachment_download(
+    att_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download a document attachment."""
+    import os
+    att = await db.get(CargoDocumentAttachment, att_id)
+    if not att or not os.path.isfile(att.file_path):
+        raise HTTPException(404)
+
+    with open(att.file_path, "rb") as f:
+        content = f.read()
+
+    return Response(
+        content=content,
+        media_type=att.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{att.filename}"'},
+    )
+
+
+@router.delete("/doc/attachments/{att_id}", response_class=HTMLResponse)
+async def doc_attachment_delete(
+    att_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a document attachment."""
+    import os
+    att = await db.get(CargoDocumentAttachment, att_id)
+    if att:
         leg = await db.get(Leg, att.leg_id)
         if leg and leg.status == "completed":
             raise HTTPException(400, "L'escale est clôturée")
@@ -1079,12 +1245,32 @@ async def cargo_doc_form(
 
     doc_label = next((l for c, l in CARGO_DOC_TYPES if c == doc_type), doc_type)
 
+    # Load attachments for this document
+    doc_attachments = []
+    if doc:
+        att_result = await db.execute(
+            select(CargoDocumentAttachment)
+            .where(CargoDocumentAttachment.document_id == doc.id)
+            .order_by(CargoDocumentAttachment.created_at.asc())
+        )
+        doc_attachments = att_result.scalars().all()
+
+    # Port timezone
+    _ref_port = leg.arrival_port if leg.ata else leg.departure_port
+    _port_tz = get_port_timezone(_ref_port.country_code, _ref_port.zone_code) if _ref_port else "UTC"
+    _port_tz_label = _ref_port.name if _ref_port else "Port"
+
     return templates.TemplateResponse("onboard/doc_form.html", {
         "request": request, "user": user,
         "leg": leg, "doc_type": doc_type, "doc_label": doc_label,
         "doc": doc, "doc_data": doc_data, "prefill": prefill,
         "sof_events": sof_events,
         "crew_onboard": crew_onboard,
+        "doc_attachments": doc_attachments,
+        "tz_choices": TIMEZONE_CHOICES,
+        "port_timezone": _port_tz,
+        "port_tz_label": _port_tz_label,
+        "port_tz_offset": utc_offset_label(_port_tz),
         "active_module": "captain",
         "lang": user.language or "fr",
     })
@@ -1146,3 +1332,373 @@ async def cargo_doc_save(
         saved_doc_id = saved.id if saved else None
 
     return RedirectResponse(url=f"/onboard/doc/{leg_id}/{doc_type}?doc_id={saved_doc_id}", status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  ESCALE CLOSURE WORKFLOW
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/closure/{leg_id}/submit-review", response_class=HTMLResponse)
+async def closure_submit_review(
+    leg_id: int, request: Request,
+    closure_notes: str = Form(""),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Submit escale for captain review — transition from 'open' to 'review'."""
+    from app.permissions import can_modify
+    if not can_modify(user, "captain"):
+        raise HTTPException(403)
+    leg = await db.get(Leg, leg_id)
+    if not leg:
+        raise HTTPException(404)
+    if leg.closure_status not in (None, "open"):
+        raise HTTPException(400, detail="L'escale n'est pas dans un état permettant la soumission.")
+
+    leg.closure_status = "review"
+    leg.closure_notes = closure_notes.strip() if closure_notes else None
+    leg.closure_reviewed_by = user.full_name
+    leg.closure_reviewed_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    # SOF event
+    sof = SofEvent(
+        leg_id=leg_id, event_type="CUSTOM",
+        event_label="📋 Escale soumise pour revue — Closure review submitted",
+        event_date=date.today(),
+        event_time=datetime.now().strftime("%H:%M"),
+        remarks=f"Par {user.full_name}",
+        created_by=user.full_name,
+    )
+    db.add(sof)
+    await log_activity(db, user, "captain", "closure_review", "Leg", leg_id, f"Soumission revue escale {leg.leg_code}")
+    await db.flush()
+
+    url = f"/onboard?vessel={leg.vessel_id}&leg_id={leg_id}"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.post("/closure/{leg_id}/approve", response_class=HTMLResponse)
+async def closure_approve(
+    leg_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Captain approves the escale — transition from 'review' to 'approved'."""
+    from app.permissions import can_modify
+    if not can_modify(user, "captain"):
+        raise HTTPException(403)
+    leg = await db.get(Leg, leg_id)
+    if not leg:
+        raise HTTPException(404)
+    if leg.closure_status != "review":
+        raise HTTPException(400, detail="L'escale doit être en revue pour être approuvée.")
+
+    leg.closure_status = "approved"
+    leg.closure_approved_by = user.full_name
+    leg.closure_approved_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    sof = SofEvent(
+        leg_id=leg_id, event_type="CUSTOM",
+        event_label="✅ Escale approuvée par le commandant — Captain approved",
+        event_date=date.today(),
+        event_time=datetime.now().strftime("%H:%M"),
+        remarks=f"Approuvé par {user.full_name}",
+        created_by=user.full_name,
+    )
+    db.add(sof)
+    await log_activity(db, user, "captain", "closure_approve", "Leg", leg_id, f"Approbation escale {leg.leg_code}")
+    await db.flush()
+
+    url = f"/onboard?vessel={leg.vessel_id}&leg_id={leg_id}"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.post("/closure/{leg_id}/reopen", response_class=HTMLResponse)
+async def closure_reopen(
+    leg_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reopen an escale that was in review or approved — back to 'open'."""
+    from app.permissions import can_modify
+    if not can_modify(user, "captain"):
+        raise HTTPException(403)
+    leg = await db.get(Leg, leg_id)
+    if not leg:
+        raise HTTPException(404)
+    if leg.closure_status not in ("review", "approved"):
+        raise HTTPException(400, detail="L'escale ne peut pas être rouverte depuis cet état.")
+
+    old_status = leg.closure_status
+    leg.closure_status = "open"
+    leg.closure_reviewed_by = None
+    leg.closure_reviewed_at = None
+    leg.closure_approved_by = None
+    leg.closure_approved_at = None
+    await db.flush()
+
+    sof = SofEvent(
+        leg_id=leg_id, event_type="CUSTOM",
+        event_label=f"🔓 Escale rouverte (depuis {old_status}) — Closure reopened",
+        event_date=date.today(),
+        event_time=datetime.now().strftime("%H:%M"),
+        remarks=f"Par {user.full_name}",
+        created_by=user.full_name,
+    )
+    db.add(sof)
+    await log_activity(db, user, "captain", "closure_reopen", "Leg", leg_id, f"Réouverture escale {leg.leg_code}")
+    await db.flush()
+
+    url = f"/onboard?vessel={leg.vessel_id}&leg_id={leg_id}"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.post("/closure/{leg_id}/lock", response_class=HTMLResponse)
+async def closure_lock(
+    leg_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Final lock after approval — generates PDF and locks escale."""
+    from app.permissions import can_modify
+    if not can_modify(user, "captain"):
+        raise HTTPException(403)
+    leg_result = await db.execute(
+        select(Leg).options(
+            selectinload(Leg.vessel),
+            selectinload(Leg.departure_port),
+            selectinload(Leg.arrival_port),
+        ).where(Leg.id == leg_id)
+    )
+    leg = leg_result.scalar_one_or_none()
+    if not leg:
+        raise HTTPException(404)
+    if leg.closure_status != "approved":
+        raise HTTPException(400, detail="L'escale doit être approuvée avant le verrouillage.")
+
+    # Generate closure PDF
+    pdf_path = await _generate_closure_pdf(db, leg, user)
+
+    leg.closure_status = "locked"
+    leg.closure_pdf_path = pdf_path
+    leg.status = "completed"
+    await db.flush()
+
+    sof = SofEvent(
+        leg_id=leg_id, event_type="CUSTOM",
+        event_label="🔒 Escale clôturée et verrouillée — Port call closed & locked",
+        event_date=date.today(),
+        event_time=datetime.now().strftime("%H:%M"),
+        remarks=f"PDF généré — Verrouillé par {user.full_name}",
+        created_by=user.full_name,
+    )
+    db.add(sof)
+    await log_activity(db, user, "captain", "closure_lock", "Leg", leg_id, f"Clôture définitive escale {leg.leg_code}")
+    await db.flush()
+
+    url = f"/onboard?vessel={leg.vessel_id}&leg_id={leg_id}"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.get("/closure/{leg_id}/pdf")
+async def closure_download_pdf(
+    leg_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download the closure PDF."""
+    from app.permissions import can_view
+    if not can_view(user, "captain"):
+        raise HTTPException(403)
+    leg = await db.get(Leg, leg_id)
+    if not leg or not leg.closure_pdf_path:
+        raise HTTPException(404, detail="PDF de clôture non disponible.")
+    import os
+    if not os.path.exists(leg.closure_pdf_path):
+        raise HTTPException(404, detail="Fichier PDF introuvable.")
+    from fastapi.responses import FileResponse
+    return FileResponse(
+        leg.closure_pdf_path,
+        filename=f"closure_{leg.leg_code}.pdf",
+        media_type="application/pdf",
+    )
+
+
+async def _generate_closure_pdf(db: AsyncSession, leg, user) -> str:
+    """Generate a closure summary PDF for the escale."""
+    import os
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+
+    # Fetch data
+    sof_result = await db.execute(
+        select(SofEvent).where(SofEvent.leg_id == leg.id)
+        .order_by(SofEvent.event_date.asc().nulls_last(), SofEvent.event_time.asc().nulls_last())
+    )
+    sof_events = sof_result.scalars().all()
+
+    doc_result = await db.execute(
+        select(CargoDocument).where(CargoDocument.leg_id == leg.id).order_by(CargoDocument.created_at)
+    )
+    cargo_docs = doc_result.scalars().all()
+
+    att_result = await db.execute(
+        select(OnboardAttachment).where(OnboardAttachment.leg_id == leg.id).order_by(OnboardAttachment.created_at)
+    )
+    attachments_list = att_result.scalars().all()
+
+    orders_result = await db.execute(select(Order).where(Order.leg_id == leg.id))
+    orders = orders_result.scalars().all()
+
+    crew_result = await db.execute(
+        select(CrewAssignment).options(selectinload(CrewAssignment.member))
+        .where(CrewAssignment.vessel_id == leg.vessel_id, CrewAssignment.status == "active")
+    )
+    crew = crew_result.scalars().all()
+
+    # PDF generation
+    os.makedirs("app/uploads/closure", exist_ok=True)
+    pdf_path = f"app/uploads/closure/closure_{leg.leg_code}_{int(datetime.now().timestamp())}.pdf"
+
+    doc = SimpleDocTemplate(pdf_path, pagesize=A4, leftMargin=20*mm, rightMargin=20*mm, topMargin=15*mm, bottomMargin=15*mm)
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="TitleBlue", fontName="Helvetica-Bold", fontSize=16, textColor=colors.HexColor("#095561"), alignment=TA_CENTER, spaceAfter=12))
+    styles.add(ParagraphStyle(name="SectionH", fontName="Helvetica-Bold", fontSize=12, textColor=colors.HexColor("#095561"), spaceBefore=14, spaceAfter=6))
+    styles.add(ParagraphStyle(name="Small", fontName="Helvetica", fontSize=9, textColor=colors.HexColor("#555555")))
+
+    elements = []
+
+    # Header
+    elements.append(Paragraph(f"RAPPORT DE CLÔTURE D'ESCALE", styles["TitleBlue"]))
+    elements.append(Paragraph(f"TOWT — Transoceanic Wind Transport", styles["Small"]))
+    elements.append(Spacer(1, 8))
+
+    # Leg info table
+    vessel_name = leg.vessel.name if leg.vessel else "—"
+    dep_port = leg.departure_port.name if leg.departure_port else "—"
+    arr_port = leg.arrival_port.name if leg.arrival_port else "—"
+    info_data = [
+        ["Leg Code", leg.leg_code, "Navire", vessel_name],
+        ["Port départ", dep_port, "Port arrivée", arr_port],
+        ["ETD", leg.etd.strftime("%d/%m/%Y %H:%M") if leg.etd else "—", "ETA", leg.eta.strftime("%d/%m/%Y %H:%M") if leg.eta else "—"],
+        ["ATD", leg.atd.strftime("%d/%m/%Y %H:%M") if leg.atd else "—", "ATA", leg.ata.strftime("%d/%m/%Y %H:%M") if leg.ata else "—"],
+    ]
+    info_table = Table(info_data, colWidths=[80, 140, 80, 140])
+    info_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#095561")),
+        ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#095561")),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e0e0e0")),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f7f8")),
+        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#f0f7f8")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 10))
+
+    # Cargo summary
+    elements.append(Paragraph("CARGO", styles["SectionH"]))
+    total_palettes = sum(o.quantity_palettes or 0 for o in orders)
+    total_weight = sum(o.total_weight or 0 for o in orders)
+    cargo_data = [["Commandes", "Palettes", "Poids total"]]
+    cargo_data.append([str(len(orders)), str(total_palettes), f"{total_weight:.1f} t"])
+    cargo_table = Table(cargo_data, colWidths=[140, 140, 160])
+    cargo_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e0e0e0")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f7f8")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(cargo_table)
+
+    # SOF summary
+    if sof_events:
+        elements.append(Paragraph("STATEMENT OF FACTS", styles["SectionH"]))
+        sof_data = [["Événement", "Date", "Heure", "Remarques"]]
+        for evt in sof_events:
+            sof_data.append([
+                evt.event_label[:60],
+                evt.event_date.strftime("%d/%m/%Y") if evt.event_date else "",
+                evt.event_time or "",
+                (evt.remarks or "")[:40],
+            ])
+        sof_table = Table(sof_data, colWidths=[180, 70, 50, 140])
+        sof_table.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e0e0e0")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f7f8")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        elements.append(sof_table)
+
+    # Cargo documents
+    if cargo_docs:
+        elements.append(Paragraph("DOCUMENTS CARGO", styles["SectionH"]))
+        for cd in cargo_docs:
+            doc_type_label = dict(CARGO_DOC_TYPES).get(cd.doc_type, cd.doc_type)
+            elements.append(Paragraph(f"• {doc_type_label} — créé par {cd.created_by or '—'} le {cd.created_at.strftime('%d/%m/%Y %H:%M') if cd.created_at else '—'}", styles["Small"]))
+
+    # Attachments
+    if attachments_list:
+        elements.append(Paragraph("PIÈCES JOINTES", styles["SectionH"]))
+        for att in attachments_list:
+            elements.append(Paragraph(f"• [{att.category}] {att.title} — {att.filename} ({att.uploaded_by})", styles["Small"]))
+
+    # Crew
+    if crew:
+        elements.append(Paragraph("ÉQUIPAGE", styles["SectionH"]))
+        crew_data = [["Nom", "Rôle"]]
+        for ca in crew:
+            crew_data.append([f"{ca.member.first_name} {ca.member.last_name}", ca.role.replace("_", " ").capitalize()])
+        crew_table = Table(crew_data, colWidths=[220, 220])
+        crew_table.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e0e0e0")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f7f8")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        elements.append(crew_table)
+
+    # Closure info
+    elements.append(Spacer(1, 16))
+    elements.append(Paragraph("VALIDATION", styles["SectionH"]))
+    now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
+    closure_info = [
+        f"Revue par : {leg.closure_reviewed_by or '—'} — {leg.closure_reviewed_at.strftime('%d/%m/%Y %H:%M') if leg.closure_reviewed_at else '—'}",
+        f"Approuvé par : {leg.closure_approved_by or '—'} — {leg.closure_approved_at.strftime('%d/%m/%Y %H:%M') if leg.closure_approved_at else '—'}",
+        f"Verrouillé par : {user.full_name} — {now_str}",
+    ]
+    for line in closure_info:
+        elements.append(Paragraph(line, styles["Small"]))
+    if leg.closure_notes:
+        elements.append(Spacer(1, 6))
+        elements.append(Paragraph(f"Notes : {leg.closure_notes}", styles["Small"]))
+
+    doc.build(elements)
+    return pdf_path

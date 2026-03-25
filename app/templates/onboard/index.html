@@ -4,6 +4,9 @@
 
 {% block topbar_actions %}
 {% if current_leg %}
+<a href="/cargo/voyage/{{ current_leg.id }}/excel" class="btn btn-secondary btn-sm"><i data-lucide="package"></i> Packing List</a>
+<a href="/crew/border-police/{{ current_leg.vessel_id }}" class="btn btn-secondary btn-sm" target="_blank"><i data-lucide="users"></i> Crew List</a>
+<a href="/passengers?vessel={{ selected_vessel }}" class="btn btn-secondary btn-sm"><i data-lucide="user-check"></i> Passenger List</a>
 <a href="/escale?vessel={{ selected_vessel }}&leg_id={{ current_leg.id }}" class="btn btn-secondary btn-sm"><i data-lucide="anchor"></i> Escale</a>
 {% endif %}
 {% endblock %}
@@ -54,7 +57,15 @@
         </div>
         {% endif %}
         <a href="/stowage/onboard/{{ current_leg.id }}" class="ob-escale-btn" style="background:var(--towt-green,#28a745);">
-            <i data-lucide="package" style="width:16px;height:16px;"></i> Chargement
+            <i data-lucide="package" style="width:16px;height:16px;"></i> Plan chargement
+        </a>
+        {% if next_leg %}
+        <a href="/stowage/onboard/{{ next_leg.id }}" class="ob-escale-btn" style="background:#fd7e14;">
+            <i data-lucide="package-open" style="width:16px;height:16px;"></i> Plan dechargement
+        </a>
+        {% endif %}
+        <a href="/stowage/leg/{{ current_leg.id }}" class="ob-escale-btn" style="background:var(--towt-sky-dark,#2980b9);">
+            <i data-lucide="layout-grid" style="width:16px;height:16px;"></i> Gestion plan
         </a>
         <a href="/escale?vessel={{ selected_vessel }}&leg_id={{ current_leg.id }}" class="ob-escale-btn">
             <i data-lucide="anchor" style="width:16px;height:16px;"></i> Voir l'escale
@@ -75,12 +86,21 @@
             {% if current_leg.etd %}· ETD : <strong>{{ current_leg.etd.strftime('%d/%m/%Y %H:%M') }}</strong>{% endif %}
         </p>
         <form method="POST" action="/onboard/eta-shift" class="eta-shift-form">
+            {{ csrf_input(request) }}
             <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
             <div class="eta-shift-grid">
                 <div class="fg">
                     <label class="field-label">Nouvelle ETA</label>
-                    <input type="datetime-local" name="new_eta" required class="fi"
-                           value="{{ current_leg.eta.strftime('%Y-%m-%dT%H:%M') if current_leg.eta else '' }}">
+                    <div class="tz-input-wrap">
+                        <input type="datetime-local" name="new_eta" required class="fi"
+                               value="{{ current_leg.eta.strftime('%Y-%m-%dT%H:%M') if current_leg.eta else '' }}">
+                        <select name="new_eta_tz" class="tz-select">
+                            {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                            <option value="{{ code }}" {% if code == 'UTC' %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <span class="tz-utc-hint"></span>
                 </div>
                 <div class="fg">
                     <label class="field-label">Raison</label>
@@ -124,8 +144,8 @@
             {% for s in leg_shifts %}
             <tr class="{% if s.shift_hours > 0 %}eta-delay{% else %}eta-advance{% endif %}">
                 <td>{{ s.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
-                <td style="font-family:monospace;font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
-                <td style="font-family:monospace;font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
+                <td style="font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
+                <td style="font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
                 <td>
                     {% if s.shift_hours > 0 %}
                     <span class="eta-badge eta-badge-delay">+{{ "%.1f"|format(s.shift_hours) }}h</span>
@@ -160,12 +180,12 @@
             <tbody>
             {% for s in eta_shifts %}
             <tr class="{% if s.shift_hours > 0 %}eta-delay{% else %}eta-advance{% endif %}">
-                <td style="font-family:monospace;font-size:11px;font-weight:600;color:var(--towt-blue);">
+                <td style="font-size:11px;font-weight:600;color:var(--towt-blue);">
                     {% for l in legs %}{% if l.id == s.leg_id %}{{ l.leg_code }}{% endif %}{% endfor %}
                 </td>
                 <td>{{ s.created_at.strftime('%d/%m %H:%M') }}</td>
-                <td style="font-family:monospace;font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
-                <td style="font-family:monospace;font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
+                <td style="font-size:11px;">{{ s.old_value.strftime('%d/%m %H:%M') if s.old_value else '—' }}</td>
+                <td style="font-size:11px;">{{ s.new_value.strftime('%d/%m %H:%M') if s.new_value else '—' }}</td>
                 <td>
                     {% if s.shift_hours > 0 %}
                     <span class="eta-badge eta-badge-delay">+{{ "%.1f"|format(s.shift_hours) }}h</span>
@@ -190,6 +210,7 @@
     <div class="ob-notif-header">
         🔔 {{ unread|length }} notification{{ 's' if unread|length > 1 }}
         <form method="POST" action="/onboard/notifications/dismiss-all" style="display:inline;">
+            {{ csrf_input(request) }}
             <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
             <button type="submit" class="btn btn-sm btn-secondary" style="font-size:10px;padding:3px 10px;">Tout marquer lu</button>
         </form>
@@ -216,7 +237,7 @@
             <tbody>
             {% for ca in crew_onboard %}
             <tr>
-                <td><strong>{{ ca.member.full_name }}</strong></td>
+                <td><strong>{{ ca.member.full_name }}</strong>{% if ca.member.is_foreign %} <span class="ob-foreign-badge">Étranger</span>{% endif %}</td>
                 <td><span class="role-badge role-{{ ca.member.role }}">{{ ca.member.role_label }}</span></td>
                 <td style="font-size:11px;color:#888;">{{ ca.embark_date.strftime('%d/%m/%Y') if ca.embark_date else '—' }}</td>
             </tr>
@@ -290,7 +311,7 @@
                     <br><span style="font-size:10px;color:#888;">{{ p.nationality or '' }} {% if p.date_of_birth %}· {{ p.date_of_birth.strftime('%d/%m/%Y') }}{% endif %}</span>
                 </td>
                 <td><span class="cabin-badge cabin-{{ b.cabin_number }}">{{ b.cabin_number }}</span></td>
-                <td style="font-family:monospace;font-size:11px;">{{ p.passport_number or '—' }}</td>
+                <td style="font-size:11px;">{{ p.passport_number or '—' }}</td>
                 <td>
                     {% if docs_total > 0 %}
                     <div class="ob-doc-bar">
@@ -344,7 +365,7 @@
 
     {% if sof_events %}
     <table class="ob-table sof-table">
-        <thead><tr><th style="width:35%;">Événement</th><th>Date</th><th>Heure (LT)</th><th>Remarques</th><th></th></tr></thead>
+        <thead><tr><th style="width:35%;">Événement</th><th>Date</th><th>Heure</th><th>Fuseau</th><th>Remarques</th><th></th></tr></thead>
         <tbody>
         {% for evt in sof_events %}
         <!-- Display row -->
@@ -353,6 +374,7 @@
             <td><strong>{{ evt.event_label }}</strong></td>
             <td>{{ evt.event_date.strftime('%d/%m/%Y') if evt.event_date else '' }}</td>
             <td>{{ evt.event_time or '' }}</td>
+            <td style="font-size:10px;color:#888;">{{ evt.event_time_tz or 'UTC' }}</td>
             <td style="font-size:11px;color:#666;">{{ evt.remarks or '' }}</td>
             <td style="white-space:nowrap;" onclick="event.stopPropagation();">
                 {% if not is_locked %}
@@ -364,12 +386,20 @@
         <!-- Edit row (hidden by default) -->
         {% if not is_locked %}
         <tr class="sof-edit-row" id="sof-edit-{{ evt.id }}" style="display:none;">
-            <td colspan="5">
+            <td colspan="6">
                 <form method="POST" action="/onboard/sof/{{ evt.id }}/edit" class="sof-inline-edit">
+                    {{ csrf_input(request) }}
                     <div class="sof-edit-grid">
                         <input type="text" name="event_label" value="{{ evt.event_label }}" class="sof-edit-fi" placeholder="Libellé">
                         <input type="date" name="event_date" value="{{ evt.event_date.strftime('%Y-%m-%d') if evt.event_date else '' }}" class="sof-edit-fi">
-                        <input type="time" name="event_time" value="{{ evt.event_time or '' }}" class="sof-edit-fi">
+                        <div class="tz-input-wrap">
+                            <input type="time" name="event_time" value="{{ evt.event_time or '' }}" class="sof-edit-fi">
+                            <select name="event_time_tz" class="tz-select">
+                                {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                                <option value="{{ code }}" {% if code == (evt.event_time_tz or 'UTC') %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                         <input type="text" name="remarks" value="{{ evt.remarks or '' }}" class="sof-edit-fi" placeholder="Remarques">
                         <div class="sof-edit-actions">
                             <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>
@@ -389,6 +419,7 @@
 
     {% if not is_locked %}
     <form method="POST" action="/onboard/sof/add" class="sof-add-form">
+        {{ csrf_input(request) }}
         <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
         <div class="sof-add-grid">
             <select name="event_type" id="sof-type" required onchange="var o=this.options[this.selectedIndex]; document.getElementById('sof-label').value=o.text;">
@@ -418,7 +449,14 @@
             </select>
             <input type="text" name="event_label" id="sof-label" placeholder="Libellé (auto ou libre)">
             <input type="date" name="event_date" id="sof-date">
-            <input type="time" name="event_time" id="sof-time">
+            <div class="tz-input-wrap">
+                <input type="time" name="event_time" id="sof-time">
+                <select name="event_time_tz" class="tz-select">
+                    {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                    <option value="{{ code }}">{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <input type="text" name="remarks" placeholder="Remarques">
             <button type="submit" class="btn btn-primary btn-sm">＋</button>
         </div>
@@ -487,6 +525,7 @@
 
     {% if not is_locked %}
     <form method="POST" action="/onboard/attachments/upload" enctype="multipart/form-data" class="att-upload-form">
+        {{ csrf_input(request) }}
         <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
         <div class="att-upload-grid">
             <div class="fg">
@@ -517,6 +556,201 @@
     {% endif %}
 </div>
 
+<!-- DOCUMENTS AGENT D'ESCALE -->
+<div class="ob-section" id="port-agent-docs">
+    <div class="ob-section-header">
+        <h3>🏢 Documents agent d'escale <span class="ob-badge">{{ port_agent_attachments|length }}</span></h3>
+    </div>
+    <p style="font-size:11px;color:#888;margin-bottom:10px;">Documents reçus de l'agent d'escale local : BL signés, lettres de protestation, constats, protocoles…</p>
+
+    {% if port_agent_attachments %}
+    <div class="att-grid">
+        {% for att in port_agent_attachments %}
+        <div class="att-item" style="border-left:3px solid #D97706;">
+            <div class="att-icon">
+                <i data-lucide="file-check" style="width:20px;height:20px;color:#D97706;"></i>
+            </div>
+            <div class="att-info">
+                <strong>{{ att.title }}</strong>
+                <span class="att-meta">
+                    <span class="att-cat-badge att-cat-{{ att.category }}">{{ att.category|replace('_', ' ') }}</span>
+                    · {{ att.filename }}
+                    {% if att.file_size %}· {{ "%.1f"|format(att.file_size / 1024) }} Ko{% endif %}
+                    · {{ att.uploaded_by }}
+                    · {{ att.created_at.strftime('%d/%m %H:%M') }}
+                </span>
+                {% if att.description %}<span class="att-desc">{{ att.description }}</span>{% endif %}
+            </div>
+            <div class="att-actions">
+                <a href="/onboard/attachments/{{ att.id }}/download" class="btn-icon" title="Télécharger"><i data-lucide="download" style="width:14px;height:14px;color:var(--towt-blue);"></i></a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="ob-empty">Aucun document d'agent d'escale.</p>
+    {% endif %}
+
+    {% if not is_locked %}
+    <form method="POST" action="/onboard/attachments/upload" enctype="multipart/form-data" style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;">
+        {{ csrf_input(request) }}
+        <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
+        <div class="att-upload-grid">
+            <div class="fg">
+                <label class="field-label">Document de l'agent</label>
+                <input type="file" name="file" required class="fi" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
+            </div>
+            <div class="fg">
+                <label class="field-label">Titre</label>
+                <input type="text" name="title" class="fi" placeholder="Ex: BL signé lot 42">
+            </div>
+            <div class="fg">
+                <label class="field-label">Type</label>
+                <select name="category" class="fi">
+                    <option value="port_agent">Document agent d'escale</option>
+                    <option value="bl_signed">BL signé</option>
+                    <option value="letter_protest">Lettre de protestation</option>
+                </select>
+            </div>
+            <div class="fg">
+                <label class="field-label">Description</label>
+                <input type="text" name="description" class="fi" placeholder="Notes (optionnel)">
+            </div>
+            <div class="fg" style="align-self:end;">
+                <button type="submit" class="btn btn-sm" style="background:#D97706;color:white;"><i data-lucide="upload" style="width:14px;height:14px;"></i> Ajouter</button>
+            </div>
+        </div>
+    </form>
+    {% endif %}
+</div>
+
+<!-- CLÔTURE D'ESCALE -->
+{% set closure = current_leg.closure_status or 'open' %}
+<div class="ob-section closure-section" id="closure">
+    <div class="ob-section-header">
+        <h3>🔒 Clôture d'escale</h3>
+        {% if closure == 'locked' and current_leg.closure_pdf_path %}
+        <a href="/onboard/closure/{{ current_leg.id }}/pdf" class="btn btn-secondary btn-sm"><i data-lucide="file-text"></i> Télécharger PDF</a>
+        {% endif %}
+    </div>
+
+    <!-- Workflow progress bar -->
+    <div class="closure-workflow">
+        <div class="closure-step {% if closure in ('open', 'review', 'approved', 'locked') %}done{% endif %}">
+            <div class="closure-step-dot">1</div>
+            <div class="closure-step-label">Ouverte</div>
+        </div>
+        <div class="closure-step-line {% if closure in ('review', 'approved', 'locked') %}done{% endif %}"></div>
+        <div class="closure-step {% if closure in ('review', 'approved', 'locked') %}done{% endif %} {% if closure == 'review' %}current{% endif %}">
+            <div class="closure-step-dot">2</div>
+            <div class="closure-step-label">En revue</div>
+        </div>
+        <div class="closure-step-line {% if closure in ('approved', 'locked') %}done{% endif %}"></div>
+        <div class="closure-step {% if closure in ('approved', 'locked') %}done{% endif %} {% if closure == 'approved' %}current{% endif %}">
+            <div class="closure-step-dot">3</div>
+            <div class="closure-step-label">Approuvée</div>
+        </div>
+        <div class="closure-step-line {% if closure == 'locked' %}done{% endif %}"></div>
+        <div class="closure-step {% if closure == 'locked' %}done{% endif %} {% if closure == 'locked' %}current{% endif %}">
+            <div class="closure-step-dot">4</div>
+            <div class="closure-step-label">Verrouillée</div>
+        </div>
+    </div>
+
+    <!-- Document checklist -->
+    <div style="margin:16px 0;">
+        <h4 style="font-size:12px;color:#555;text-transform:uppercase;margin-bottom:8px;">Checklist documentaire</h4>
+        <div class="closure-check-grid">
+            {% set doc_types_done = cargo_documents|map(attribute='doc_type')|list %}
+            {% for code, label in cargo_doc_types %}
+            <div class="closure-check-item {% if code in doc_types_done %}check-ok{% else %}check-missing{% endif %}">
+                {% if code in doc_types_done %}✅{% else %}⬜{% endif %}
+                {{ label }}
+            </div>
+            {% endfor %}
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:#888;">
+            {{ cargo_documents|length }} / {{ cargo_doc_types|length }} documents créés ·
+            {{ port_agent_attachments|length }} documents agent d'escale ·
+            {{ attachments|length }} pièces jointes totales
+        </div>
+    </div>
+
+    <!-- Closure details -->
+    {% if current_leg.closure_reviewed_by %}
+    <div style="font-size:12px;color:#555;margin:8px 0;">
+        📋 Revue par <strong>{{ current_leg.closure_reviewed_by }}</strong>
+        {% if current_leg.closure_reviewed_at %} le {{ current_leg.closure_reviewed_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+    </div>
+    {% endif %}
+    {% if current_leg.closure_approved_by %}
+    <div style="font-size:12px;color:#555;margin:8px 0;">
+        ✅ Approuvé par <strong>{{ current_leg.closure_approved_by }}</strong>
+        {% if current_leg.closure_approved_at %} le {{ current_leg.closure_approved_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+    </div>
+    {% endif %}
+    {% if current_leg.closure_notes %}
+    <div style="font-size:12px;color:#666;margin:8px 0;padding:8px 12px;background:#f8fafb;border-radius:6px;">
+        <strong>Notes :</strong> {{ current_leg.closure_notes }}
+    </div>
+    {% endif %}
+
+    <!-- Action buttons -->
+    {% if closure == 'open' %}
+    <form method="POST" action="/onboard/closure/{{ current_leg.id }}/submit-review" style="margin-top:12px;">
+        {{ csrf_input(request) }}
+        <div class="fg" style="margin-bottom:8px;">
+            <label class="field-label">Notes de revue (optionnel)</label>
+            <textarea name="closure_notes" class="fi" rows="2" placeholder="Remarques, documents manquants…" style="resize:vertical;min-height:40px;font-family:'Poppins',system-ui,sans-serif;"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Soumettre l\'escale pour revue du commandant ?')">
+            <i data-lucide="send" style="width:14px;height:14px;"></i> Soumettre pour revue
+        </button>
+    </form>
+
+    {% elif closure == 'review' %}
+    <div style="display:flex;gap:8px;margin-top:12px;">
+        <form method="POST" action="/onboard/closure/{{ current_leg.id }}/approve">
+            {{ csrf_input(request) }}
+            <button type="submit" class="btn btn-sm" style="background:#16a34a;color:white;" onclick="return confirm('Approuver la clôture d\'escale ?')">
+                <i data-lucide="check" style="width:14px;height:14px;"></i> Approuver (Commandant)
+            </button>
+        </form>
+        <form method="POST" action="/onboard/closure/{{ current_leg.id }}/reopen">
+            {{ csrf_input(request) }}
+            <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Rouvrir l\'escale ?')">
+                <i data-lucide="rotate-ccw" style="width:14px;height:14px;"></i> Rouvrir
+            </button>
+        </form>
+    </div>
+
+    {% elif closure == 'approved' %}
+    <div style="display:flex;gap:8px;margin-top:12px;">
+        <form method="POST" action="/onboard/closure/{{ current_leg.id }}/lock">
+            {{ csrf_input(request) }}
+            <button type="submit" class="btn btn-sm" style="background:#DC2626;color:white;" onclick="return confirm('Verrouiller définitivement l\'escale ? Un PDF récapitulatif sera généré. Cette action est irréversible.')">
+                <i data-lucide="lock" style="width:14px;height:14px;"></i> Verrouiller définitivement + PDF
+            </button>
+        </form>
+        <form method="POST" action="/onboard/closure/{{ current_leg.id }}/reopen">
+            {{ csrf_input(request) }}
+            <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Rouvrir l\'escale ?')">
+                <i data-lucide="rotate-ccw" style="width:14px;height:14px;"></i> Rouvrir
+            </button>
+        </form>
+    </div>
+
+    {% elif closure == 'locked' %}
+    <div style="margin-top:12px;padding:12px 16px;background:rgba(107,114,128,0.06);border:1px solid rgba(107,114,128,0.15);border-radius:8px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:24px;">🔒</span>
+        <div>
+            <strong style="color:#374151;font-size:13px;">Escale définitivement clôturée</strong>
+            <p style="font-size:11px;color:#888;margin:2px 0 0;">Aucune modification possible. Le PDF récapitulatif est disponible en téléchargement.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
 {% endif %}
 
 <style>
@@ -526,7 +760,7 @@
     .ob-vessel-pill.active{background:var(--towt-blue);color:white;border-color:var(--towt-blue)}
     .ob-leg-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;padding:6px;background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow-x:auto}
     .ob-leg-chip{display:flex;flex-direction:column;padding:8px 14px;border-radius:var(--radius);font-size:11px;color:#555;text-decoration:none;border:1px solid #eee;transition:all 0.15s;min-width:100px}
-    .ob-leg-chip strong{font-size:12px;font-family:monospace;color:var(--towt-blue)}
+    .ob-leg-chip strong{font-size:12px;font-weight:700;color:var(--towt-blue)}
     .ob-leg-chip span{color:#888}
     .ob-leg-chip:hover{border-color:var(--towt-blue);background:#f0f7f8}
     .ob-leg-chip.active{background:var(--towt-blue);border-color:var(--towt-blue);color:white}
@@ -536,7 +770,7 @@
     .ob-leg-live{font-size:9px;font-weight:700;color:#87BD2B}
     .ob-leg-chip.active .ob-leg-live{color:#d4ff88}
     .ob-header{display:flex;justify-content:space-between;align-items:center;background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px}
-    .ob-leg-info h2{margin:0;font-size:18px;color:var(--towt-blue);font-family:monospace}
+    .ob-leg-info h2{margin:0;font-size:18px;color:var(--towt-blue);font-weight:700}
     .ob-leg-info span{font-size:13px;color:#555;display:block;margin-top:2px}.ob-dates{font-size:11px !important;color:#888 !important}
     .ob-last-sof{text-align:right;font-size:12px;background:rgba(9,85,97,0.06);padding:10px 14px;border-radius:8px}
     .ob-last-sof .ob-sof-label{font-size:10px;color:#888;text-transform:uppercase;display:block}
@@ -584,6 +818,8 @@
     .role-chef_mecanicien{background:rgba(245,158,11,0.1);color:#D97706}.role-cook{background:rgba(34,197,94,0.1);color:#16a34a}
     .role-lieutenant{background:rgba(96,165,250,0.1);color:#2563EB}.role-bosco{background:rgba(168,85,247,0.1);color:#A855F7}
     .role-marin{background:rgba(107,114,128,0.1);color:#6B7280}
+    .role-eleve_officier{background:rgba(251,191,36,0.15);color:#B45309}
+    .ob-foreign-badge{font-size:9px;padding:1px 6px;border-radius:100px;font-weight:600;background:rgba(239,68,68,0.1);color:#DC2626}
     .ob-stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
     .ob-stat{background:#f8fafb;padding:10px;border-radius:8px;text-align:center}
     .ob-stat-val{font-size:18px;font-weight:700;color:var(--towt-blue);display:block}
@@ -637,7 +873,7 @@
     /* ETA Shift */
     .eta-shift-form-wrap{padding-bottom:12px;border-bottom:1px solid #f0f0f0;margin-bottom:12px}
     .eta-shift-current{font-size:13px;color:#555;margin:0 0 10px}
-    .eta-shift-current strong{color:var(--towt-blue);font-family:monospace}
+    .eta-shift-current strong{color:var(--towt-blue);font-weight:700}
     .eta-shift-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .eta-shift-grid .fg-wide{grid-column:1/-1}
     .eta-shift-grid .fg{display:flex;flex-direction:column;gap:3px}
@@ -647,10 +883,29 @@
     .eta-shift-history h4{font-size:12px;color:#555;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.5px}
     .eta-delay{border-left:3px solid #DC2626}
     .eta-advance{border-left:3px solid #16a34a}
-    .eta-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:700;font-family:monospace}
+    .eta-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:700}
     .eta-badge-delay{background:rgba(220,38,38,0.1);color:#DC2626}
     .eta-badge-advance{background:rgba(22,163,106,0.1);color:#16a34a}
     .eta-cascade-badge{font-size:10px;padding:2px 6px;border-radius:100px;background:rgba(245,158,11,0.1);color:#D97706;font-weight:600}
+    /* Port agent attachment categories */
+    .att-cat-port_agent{background:rgba(245,158,11,0.1);color:#D97706}
+    .att-cat-bl_signed{background:rgba(59,130,246,0.1);color:#2563EB}
+    .att-cat-letter_protest{background:rgba(220,38,38,0.1);color:#DC2626}
+    /* Closure workflow */
+    .closure-workflow{display:flex;align-items:center;gap:0;padding:16px 0;justify-content:center}
+    .closure-step{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:80px}
+    .closure-step-dot{width:32px;height:32px;border-radius:50%;border:2px solid #ddd;background:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#aaa;transition:all 0.2s}
+    .closure-step.done .closure-step-dot{background:var(--towt-blue);border-color:var(--towt-blue);color:white}
+    .closure-step.current .closure-step-dot{background:#87BD2B;border-color:#87BD2B;color:white;box-shadow:0 0 0 4px rgba(135,189,43,0.2)}
+    .closure-step-label{font-size:10px;color:#888;font-weight:500;text-align:center}
+    .closure-step.done .closure-step-label{color:var(--towt-blue);font-weight:600}
+    .closure-step.current .closure-step-label{color:#5a8010;font-weight:700}
+    .closure-step-line{width:40px;height:2px;background:#ddd;margin-bottom:18px}
+    .closure-step-line.done{background:var(--towt-blue)}
+    .closure-check-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px}
+    .closure-check-item{font-size:11px;padding:4px 8px;border-radius:4px}
+    .check-ok{color:#16a34a;background:rgba(34,197,94,0.06)}
+    .check-missing{color:#aaa;background:#fafafa}
 </style>
 <script>
 // Pre-fill SOF date and time with current values

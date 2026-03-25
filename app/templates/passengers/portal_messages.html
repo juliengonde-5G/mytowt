@@ -25,6 +25,7 @@
     {% endif %}
 
     <form method="POST" action="/passenger/{{ token }}/messages/send?lang={{ lang }}">
+        {{ csrf_input(request) }}
         <div class="msg-input-bar">
             <textarea name="message" placeholder="{% if lang == 'en' %}Write your message…{% else %}Écrivez votre message…{% endif %}" required rows="2"></textarea>
             <button type="submit">{% if lang == 'en' %}Send{% else %}Envoyer{% endif %}</button>
@@ -33,7 +34,7 @@
 </div>
 
 <div style="font-size:12px;color:#888;margin-top:8px;">
-    {% if lang == 'en' %}Our team will respond as soon as possible. For urgent matters, please contact us at <strong>passengers@towt.eu</strong>.{% else %}Notre équipe vous répondra dans les meilleurs délais. Pour les urgences, contactez-nous à <strong>passengers@towt.eu</strong>.{% endif %}
+    {% if lang == 'en' %}Our team will respond as soon as possible. For urgent matters, please contact us at <strong>voyage@towt.eu</strong>.{% else %}Notre équipe vous répondra dans les meilleurs délais. Pour les urgences, contactez-nous à <strong>voyage@towt.eu</strong>.{% endif %}
 </div>
 
 <script>

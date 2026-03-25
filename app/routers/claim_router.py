@@ -19,6 +19,7 @@ from app.models.order import OrderAssignment, Order
 from app.models.crew import CrewMember
 from app.models.passenger import Passenger, PassengerBooking
 from app.models.onboard import SofEvent
+from app.utils.timezones import TIMEZONE_CHOICES
 from app.models.finance import LegFinance, InsuranceContract
 from app.models.claim import (
     Claim, ClaimDocument, ClaimTimeline,
@@ -81,7 +82,7 @@ async def claim_create_form(request: Request, user: User=Depends(get_current_use
     oas = (await db.execute(select(OrderAssignment).options(selectinload(OrderAssignment.order),selectinload(OrderAssignment.leg)).order_by(OrderAssignment.id.desc()))).scalars().all()
     crew = (await db.execute(select(CrewMember).where(CrewMember.is_active==True).order_by(CrewMember.last_name))).scalars().all()
     pax = (await db.execute(select(Passenger).options(selectinload(Passenger.booking)).order_by(Passenger.last_name))).scalars().all()
-    return templates.TemplateResponse("claims/form.html", {"request":request,"user":user,"claim":None,"vessels":vessels,"legs":legs,"order_assignments":oas,"crew_members":crew,"passengers":pax,"claim_types":CLAIM_TYPES,"claim_contexts":CLAIM_CONTEXTS,"claim_guarantees":CLAIM_GUARANTEES,"claim_responsibility":CLAIM_RESPONSIBILITY,"active_module":"claims"})
+    return templates.TemplateResponse("claims/form.html", {"request":request,"user":user,"claim":None,"vessels":vessels,"legs":legs,"order_assignments":oas,"crew_members":crew,"passengers":pax,"claim_types":CLAIM_TYPES,"claim_contexts":CLAIM_CONTEXTS,"claim_guarantees":CLAIM_GUARANTEES,"claim_responsibility":CLAIM_RESPONSIBILITY,"tz_choices":TIMEZONE_CHOICES,"active_module":"claims"})
 
 @router.post("/create", response_class=HTMLResponse)
 async def claim_create_submit(request: Request, claim_type:str=Form(...), vessel_id:int=Form(...), leg_id:int=Form(...), context:str=Form(""), incident_date:str=Form(""), incident_location:str=Form(""), description:str=Form(...), guarantee_type:str=Form(""), responsibility:str=Form("pending"), provision_amount:str=Form(""), franchise_amount:str=Form(""), order_assignment_id:Optional[str]=Form(None), crew_member_id:Optional[str]=Form(None), passenger_id:Optional[str]=Form(None), notes:str=Form(""), user:User=Depends(get_current_user), db:AsyncSession=Depends(get_db)):
@@ -94,35 +95,24 @@ async def claim_create_submit(request: Request, claim_type:str=Form(...), vessel
     # Auto-retrieve cargo zone from stowage plan for cargo claims
     cargo_zone = None
     if claim_type == "cargo" and _to_int(order_assignment_id):
-        from app.models.stowage import StowagePlan
-        from app.models.packing_list import PackingList, PackingListBatch
-        oa_result = await db.execute(
-            select(OrderAssignment).where(OrderAssignment.id == _to_int(order_assignment_id))
-        )
-        oa = oa_result.scalar_one_or_none()
-        if oa:
-            # Find batches for this order and check stowage plans
-            pl_result = await db.execute(
-                select(PackingList).where(PackingList.order_id == oa.order_id)
-            )
-            pl = pl_result.scalar_one_or_none()
-            if pl:
-                batch_result = await db.execute(
-                    select(PackingListBatch).where(PackingListBatch.packing_list_id == pl.id)
-                )
-                batches = batch_result.scalars().all()
-                for batch in batches:
-                    sp_result = await db.execute(
-                        select(StowagePlan).where(
-                            StowagePlan.leg_id == leg_id,
-                            StowagePlan.batch_id == batch.id,
-                        )
-                    )
-                    sp = sp_result.scalar_one_or_none()
-                    if sp:
-                        cargo_zone = sp.zone_code
-                        break  # Use first batch zone found
-
+        try:
+            from app.models.stowage import StowagePlan
+            from app.models.packing_list import PackingList as _PL, PackingListBatch as _PLB
+            oa_r = await db.execute(select(OrderAssignment).where(OrderAssignment.id == _to_int(order_assignment_id)))
+            oa = oa_r.scalar_one_or_none()
+            if oa:
+                pl_r = await db.execute(select(_PL).where(_PL.order_id == oa.order_id))
+                pl = pl_r.scalar_one_or_none()
+                if pl:
+                    b_r = await db.execute(select(_PLB).where(_PLB.packing_list_id == pl.id))
+                    for batch in b_r.scalars().all():
+                        sp_r = await db.execute(select(StowagePlan).where(StowagePlan.leg_id == leg_id, StowagePlan.batch_id == batch.id))
+                        sp = sp_r.scalar_one_or_none()
+                        if sp:
+                            cargo_zone = sp.zone_code
+                            break
+        except Exception:
+            pass
     claim = Claim(reference=ref, claim_type=claim_type, status="open", vessel_id=vessel_id, leg_id=leg_id, order_assignment_id=_to_int(order_assignment_id) if claim_type=="cargo" else None, crew_member_id=_to_int(crew_member_id) if claim_type=="crew" else None, passenger_id=_to_int(passenger_id) if claim_type=="crew" else None, context=context or None, incident_date=inc_date, incident_location=incident_location or None, description=description, guarantee_type=guarantee_type or None, responsibility=responsibility, provision_amount=_pf(provision_amount), franchise_amount=_pf(franchise_amount), declared_by=user.full_name, notes=notes or None, cargo_zone=cargo_zone)
     db.add(claim); await db.flush()
     await log_activity(db, user=user, action="create", module="claims",

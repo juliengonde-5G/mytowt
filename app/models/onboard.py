@@ -110,7 +110,8 @@ class SofEvent(Base):
     event_type = Column(String(50), nullable=False)  # code from SOF_EVENT_TYPES
     event_label = Column(String(300), nullable=False)  # display text (can be customized)
     event_date = Column(Date, nullable=True)
-    event_time = Column(String(10), nullable=True)  # HH:MM format (LT)
+    event_time = Column(String(10), nullable=True)  # HH:MM format
+    event_time_tz = Column(String(50), nullable=True, default="UTC")  # IANA timezone of event_time
     remarks = Column(Text, nullable=True)
     created_by = Column(String(200), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -156,8 +157,30 @@ ATTACHMENT_CATEGORIES = [
     ("document", "Document"),
     ("report", "Rapport / Report"),
     ("certificate", "Certificat / Certificate"),
+    ("port_agent", "Document agent d'escale / Port agent"),
+    ("bl_signed", "BL signé / Signed BL"),
+    ("letter_protest", "Lettre de protestation / Letter of Protest"),
     ("other", "Autre / Other"),
 ]
+
+
+class CargoDocumentAttachment(Base):
+    """File or photo attachment linked to a specific cargo document."""
+    __tablename__ = "cargo_document_attachments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    document_id = Column(Integer, ForeignKey("cargo_documents.id", ondelete="CASCADE"), nullable=False)
+    leg_id = Column(Integer, ForeignKey("legs.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(300), nullable=False)
+    filename = Column(String(300), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+    uploaded_by = Column(String(200), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    document = relationship("CargoDocument", backref="attachments")
+    leg = relationship("Leg")
 
 
 class OnboardAttachment(Base):

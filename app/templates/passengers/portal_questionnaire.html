@@ -23,6 +23,7 @@
     </div>
     {% else %}
     <form method="POST" action="/passenger/{{ token }}/pax/{{ pax.id }}/questionnaire">
+        {{ csrf_input(request) }}
         <h3 style="font-size:12px;">{% if lang == 'en' %}Maritime experience{% else %}Expérience maritime{% endif %}</h3>
         <div class="fg"><label>{% if lang == 'en' %}Have you sailed before?{% else %}Avez-vous déjà voyagé en voilier/bateau ?{% endif %}</label>
             <div class="q-radio"><label><input type="radio" name="sailed_before" value="yes"> {% if lang == 'en' %}Yes{% else %}Oui{% endif %}</label><label><input type="radio" name="sailed_before" value="no"> {% if lang == 'en' %}No{% else %}Non{% endif %}</label></div>
@@ -45,6 +46,39 @@
         <div class="fg full"><label>{% if lang == 'en' %}Intolerances{% else %}Intolérances{% endif %}</label><textarea name="intolerances" class="fi" rows="2"></textarea></div>
         <div style="margin-top:12px;padding:10px;background:rgba(9,85,97,0.03);border-radius:6px;font-size:11px;color:#555;">
             {% if lang == 'en' %}I acknowledge having received the safety instructions, commit to respecting them and will inform the crew of any changes regarding my health or special needs.{% else %}Je reconnais avoir reçu les consignes de sécurité, m'engage à les respecter et informe l'équipage de toute modification concernant ma santé ou mes besoins particuliers.{% endif %}
+        </div>
+
+        <!-- Renonciation aux droits d'auteur -->
+        <div style="margin-top:12px;padding:12px;background:rgba(135,189,43,0.05);border:1px solid rgba(135,189,43,0.2);border-radius:8px;">
+            <h3 style="font-size:12px;color:var(--towt-blue);margin:0 0 8px;">
+                {% if lang == 'en' %}Waiver of Copyright{% else %}Renonciation aux droits d'auteur{% endif %}
+            </h3>
+            <div style="font-size:10px;color:#555;max-height:120px;overflow-y:auto;padding:8px;background:white;border-radius:6px;margin-bottom:8px;">
+                {% if lang == 'en' %}
+                <p>In the context of using the passenger transport services offered by TOWT (SIREN 803 845 270, 52 quai Frissard, 76600 Le Havre), you may share content (text, video, photo) describing the service (the "Work").</p>
+                <p>This content may be reworked (without distorting its meaning), used and published by TOWT on social networks and the TOWT website. By checking the box below, you expressly waive all copyright on the Work, including moral rights and economic rights, for social networks and website use.</p>
+                <p>This waiver is made free of charge and irrevocably, without any financial consideration, for all territories and for the full duration of copyright protection.</p>
+                {% else %}
+                <p>Dans le cadre de l'utilisation des services de transport de passagers proposés par TOWT (SIREN 803 845 270, 52 quai Frissard, 76600 Le Havre), vous pouvez envoyer des contenus (texte, vidéo, photo) décrivant le service (ci-après l'Œuvre).</p>
+                <p>Les contenus pourront être retravaillés (sans en dénaturer le sens), utilisés et publiés par TOWT sur les réseaux sociaux et le site internet. En cochant la case ci-dessous, vous déclarez expressément renoncer à l'ensemble de vos droits d'auteur sur l'Œuvre, y compris le droit moral et le droit patrimonial, pour les réseaux sociaux et le site internet.</p>
+                <p>Cette renonciation est faite à titre gratuit et irrévocable, sans aucune contrepartie financière, pour l'ensemble des territoires et pour toute la durée de protection des droits d'auteur.</p>
+                {% endif %}
+            </div>
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#333;text-transform:none;font-weight:400;">
+                <input type="checkbox" name="photo_rights_consent" value="1" required style="margin-top:2px;width:16px;height:16px;flex-shrink:0;">
+                <span>
+                    {% if lang == 'en' %}I have read and accept the waiver of copyright above, authorizing TOWT to use any content (photos, videos, text) I may share during the crossing.{% else %}J'ai lu et j'accepte la renonciation aux droits d'auteur ci-dessus, autorisant TOWT à utiliser tout contenu (photos, vidéos, textes) que je pourrais partager durant la traversée.{% endif %}
+                </span>
+            </label>
+        </div>
+
+        <div style="margin-top:12px;padding:12px;background:rgba(37,99,235,0.04);border:1px solid rgba(37,99,235,0.15);border-radius:8px;">
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#333;text-transform:none;font-weight:400;">
+                <input type="checkbox" name="gdpr_consent" value="1" required style="margin-top:2px;width:16px;height:16px;flex-shrink:0;">
+                <span>
+                    {% if lang == 'en' %}I consent to the processing of my personal data (identity, health, dietary requirements) by TOWT for the purpose of organizing my crossing, in accordance with the <a href="/passenger/{{ token }}/privacy?lang={{ lang }}" target="_blank" style="color:#2563EB;">privacy policy</a>. I may withdraw my consent at any time by contacting privacy@towt.eu.{% else %}J'accepte le traitement de mes données personnelles (identité, santé, régime alimentaire) par TOWT pour l'organisation de ma traversée, conformément à la <a href="/passenger/{{ token }}/privacy?lang={{ lang }}" target="_blank" style="color:#2563EB;">politique de confidentialité</a>. Je peux retirer mon consentement à tout moment en contactant privacy@towt.eu.{% endif %}
+                </span>
+            </label>
         </div>
         <button type="submit" class="btn btn-primary" style="margin-top:12px;">{% if lang == 'en' %}Sign & Submit{% else %}Signer & Envoyer{% endif %}</button>
     </form>

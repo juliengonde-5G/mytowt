@@ -12,9 +12,9 @@ from app.models.packing_list import PackingList, PackingListBatch, PackingListAu
 from app.models.onboard import SofEvent, OnboardNotification, CargoDocument
 from app.models.passenger import (
     Passenger, PassengerBooking, PassengerPayment, PassengerDocument,
-    CabinPriceGrid, PreBoardingForm, PassengerAuditLog,
+    CabinPriceGrid, PreBoardingForm, PassengerAuditLog, SatisfactionResponse,
 )
-from app.models.activity import ActivityLog
+from app.models.activity_log import ActivityLog
 from app.models.mrv import MrvEvent, MrvParameter
 from app.models.co2_variable import Co2Variable
 from app.models.claim import Claim, ClaimDocument, ClaimTimeline
@@ -22,6 +22,8 @@ from app.models.commercial import Client, RateGrid, RateGridLine, RateOffer
 from app.models.notification import Notification
 from app.models.portal_message import PortalMessage
 from app.models.vessel_position import VesselPosition
+from app.models.planning_share import PlanningShare
+from app.models.stowage import StowagePlan
 
 __all__ = [
     "User", "Port", "Vessel", "Leg",
@@ -33,7 +35,7 @@ __all__ = [
     "PackingList", "PackingListBatch", "PackingListAudit",
     "SofEvent", "OnboardNotification", "CargoDocument",
     "Passenger", "PassengerBooking", "PassengerPayment", "PassengerDocument",
-    "CabinPriceGrid", "PreBoardingForm", "PassengerAuditLog",
+    "CabinPriceGrid", "PreBoardingForm", "PassengerAuditLog", "SatisfactionResponse",
     "ActivityLog",
     "MrvEvent", "MrvParameter",
     "Co2Variable",
@@ -42,4 +44,6 @@ __all__ = [
     "Notification",
     "PortalMessage",
     "VesselPosition",
+    "PlanningShare",
+    "StowagePlan",
 ]

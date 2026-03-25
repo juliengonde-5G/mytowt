@@ -60,7 +60,7 @@
         @media(max-width:600px){.form-grid{grid-template-columns:1fr}}
         .fg{display:flex;flex-direction:column;gap:2px;margin-bottom:4px}.fg.full{grid-column:1/-1}
         .fg label{font-size:10px;font-weight:600;color:#888;text-transform:uppercase}
-        .fi{padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;width:100%}
+        .fi{padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:'Poppins',system-ui,sans-serif;width:100%}
         .fi:focus{border-color:#095561;outline:none}
         .btn{padding:8px 18px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
         .btn-primary{background:#095561;color:white}.btn-sm{padding:5px 12px;font-size:11px}
@@ -105,7 +105,7 @@
         .msg-company{align-self:flex-start;background:#f0f0f0;color:#333;border-bottom-left-radius:4px}
         .msg-meta{font-size:10px;color:#aaa;margin-top:3px}
         .msg-input-bar{display:flex;gap:8px;margin-top:12px}
-        .msg-input-bar textarea{flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;resize:none;min-height:44px}
+        .msg-input-bar textarea{flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:'Poppins',system-ui,sans-serif;resize:none;min-height:44px}
         .msg-input-bar button{padding:10px 20px;background:#095561;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer}
 
         /* CREW TABLE */
@@ -127,7 +127,7 @@
     <div class="portal-header">
         <div class="portal-logo">
             <button class="mobile-nav-toggle" onclick="toggleSidebar()">☰</button>
-            <img src="/static/img/logo_towt.png" alt="TOWT">
+            <img src="/static/img/logo_towt_white.png" alt="TOWT">
             <div>
                 <div class="portal-logo-text">TOWT</div>
                 <div class="portal-logo-sub">Transoceanic Wind Transport</div>
@@ -198,6 +198,9 @@
                 </a>
             </nav>
             <div class="portal-sidebar-footer">
+                <a href="/passenger/{{ token }}/privacy?lang={{ lang }}" style="color:#888;font-size:10px;text-decoration:underline;">
+                    {% if lang == 'en' %}Privacy Policy{% else %}Politique de confidentialité{% endif %}
+                </a><br>
                 TOWT — Les Docks, 52 quai Frissard<br>76600 Le Havre
             </div>
         </div>
@@ -208,11 +211,26 @@
         </div>
     </div>
 
+    <!-- Cookie consent banner -->
+    <div id="cookie-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1a1a2e;color:white;padding:14px 24px;z-index:200;font-size:12px;box-shadow:0 -2px 10px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span>
+            {% if lang == 'en' %}This site uses only strictly necessary cookies (session, language). No tracking or advertising cookies. <a href="/passenger/{{ token }}/privacy?lang={{ lang }}" style="color:#87BD2B;">Learn more</a>{% else %}Ce site utilise uniquement des cookies strictement nécessaires (session, langue). Aucun cookie de suivi ou publicitaire. <a href="/passenger/{{ token }}/privacy?lang={{ lang }}" style="color:#87BD2B;">En savoir plus</a>{% endif %}
+        </span>
+        <button onclick="acceptCookies()" style="background:#87BD2B;color:white;border:none;padding:6px 18px;border-radius:4px;font-weight:600;cursor:pointer;white-space:nowrap;font-size:12px;">OK</button>
+    </div>
+
     <script>
     function toggleSidebar(){
         document.getElementById('portalSidebar').classList.toggle('open');
         document.getElementById('sidebarOverlay').classList.toggle('show');
     }
+    function acceptCookies(){
+        document.getElementById('cookie-banner').style.display='none';
+        try{localStorage.setItem('towt_cookies_ok','1');}catch(e){}
+    }
+    (function(){
+        try{if(!localStorage.getItem('towt_cookies_ok')){document.getElementById('cookie-banner').style.display='flex';}}catch(e){}
+    })();
     </script>
 </body>
 </html>

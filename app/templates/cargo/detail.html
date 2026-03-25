@@ -12,10 +12,12 @@
 <button class="btn btn-secondary btn-sm" onclick="toggleEditMode()" id="edit-toggle-btn"><i data-lucide="pencil"></i> Modifier</button>
 <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-modal').style.display='flex'"><i data-lucide="upload"></i> Import Excel</button>
 <form method="POST" action="/cargo/{{ pl.id }}/lock" style="display:inline;">
+    {{ csrf_input(request) }}
     <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="lock"></i> Verrouiller</button>
 </form>
 {% else %}
 <form method="POST" action="/cargo/{{ pl.id }}/unlock" style="display:inline;">
+    {{ csrf_input(request) }}
     <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="unlock"></i> Déverrouiller</button>
 </form>
 {% endif %}
@@ -23,6 +25,14 @@
 
 {% block content %}
 <div class="cargo-detail" id="cargo-detail">
+    {% if imdg_warnings %}
+    <div style="background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.2);border-radius:8px;padding:12px 16px;margin-bottom:16px;">
+        <div style="font-weight:600;font-size:12px;color:#DC2626;margin-bottom:6px;">⚠️ IMDG — Marchandises dangereuses : champs requis manquants</div>
+        {% for w in imdg_warnings %}
+        <div style="font-size:11px;color:#991B1B;padding:2px 0;">• {{ w }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
     <div class="summary-bar">
         <div class="summary-item"><span class="summary-label">Commande</span><span class="summary-value" style="font-family:monospace;">{{ pl.order.reference }}</span></div>
         <div class="summary-item"><span class="summary-label">Client</span><span class="summary-value">{{ pl.order.client_name }}</span></div>
@@ -57,6 +67,7 @@
     {% endif %}
 
     <form method="POST" action="/cargo/{{ pl.id }}/edit" id="edit-form">
+        {{ csrf_input(request) }}
     <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 12px;">
         <h3 style="font-size:16px;margin:0;">📦 Batchs ({{ pl.batches|length }})</h3>
         <button type="submit" class="btn btn-primary edit-actions" style="padding:6px 16px;font-size:12px;">💾 Enregistrer les modifications</button>
@@ -127,6 +138,7 @@
 
     {% if not pl.is_locked %}
     <form method="POST" action="/cargo/{{ pl.id }}/add-batch" style="margin-top:12px;">
+        {{ csrf_input(request) }}
         <button type="submit" class="btn-add-batch">＋ Ajouter un batch</button>
     </form>
     {% endif %}
@@ -137,6 +149,7 @@
         <h3 style="margin-bottom:16px;">📥 Importer un fichier Excel</h3>
         <p style="font-size:12px;color:#888;margin-bottom:16px;">Le fichier doit respecter le format du template TOWT. Les batchs existants seront remplacés.</p>
         <form method="POST" action="/cargo/{{ pl.id }}/import-excel" enctype="multipart/form-data">
+            {{ csrf_input(request) }}
             <input type="file" name="file" accept=".xlsx,.xls" class="form-input" required style="margin-bottom:16px;">
             <div style="display:flex;gap:8px;justify-content:flex-end;">
                 <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='none'">Annuler</button>

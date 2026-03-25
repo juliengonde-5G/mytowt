@@ -1,14 +1,21 @@
+import csv
+import io
+import logging
+import secrets
+from datetime import datetime
+from typing import Optional
+
 from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, Response
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.utils.activity import log_activity, get_client_ip
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
-from typing import Optional
-from datetime import datetime
-import csv
-import io
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.auth import get_current_user
@@ -22,6 +29,7 @@ from app.models.co2_variable import Co2Variable, CO2_DEFAULTS
 from app.models.mrv import MrvParameter, MRV_DEFAULTS
 
 ADMIN_ROLES = {"administrateur", "admin", "data_analyst"}
+ADMIN_OR_COMMERCIAL = ADMIN_ROLES | {"commercial"}
 
 
 async def require_admin(user: User = Depends(get_current_user)):
@@ -30,7 +38,18 @@ async def require_admin(user: User = Depends(get_current_user)):
         raise HTTPException(403, detail="Admin access required")
     return user
 
+
+async def require_admin_or_commercial(user: User = Depends(get_current_user)):
+    """Require admin, data_analyst or commercial role."""
+    if user.role not in ADMIN_OR_COMMERCIAL:
+        raise HTTPException(403, detail="Access denied")
+    return user
+
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+# Separate router for routes accessible to all authenticated users (my-account)
+# or admin+commercial (settings)
+account_router = APIRouter(prefix="/admin", tags=["admin"])
 
 USER_ROLES = [
     {"value": "administrateur", "label": "Administrateur"},
@@ -39,7 +58,6 @@ USER_ROLES = [
     {"value": "technique", "label": "Technique"},
     {"value": "data_analyst", "label": "Data Analyst"},
     {"value": "marins", "label": "Marins"},
-    {"value": "gestionnaire_passagers", "label": "Gestionnaire Passagers"},
     {"value": "commercial", "label": "Commercial"},
     {"value": "manager_maritime", "label": "Manager Maritime"},
 ]
@@ -63,10 +81,10 @@ def pf(val, default=0):
 
 
 # ─── SETTINGS HOME ───────────────────────────────────────────
-@router.get("/settings", response_class=HTMLResponse)
+@account_router.get("/settings", response_class=HTMLResponse)
 async def settings_home(
     request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin_or_commercial),
     db: AsyncSession = Depends(get_db),
 ):
     # Users
@@ -181,6 +199,7 @@ async def settings_home(
         "co2_defaults": CO2_DEFAULTS,
         "mrv_params": mrv_params, "mrv_defaults": MRV_DEFAULTS,
         "pipedrive_token": pipedrive_token,
+        "maintenance_active": __import__('app.maintenance', fromlist=['is_maintenance_mode']).is_maintenance_mode(),
         "active_module": "settings",
     })
 
@@ -216,6 +235,21 @@ async def user_create_submit(
     db: AsyncSession = Depends(get_db),
 ):
     from app.auth import hash_password
+    # Input length validation
+    username = username[:50]
+    password = password[:128]
+    full_name = full_name[:100]
+    email = email[:200]
+    if len(username) < 3:
+        return templates.TemplateResponse("admin/user_form.html", {
+            "request": request, "user": user, "edit_user": None,
+            "error": "Le nom d'utilisateur doit contenir au moins 3 caractères.", "roles": USER_ROLES,
+        })
+    if len(password) < 8:
+        return templates.TemplateResponse("admin/user_form.html", {
+            "request": request, "user": user, "edit_user": None,
+            "error": "Le mot de passe doit contenir au moins 8 caractères.", "roles": USER_ROLES,
+        })
     if not email:
         email = f"{username}@towt.eu"
     existing = await db.execute(select(User).where(User.username == username))
@@ -263,11 +297,15 @@ async def user_edit_submit(
     edit_user = result.scalar_one_or_none()
     if not edit_user:
         raise HTTPException(status_code=404)
-    edit_user.full_name = full_name
+    edit_user.full_name = full_name[:100]
     edit_user.role = role
     if password and password.strip():
-        edit_user.hashed_password = _hp(password)
+        edit_user.hashed_password = _hp(password[:128])
     await db.flush()
+    await log_activity(db, user=user, action="update", module="admin",
+                       entity_type="user", entity_id=edit_user.id,
+                       entity_label=edit_user.full_name, detail=f"role: {role}",
+                       ip_address=get_client_ip(request))
     return RedirectResponse(url="/admin/users", status_code=303)
 
 
@@ -288,6 +326,226 @@ async def user_delete(
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/users"})
     return RedirectResponse(url="/admin/users", status_code=303)
+
+
+# ─── USER IMPORT (EXCEL) ────────────────────────────────────
+VALID_ROLES = {r["value"] for r in USER_ROLES}
+
+@router.get("/users/import/template")
+async def users_import_template(user: User = Depends(require_admin)):
+    """Download an Excel template for user import."""
+    wb = openpyxl.Workbook()
+
+    # ── Sheet 1: Template ──
+    ws = wb.active
+    ws.title = "Utilisateurs"
+    headers = ["username", "full_name", "email", "role", "password", "language", "is_active"]
+    header_font = Font(name="Poppins", bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="095561", end_color="095561", fill_type="solid")
+    thin_border = Border(
+        left=Side(style="thin", color="CCCCCC"),
+        right=Side(style="thin", color="CCCCCC"),
+        top=Side(style="thin", color="CCCCCC"),
+        bottom=Side(style="thin", color="CCCCCC"),
+    )
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = thin_border
+
+    # Example rows
+    examples = [
+        ("jdupont", "Jean Dupont", "jean.dupont@towt.eu", "operation", "MotDePasse123", "fr", "oui"),
+        ("mmartin", "Marie Martin", "marie.martin@towt.eu", "commercial", "MotDePasse456", "en", "oui"),
+    ]
+    example_font = Font(name="Poppins", color="888888", italic=True, size=10)
+    for r, row_data in enumerate(examples, 2):
+        for c, val in enumerate(row_data, 1):
+            cell = ws.cell(row=r, column=c, value=val)
+            cell.font = example_font
+            cell.border = thin_border
+
+    # Column widths
+    widths = [18, 25, 30, 22, 20, 12, 12]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+    # ── Sheet 2: Référence rôles ──
+    ws2 = wb.create_sheet("Référence rôles")
+    ws2.cell(row=1, column=1, value="Valeur (role)").font = Font(bold=True)
+    ws2.cell(row=1, column=2, value="Description").font = Font(bold=True)
+    for i, r in enumerate(USER_ROLES, 2):
+        ws2.cell(row=i, column=1, value=r["value"])
+        ws2.cell(row=i, column=2, value=r["label"])
+    ws2.column_dimensions["A"].width = 25
+    ws2.column_dimensions["B"].width = 30
+
+    # ── Sheet 3: Instructions ──
+    ws3 = wb.create_sheet("Instructions")
+    instructions = [
+        "Instructions d'import des utilisateurs",
+        "",
+        "Colonnes obligatoires : username, full_name, password",
+        "Colonnes optionnelles : email, role, language, is_active",
+        "",
+        "username : identifiant unique (3-50 car.), pas d'espaces",
+        "full_name : nom complet (max 100 car.)",
+        "email : si vide, sera généré comme username@towt.eu",
+        "role : voir onglet 'Référence rôles' (défaut: operation)",
+        "password : min 8 caractères",
+        "language : fr, en, es, pt-br, vi (défaut: fr)",
+        "is_active : oui/non ou true/false (défaut: oui)",
+        "",
+        "Les utilisateurs existants (même username) seront ignorés.",
+        "Les lignes avec erreurs seront signalées dans le rapport.",
+    ]
+    for i, line in enumerate(instructions, 1):
+        cell = ws3.cell(row=i, column=1, value=line)
+        if i == 1:
+            cell.font = Font(bold=True, size=13)
+        else:
+            cell.font = Font(size=11)
+    ws3.column_dimensions["A"].width = 60
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=import_utilisateurs_template.xlsx"},
+    )
+
+
+@router.post("/users/import", response_class=HTMLResponse)
+async def users_import_excel(
+    request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Import users from an Excel file."""
+    from app.auth import hash_password
+
+    raw = await file.read()
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+    except Exception:
+        msg = "Fichier Excel invalide. Utilisez le template fourni."
+        return RedirectResponse(url=f"/admin/users?import_error={msg.replace(' ', '+')}", status_code=303)
+
+    ws = wb.active
+    rows = list(ws.iter_rows(min_row=1, values_only=True))
+    if len(rows) < 2:
+        return RedirectResponse(url="/admin/users?import_error=Fichier+vide+ou+sans+données", status_code=303)
+
+    # Map header names to column indices
+    raw_headers = [str(h).strip().lower() if h else "" for h in rows[0]]
+    col_map = {}
+    for i, h in enumerate(raw_headers):
+        col_map[h] = i
+
+    required = {"username", "full_name", "password"}
+    missing = required - set(col_map.keys())
+    if missing:
+        msg = f"Colonnes manquantes : {', '.join(missing)}"
+        return RedirectResponse(url=f"/admin/users?import_error={msg.replace(' ', '+')}", status_code=303)
+
+    def cell_val(row, col_name, default=""):
+        idx = col_map.get(col_name)
+        if idx is None or idx >= len(row) or row[idx] is None:
+            return default
+        return str(row[idx]).strip()
+
+    # Preload existing usernames
+    result = await db.execute(select(User.username))
+    existing_usernames = {u.lower() for u in result.scalars().all()}
+
+    created = 0
+    skipped = 0
+    errors = []
+
+    for line_no, row in enumerate(rows[1:], 2):
+        # Skip empty rows
+        if not any(row):
+            continue
+
+        username = cell_val(row, "username")
+        full_name = cell_val(row, "full_name")
+        password = cell_val(row, "password")
+        email = cell_val(row, "email")
+        role = cell_val(row, "role", "operation").lower()
+        language = cell_val(row, "language", "fr").lower()
+        is_active_str = cell_val(row, "is_active", "oui").lower()
+
+        # Validate
+        if not username or len(username) < 3:
+            errors.append(f"Ligne {line_no}: username manquant ou trop court (<3 car.)")
+            continue
+        username = username[:50]
+
+        if not full_name:
+            errors.append(f"Ligne {line_no}: full_name manquant")
+            continue
+        full_name = full_name[:100]
+
+        if not password or len(password) < 8:
+            errors.append(f"Ligne {line_no}: password manquant ou trop court (<8 car.)")
+            continue
+        password = password[:128]
+
+        if username.lower() in existing_usernames:
+            skipped += 1
+            continue
+
+        if role not in VALID_ROLES:
+            errors.append(f"Ligne {line_no}: rôle '{role}' invalide")
+            continue
+
+        if language not in ("fr", "en", "es", "pt-br", "vi"):
+            language = "fr"
+
+        if not email:
+            email = f"{username}@towt.eu"
+        email = email[:255]
+
+        is_active = is_active_str not in ("non", "false", "0", "no", "inactif")
+
+        new_user = User(
+            username=username,
+            email=email,
+            hashed_password=hash_password(password),
+            full_name=full_name,
+            role=role,
+            language=language,
+            is_active=is_active,
+        )
+        db.add(new_user)
+        existing_usernames.add(username.lower())
+        created += 1
+
+    await db.flush()
+    await log_activity(db, user=user, action="import", module="admin",
+                       entity_type="users_excel", entity_id=None,
+                       entity_label=f"{file.filename}: {created} créés, {skipped} ignorés",
+                       ip_address=get_client_ip(request))
+
+    msg = f"Import terminé : {created} utilisateurs créés, {skipped} existants ignorés"
+    if errors:
+        msg += f", {len(errors)} erreurs"
+    param = "import_success" if created > 0 or (not errors) else "import_error"
+    url = f"/admin/users?{param}={msg.replace(' ', '+')}"
+    if errors:
+        detail = " | ".join(errors[:10])
+        if len(errors) > 10:
+            detail += f" ... et {len(errors)-10} autres"
+        url += f"&import_detail={detail.replace(' ', '+')}"
+
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
 
 
 # ─── VESSELS ─────────────────────────────────────────────────
@@ -320,7 +578,7 @@ async def vessel_create_submit(
     if existing.scalar_one_or_none():
         return templates.TemplateResponse("admin/vessel_form.html", {
             "request": request, "user": user, "vessel": None,
-            "error": f"Le code navire {code} existe déjà.",
+            "error": "Ce code navire existe déjà.",
         })
     vessel = Vessel(
         code=code, name=name.strip(),
@@ -375,6 +633,9 @@ async def vessel_edit_submit(
     vessel.default_speed = pf(default_speed, 8)
     vessel.default_elongation = pf(default_elongation, 1.25)
     await db.flush()
+    await log_activity(db, user=user, action="update", module="admin",
+                       entity_type="vessel", entity_id=vessel.id,
+                       entity_label=vessel.name, ip_address=get_client_ip(request))
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
     return RedirectResponse(url="/admin/settings", status_code=303)
@@ -401,6 +662,9 @@ async def opex_update(
         )
         db.add(param)
     await db.flush()
+    await log_activity(db, user=user, action="update", module="admin",
+                       entity_type="opex", detail=f"opex_daily_rate={opex_daily_rate}",
+                       ip_address=get_client_ip(request))
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/admin/settings"})
     return RedirectResponse(url="/admin/settings", status_code=303)
@@ -466,12 +730,19 @@ TABLE_DEFS = {
     "cargo": {"label": "Cargo", "tables": ["packing_lists", "packing_list_batches", "packing_list_audit"]},
     "finance": {"label": "Finance", "tables": ["leg_finances"]},
     "claims": {"label": "Claims", "tables": ["claims", "claim_documents", "claim_timeline"]},
-    "crew": {"label": "Équipage", "tables": ["crew_members", "crew_assignments"]},
+    "crew": {"label": "Équipage", "tables": ["crew_members", "crew_assignments", "crew_tickets"]},
     "crew_assignments": {"label": "Affectations", "tables": ["crew_assignments"]},
+    "escale": {"label": "Escale", "tables": ["escale_operations", "docker_shifts"]},
     "sof": {"label": "SOF", "tables": ["sof_events"]},
+    "onboard": {"label": "On Board", "tables": ["onboard_notifications", "onboard_attachments", "cargo_documents", "cargo_document_attachments", "eta_shifts"]},
     "messages": {"label": "Messages", "tables": ["portal_messages"]},
     "notifications": {"label": "Notifications", "tables": ["notifications"]},
-    "config": {"label": "Config", "tables": ["vessels", "ports", "port_configs", "opex_parameters", "emission_parameters", "cabin_price_grid", "insurance_contracts"]},
+    "activity": {"label": "Journal d'activité", "tables": ["activity_logs"]},
+    "clients": {"label": "Clients", "tables": ["clients"]},
+    "rates": {"label": "Grilles tarifaires", "tables": ["rate_grids", "rate_grid_lines", "rate_offers"]},
+    "kpi": {"label": "KPI", "tables": ["leg_kpis"]},
+    "config": {"label": "Config", "tables": ["vessels", "ports", "port_configs", "opex_parameters", "emission_parameters", "cabin_price_grid", "insurance_contracts", "co2_variables", "mrv_parameters", "mrv_events", "planning_shares", "vessel_positions"]},
+    "access_logs": {"label": "Logs d'accès", "tables": ["portal_access_logs"]},
 }
 
 # Whitelist of all allowed table names for SQL queries (prevents SQL injection)
@@ -515,7 +786,8 @@ async def export_global(
                     writer.writerow([_date_fmt(v) if hasattr(v, 'strftime') else ('' if v is None else str(v)) for v in row])
 
                 zf.writestr(f"{table_name}.csv", output.getvalue())
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Export failed for table {table_name}: {e}")
                 continue
 
     zip_buffer.seek(0)
@@ -566,7 +838,8 @@ async def export_selective(
                     writer.writerow([_date_fmt(v) if hasattr(v, 'strftime') else ('' if v is None else str(v)) for v in row])
 
                 zf.writestr(f"{table_name}.csv", output.getvalue())
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Selective export failed for table {table_name}: {e}")
                 continue
 
     zip_buffer.seek(0)
@@ -589,6 +862,9 @@ async def export_files(
         ("/app/uploads/passenger_docs", "passenger_docs"),
         ("/app/data/claims", "claims"),
         ("app/static/uploads/orders", "orders"),
+        ("/app/uploads/crew_tickets", "crew_tickets"),
+        ("/app/uploads/onboard_attachments", "onboard_attachments"),
+        ("/app/uploads/cargo_doc_attachments", "cargo_doc_attachments"),
     ]
 
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
@@ -600,7 +876,8 @@ async def export_files(
                         arc_name = os.path.join(prefix, os.path.relpath(full_path, dir_path))
                         try:
                             zf.write(full_path, arc_name)
-                        except Exception:
+                        except Exception as e:
+                            logger.warning(f"File export failed for {full_path}: {e}")
                             continue
 
     zip_buffer.seek(0)
@@ -629,14 +906,24 @@ async def purge_selective(
 
     # Order matters for FK constraints — delete children first
     purge_order = [
-        "notifications", "messages", "sof", "claims",
-        "cargo", "passengers", "finance", "crew_assignments", "orders", "legs",
+        "notifications", "messages", "activity", "access_logs", "sof",
+        "onboard", "escale", "claims",
+        "cargo", "passengers", "finance", "rates", "clients",
+        "crew_assignments", "orders", "kpi", "legs",
     ]
 
     table_sql = {
         "notifications": ["DELETE FROM notifications"],
         "messages": ["DELETE FROM portal_messages"],
+        "activity": ["DELETE FROM activity_logs"],
+        "access_logs": ["DELETE FROM portal_access_logs"],
         "sof": ["DELETE FROM sof_events WHERE event_type NOT IN ('CLAIM_DECLARED','CLAIM_UPDATED')"],
+        "onboard": [
+            "DELETE FROM cargo_document_attachments", "DELETE FROM cargo_documents",
+            "DELETE FROM onboard_attachments", "DELETE FROM onboard_notifications",
+            "DELETE FROM eta_shifts",
+        ],
+        "escale": ["DELETE FROM escale_operations", "DELETE FROM docker_shifts"],
         "claims": ["DELETE FROM claim_timeline", "DELETE FROM claim_documents", "DELETE FROM claims"],
         "cargo": ["DELETE FROM packing_list_audit", "DELETE FROM packing_list_batches", "DELETE FROM packing_lists"],
         "passengers": [
@@ -646,11 +933,17 @@ async def purge_selective(
         ],
         "orders": ["DELETE FROM order_assignments", "DELETE FROM orders"],
         "finance": ["DELETE FROM leg_finances"],
-        "crew_assignments": ["DELETE FROM crew_assignments"],
+        "rates": ["DELETE FROM rate_offers", "DELETE FROM rate_grid_lines", "DELETE FROM rate_grids"],
+        "clients": ["DELETE FROM clients"],
+        "crew_assignments": ["DELETE FROM crew_tickets", "DELETE FROM crew_assignments"],
+        "kpi": ["DELETE FROM leg_kpis"],
         "legs": [
             "DELETE FROM sof_events", "DELETE FROM escale_operations",
             "DELETE FROM onboard_notifications", "DELETE FROM cargo_documents",
+            "DELETE FROM cargo_document_attachments",
             "DELETE FROM docker_shifts", "DELETE FROM leg_finances", "DELETE FROM leg_kpis",
+            "DELETE FROM eta_shifts", "DELETE FROM onboard_attachments",
+            "DELETE FROM crew_tickets",
             "DELETE FROM legs",
         ],
     }
@@ -660,9 +953,12 @@ async def purge_selective(
             for sql in table_sql[key]:
                 try:
                     await db.execute(text(sql))
-                except Exception:
-                    pass
-    await db.commit()
+                except Exception as e:
+                    logger.warning(f"Purge SQL failed ({sql[:50]}): {e}")
+    await log_activity(db, user=user, action="purge", module="admin",
+                       detail=f"Purge sélective: {', '.join(tables_param)}",
+                       ip_address=get_client_ip(request))
+    await db.flush()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
 
@@ -683,6 +979,8 @@ async def reset_database(
     purge_sql = [
         "DELETE FROM notifications",
         "DELETE FROM portal_messages",
+        "DELETE FROM portal_access_logs",
+        "DELETE FROM activity_logs",
         "DELETE FROM claim_timeline",
         "DELETE FROM claim_documents",
         "DELETE FROM claims",
@@ -695,24 +993,37 @@ async def reset_database(
         "DELETE FROM passenger_payments",
         "DELETE FROM passengers",
         "DELETE FROM passenger_bookings",
+        "DELETE FROM rate_offers",
+        "DELETE FROM rate_grid_lines",
+        "DELETE FROM rate_grids",
         "DELETE FROM order_assignments",
         "DELETE FROM orders",
+        "DELETE FROM clients",
+        "DELETE FROM crew_tickets",
         "DELETE FROM crew_assignments",
         "DELETE FROM sof_events",
-        "DELETE FROM onboard_notifications",
+        "DELETE FROM cargo_document_attachments",
         "DELETE FROM cargo_documents",
+        "DELETE FROM onboard_attachments",
+        "DELETE FROM onboard_notifications",
+        "DELETE FROM eta_shifts",
         "DELETE FROM docker_shifts",
         "DELETE FROM escale_operations",
         "DELETE FROM leg_finances",
         "DELETE FROM leg_kpis",
+        "DELETE FROM planning_shares",
+        "DELETE FROM vessel_positions",
         "DELETE FROM legs",
     ]
     for sql in purge_sql:
         try:
             await db.execute(text(sql))
-        except Exception:
-            pass
-    await db.commit()
+        except Exception as e:
+            logger.warning(f"Full purge SQL failed ({sql[:50]}): {e}")
+    await log_activity(db, user=user, action="reset", module="admin",
+                       detail="Full database reset",
+                       ip_address=get_client_ip(request))
+    await db.flush()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
 
@@ -735,7 +1046,8 @@ async def database_stats(
             cnt = await db.execute(text(f'SELECT COUNT(*) FROM "{t}"'))
             count = cnt.scalar() or 0
             stats.append((t, count))
-        except Exception:
+        except Exception as e:
+            logger.warning(f"DB stats query failed for {t}: {e}")
             stats.append((t, "?"))
 
     html = '<div class="db-stat-grid">'
@@ -754,7 +1066,7 @@ async def cleanup_notifications(
     await db.execute(text(
         "DELETE FROM notifications WHERE is_archived = TRUE AND created_at < NOW() - INTERVAL '30 days'"
     ))
-    await db.commit()
+    await db.flush()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
 
@@ -770,7 +1082,46 @@ async def cleanup_audit(
     await db.execute(text(
         "DELETE FROM passenger_audit_logs WHERE created_at < NOW() - INTERVAL '12 months'"
     ))
-    await db.commit()
+    await db.flush()
+    return RedirectResponse(url="/admin/settings#database", status_code=303)
+
+
+@router.post("/database/cleanup-activity-logs", response_class=HTMLResponse)
+async def cleanup_activity_logs(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import text
+    await db.execute(text(
+        "DELETE FROM activity_logs WHERE created_at < NOW() - INTERVAL '6 months'"
+    ))
+    await db.flush()
+    return RedirectResponse(url="/admin/settings#database", status_code=303)
+
+
+@router.post("/database/cleanup-onboard-notifications", response_class=HTMLResponse)
+async def cleanup_onboard_notifications(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import text
+    await db.execute(text(
+        "DELETE FROM onboard_notifications WHERE is_read = TRUE AND created_at < NOW() - INTERVAL '30 days'"
+    ))
+    await db.flush()
+    return RedirectResponse(url="/admin/settings#database", status_code=303)
+
+
+@router.post("/database/cleanup-access-logs", response_class=HTMLResponse)
+async def cleanup_access_logs(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import text
+    await db.execute(text(
+        "DELETE FROM portal_access_logs WHERE accessed_at < NOW() - INTERVAL '6 months'"
+    ))
+    await db.flush()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
 
@@ -788,12 +1139,13 @@ async def update_language(
         await db.flush()
     url = "/admin/settings"
     response = RedirectResponse(url=url, status_code=303)
-    response.set_cookie("towt_lang", language, max_age=365*24*3600)
+    response.set_cookie("towt_lang", language, max_age=365*24*3600,
+                        httponly=True, samesite="lax", secure=True)
     return response
 
 
 # ─── CABIN PRICING GRID ──────────────────────────────────────
-@router.post("/settings/pricing/add", response_class=HTMLResponse)
+@account_router.post("/settings/pricing/add", response_class=HTMLResponse)
 async def pricing_add(
     request: Request,
     origin_locode: str = Form(...),
@@ -802,7 +1154,7 @@ async def pricing_add(
     price: float = Form(...),
     deposit_pct: int = Form(30),
     notes: str = Form(""),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin_or_commercial),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.passenger import CabinPriceGrid
@@ -819,14 +1171,14 @@ async def pricing_add(
     return RedirectResponse(url="/admin/settings#pricing", status_code=303)
 
 
-@router.post("/settings/pricing/{price_id}/edit", response_class=HTMLResponse)
+@account_router.post("/settings/pricing/{price_id}/edit", response_class=HTMLResponse)
 async def pricing_edit(
     price_id: int, request: Request,
     price: float = Form(...),
     deposit_pct: int = Form(30),
     notes: str = Form(""),
     is_active: Optional[str] = Form(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin_or_commercial),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.passenger import CabinPriceGrid
@@ -840,10 +1192,10 @@ async def pricing_edit(
     return RedirectResponse(url="/admin/settings#pricing", status_code=303)
 
 
-@router.delete("/settings/pricing/{price_id}", response_class=HTMLResponse)
+@account_router.delete("/settings/pricing/{price_id}", response_class=HTMLResponse)
 async def pricing_delete(
     price_id: int, request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin_or_commercial),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.passenger import CabinPriceGrid
@@ -994,7 +1346,7 @@ async def pipedrive_test(
 
 
 # ─── MON COMPTE (accessible à tous les rôles) ─────────────────
-@router.get("/my-account", response_class=HTMLResponse)
+@account_router.get("/my-account", response_class=HTMLResponse)
 async def my_account(
     request: Request,
     success: Optional[str] = Query(None),
@@ -1013,7 +1365,7 @@ async def my_account(
     })
 
 
-@router.post("/my-account/password", response_class=HTMLResponse)
+@account_router.post("/my-account/password", response_class=HTMLResponse)
 async def my_account_password(
     request: Request,
     current_password: str = Form(...),
@@ -1034,7 +1386,7 @@ async def my_account_password(
     return RedirectResponse(url="/admin/my-account?success=Mot+de+passe+modifié+avec+succès", status_code=303)
 
 
-@router.post("/my-account/language", response_class=HTMLResponse)
+@account_router.post("/my-account/language", response_class=HTMLResponse)
 async def my_account_language(
     request: Request,
     language: str = Form(...),
@@ -1429,6 +1781,265 @@ async def import_planning_csv(
     if errors:
         msg += f", {len(errors)} erreurs"
     url = f"/admin/settings?import_success={msg.replace(' ', '+')}"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# ═══ RGPD DATA EXPORT (DSR) ═════════════════════════════════
+@router.get("/rgpd/export/passenger/{booking_id}")
+async def rgpd_export_passenger(
+    booking_id: int, request: Request,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export all personal data for a passenger booking (GDPR Data Subject Request)."""
+    import json
+    from app.models.passenger import PassengerBooking, Passenger, PreBoardingForm
+    from app.models.portal_message import PortalMessage
+    from app.models.portal_access_log import PortalAccessLog
+
+    result = await db.execute(
+        select(PassengerBooking).options(
+            selectinload(PassengerBooking.passengers),
+            selectinload(PassengerBooking.payments),
+        ).where(PassengerBooking.id == booking_id)
+    )
+    booking = result.scalar_one_or_none()
+    if not booking:
+        raise HTTPException(404)
+
+    data = {
+        "export_type": "RGPD_DSR",
+        "export_date": datetime.now().isoformat(),
+        "exported_by": user.username,
+        "booking": {
+            "reference": booking.reference,
+            "status": booking.status,
+            "booking_date": str(booking.booking_date) if booking.booking_date else None,
+            "contact_email": booking.contact_email,
+            "contact_phone": booking.contact_phone,
+            "created_at": booking.created_at.isoformat() if booking.created_at else None,
+        },
+        "passengers": [],
+        "payments": [],
+        "messages": [],
+        "access_logs": [],
+    }
+
+    for pax in booking.passengers:
+        pax_data = {
+            "first_name": pax.first_name, "last_name": pax.last_name,
+            "email": pax.email, "phone": pax.phone,
+            "date_of_birth": str(pax.date_of_birth) if pax.date_of_birth else None,
+            "nationality": pax.nationality, "passport_number": pax.passport_number,
+            "emergency_contact_name": pax.emergency_contact_name,
+            "emergency_contact_phone": pax.emergency_contact_phone,
+        }
+        # Pre-boarding form
+        form_result = await db.execute(select(PreBoardingForm).where(PreBoardingForm.passenger_id == pax.id))
+        form = form_result.scalar_one_or_none()
+        if form:
+            pax_data["questionnaire"] = {
+                "sailed_before": form.sailed_before, "seasick": form.seasick,
+                "chronic_conditions": form.chronic_conditions, "allergies": form.allergies,
+                "daily_medication": form.daily_medication, "dietary_requirements": form.dietary_requirements,
+                "gdpr_consent": form.gdpr_consent,
+                "gdpr_consent_at": form.gdpr_consent_at.isoformat() if form.gdpr_consent_at else None,
+                "signed_at": form.signed_at.isoformat() if form.signed_at else None,
+            }
+        data["passengers"].append(pax_data)
+
+    for pay in booking.payments:
+        data["payments"].append({
+            "type": pay.payment_type, "amount": str(pay.amount),
+            "status": pay.status, "paid_date": str(pay.paid_date) if pay.paid_date else None,
+        })
+
+    # Messages
+    msg_result = await db.execute(
+        select(PortalMessage).where(PortalMessage.booking_id == booking_id).order_by(PortalMessage.created_at))
+    for msg in msg_result.scalars().all():
+        data["messages"].append({
+            "sender": msg.sender_name, "message": msg.message,
+            "created_at": msg.created_at.isoformat() if msg.created_at else None,
+        })
+
+    # Access logs
+    log_result = await db.execute(
+        select(PortalAccessLog).where(PortalAccessLog.booking_id == booking_id)
+        .order_by(PortalAccessLog.accessed_at.desc()).limit(100))
+    for log in log_result.scalars().all():
+        data["access_logs"].append({
+            "ip": log.ip_address, "path": log.path,
+            "accessed_at": log.accessed_at.isoformat() if log.accessed_at else None,
+        })
+
+    await log_activity(db, user=user, action="rgpd_export", module="admin",
+                       entity_type="passenger_booking", entity_id=booking_id,
+                       entity_label=f"Export RGPD réservation {booking.reference}",
+                       ip_address=get_client_ip(request))
+
+    content = json.dumps(data, indent=2, ensure_ascii=False)
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8")),
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename=RGPD_export_{booking.reference}.json"},
+    )
+
+
+# ─── RGPD: RIGHT TO ERASURE (droit à l'effacement) ─────────
+@router.post("/rgpd/erase/{booking_id}", response_class=HTMLResponse)
+async def rgpd_erase_booking(
+    booking_id: int,
+    request: Request,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Anonymize personal data for a passenger booking (RGPD Art. 17 right to erasure).
+
+    Replaces all personal data with anonymized placeholders while preserving
+    booking structure for statistical/financial purposes.
+    """
+    from app.models.passenger import (
+        PassengerBooking, Passenger, PassengerDocument, PassengerPayment,
+        PreBoardingForm, PassengerAuditLog,
+    )
+    import os
+
+    result = await db.execute(
+        select(PassengerBooking).options(
+            selectinload(PassengerBooking.passengers).selectinload(Passenger.documents),
+            selectinload(PassengerBooking.payments),
+        ).where(PassengerBooking.id == booking_id)
+    )
+    booking = result.scalar_one_or_none()
+    if not booking:
+        raise HTTPException(404, detail="Réservation introuvable")
+
+    anon_label = f"ANONYMIZED-{booking_id}"
+
+    # Anonymize booking contact info
+    booking.contact_email = f"{anon_label}@erased.local"
+    booking.contact_phone = "ERASED"
+    booking.notes = "Données personnelles effacées (RGPD Art. 17)"
+    booking.token = f"erased-{booking_id}-{secrets.token_urlsafe(8)}"
+
+    # Anonymize each passenger
+    for pax in booking.passengers:
+        pax.first_name = "ERASED"
+        pax.last_name = anon_label
+        pax.email = f"{anon_label}@erased.local"
+        pax.phone = "ERASED"
+        pax.date_of_birth = None
+        pax.nationality = "XX"
+        pax.passport_number = "ERASED"
+        pax.emergency_contact_name = "ERASED"
+        pax.emergency_contact_phone = "ERASED"
+
+        # Delete uploaded documents (files on disk)
+        for doc in pax.documents:
+            if doc.file_path and os.path.isfile(doc.file_path):
+                try:
+                    os.remove(doc.file_path)
+                except OSError:
+                    pass
+            doc.file_path = None
+            doc.filename = "ERASED"
+            doc.status = "missing"
+
+        # Anonymize pre-boarding forms
+        form_result = await db.execute(
+            select(PreBoardingForm).where(PreBoardingForm.passenger_id == pax.id)
+        )
+        for form in form_result.scalars().all():
+            form.chronic_conditions = "ERASED"
+            form.allergies = "ERASED"
+            form.daily_medication = "ERASED"
+            form.dietary_requirements = "ERASED"
+            form.intolerances = "ERASED"
+
+    # Anonymize payment references
+    for payment in booking.payments:
+        payment.reference = f"ERASED-{payment.id}"
+        payment.notes = "ERASED"
+
+    # Delete audit logs for this booking
+    audit_result = await db.execute(
+        select(PassengerAuditLog).where(PassengerAuditLog.booking_id == booking_id)
+    )
+    for audit in audit_result.scalars().all():
+        audit.user_email = "ERASED"
+        audit.detail = "ERASED (RGPD)"
+
+    # Delete portal access logs
+    try:
+        from app.models.portal_access_log import PortalAccessLog
+        access_result = await db.execute(
+            select(PortalAccessLog).where(
+                PortalAccessLog.token == booking.token,
+            )
+        )
+        for log in access_result.scalars().all():
+            log.ip_address = "0.0.0.0"
+            log.user_agent = "ERASED"
+    except Exception:
+        pass  # Table may not exist
+
+    await db.flush()
+    await log_activity(db, user=user, action="rgpd_erase", module="admin",
+                       entity_type="passenger_booking", entity_id=booking_id,
+                       entity_label=f"Effacement RGPD réservation {booking.reference}",
+                       ip_address=get_client_ip(request))
+
+    url = "/admin/settings?section=database"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════
+# MAINTENANCE MODE
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/maintenance/enable")
+async def maintenance_enable(
+    request: Request,
+    message: str = Form("Mise a jour en cours. L'application sera de retour dans quelques instants."),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Enable maintenance mode (admin only)."""
+    if user.role not in ("administrateur", "admin"):
+        raise HTTPException(403)
+    from app.maintenance import enable_maintenance
+    enable_maintenance(message)
+    await log_activity(db, user=user, action="maintenance_on", module="admin",
+                       entity_type="system", entity_id=0,
+                       entity_label="Mode maintenance active",
+                       ip_address=get_client_ip(request))
+    url = "/admin/settings"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.post("/maintenance/disable")
+async def maintenance_disable(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Disable maintenance mode (admin only)."""
+    if user.role not in ("administrateur", "admin"):
+        raise HTTPException(403)
+    from app.maintenance import disable_maintenance
+    disable_maintenance()
+    await log_activity(db, user=user, action="maintenance_off", module="admin",
+                       entity_type="system", entity_id=0,
+                       entity_label="Mode maintenance desactive",
+                       ip_address=get_client_ip(request))
+    url = "/admin/settings"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
     return RedirectResponse(url=url, status_code=303)

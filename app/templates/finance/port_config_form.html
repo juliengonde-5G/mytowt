@@ -6,6 +6,7 @@
             <button class="modal-close" onclick="closeModal()"><i data-lucide="x"></i></button>
         </div>
         <form method="POST" id="port-config-form" action="/finance/ports/{{ port.locode }}/edit">
+            {{ csrf_input(request) }}
             <div class="modal-body">
                 <div class="form-group" style="display:flex;align-items:center;gap:10px;">
                     <input type="checkbox" name="accessible" id="acc_cb"

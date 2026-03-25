@@ -19,6 +19,7 @@ from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.port import Port
 from app.models.onboard import SofEvent, SOF_EVENT_TYPES
+from app.utils.timezones import TIMEZONE_CHOICES
 from app.models.mrv import MrvEvent, MrvParameter, MRV_EVENT_TYPES, MRV_DEFAULTS, SOF_TO_MRV_MAP
 from app.models.vessel_position import VesselPosition
 from app.utils.activity import log_activity
@@ -363,6 +364,7 @@ async def mrv_leg_detail(
         "total_consumption": round(total_consumption, 2),
         "total_co2": round(total_co2, 2),
         "quality_counts": quality_counts,
+        "tz_choices": TIMEZONE_CHOICES,
         "active_module": "mrv",
         "lang": user.language or "fr",
         "can_edit_mrv": can_edit(user, "mrv"),

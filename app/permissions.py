@@ -2,7 +2,7 @@
 Permission system for TOWT Planning App.
 
 Roles: administrateur, operation, armement, technique, data_analyst, marins,
-       gestionnaire_passagers, commercial, manager_maritime
+       commercial, manager_maritime
 Modules: planning, commercial, escale, finance, kpi, captain, crew, cargo, mrv, passengers
 Permissions: C (consult), M (modify), S (delete/suppress)
 
@@ -100,21 +100,13 @@ _MATRIX = {
     ("marins", "cargo"):       {"C"},
     ("marins", "mrv"):         {"C"},
 
-    # ─── GESTIONNAIRE PASSAGERS ──────────────────────────
-    # Planning, Escale, KPI, Passagers
-    ("gestionnaire_passagers", "planning"):    {"C"},
-    ("gestionnaire_passagers", "escale"):      {"C"},
-    ("gestionnaire_passagers", "kpi"):         {"C"},
-    ("gestionnaire_passagers", "passengers"):  {"C", "M", "S"},
-    ("gestionnaire_passagers", "captain"):     {"C"},
-
     # ─── COMMERCIAL ──────────────────────────────────────
     # Planning, Commercial, Escale, KPI, Passagers, Cargo
     ("commercial", "planning"):    {"C"},
     ("commercial", "commercial"):  {"C", "M", "S"},
     ("commercial", "escale"):      {"C"},
     ("commercial", "kpi"):         {"C"},
-    ("commercial", "passengers"):  {"C", "M"},
+    ("commercial", "passengers"):  {"C", "M", "S"},
     ("commercial", "cargo"):       {"C", "M"},
     ("commercial", "captain"):     {"C"},
 
@@ -138,6 +130,7 @@ _LEGACY_MAP = {
     "manager": "operation",
     "operator": "operation",
     "viewer": "data_analyst",
+    "gestionnaire_passagers": "commercial",
 }
 
 # All roles for settings page
@@ -148,7 +141,6 @@ ROLES = [
     ("technique", "Technique"),
     ("data_analyst", "Data Analyst"),
     ("marins", "Marins"),
-    ("gestionnaire_passagers", "Gestionnaire Passagers"),
     ("commercial", "Commercial"),
     ("manager_maritime", "Manager Maritime"),
 ]

@@ -185,12 +185,18 @@ async def cargo_detail(
     portal_messages = msg_result.scalars().all()
     unread_client_msgs = sum(1 for m in portal_messages if m.sender_type == "client" and not m.is_read)
 
+    # IMDG validation warnings
+    imdg_warnings = []
+    for batch in pl.batches:
+        imdg_warnings.extend(validate_imdg(batch))
+
     return templates.TemplateResponse("cargo/detail.html", {
         "request": request, "user": user,
         "pl": pl, "imo_classes": IMO_CLASSES,
         "active_module": "cargo",
         "portal_messages": portal_messages,
         "unread_client_msgs": unread_client_msgs,
+        "imdg_warnings": imdg_warnings,
     })
 
 
@@ -405,27 +411,69 @@ async def bill_of_lading(
     total_cases = sum(b.cases_quantity or 0 for b in pl.batches)
     total_pallets = sum(b.pallet_quantity or 0 for b in pl.batches)
     total_weight = sum(b.weight_kg or 0 for b in pl.batches)
+    total_packages = total_cases if total_cases else total_pallets
     goods_types = ", ".join(set(b.type_of_goods for b in pl.batches if b.type_of_goods))
+    goods_descriptions = "\n".join(
+        b.description_of_goods for b in pl.batches if b.description_of_goods
+    )
     first = pl.batches[0] if pl.batches else None
 
+    # Build BL number: TUAW_{voyage_id}_{sequential_number:03d}
+    voyage_id = pl.order.leg.leg_code if pl.order.leg else ""
+    # Count how many PLs exist for this leg to determine BL sequence number
+    leg_id = pl.order.leg.id if pl.order.leg else None
+    bl_seq = 1
+    if leg_id:
+        # Count PLs for this leg with lower or equal IDs
+        all_pls_result = await db.execute(
+            select(PackingList.id).join(Order).where(Order.leg_id == leg_id).order_by(PackingList.id)
+        )
+        all_pl_ids = [r[0] for r in all_pls_result.fetchall()]
+        bl_seq = all_pl_ids.index(pl.id) + 1 if pl.id in all_pl_ids else 1
+    bl_number = f"TUAW_{voyage_id}_{bl_seq:03d}"
+
+    # Build structured addresses (name + address + postal + city + country)
+    def _build_address(batch, prefix):
+        if not batch:
+            return ""
+        parts = filter(None, [
+            getattr(batch, f"{prefix}_name", None),
+            getattr(batch, f"{prefix}_address", None),
+            " ".join(filter(None, [
+                getattr(batch, f"{prefix}_postal", None),
+                getattr(batch, f"{prefix}_city", None),
+            ])),
+            getattr(batch, f"{prefix}_country", None),
+        ])
+        return "\n".join(parts)
+
+    shipper_full = _build_address(first, "shipper")
+    consignee_full = _build_address(first, "consignee")
+    notify_full = _build_address(first, "notify")
+
+    # Packages format: "X pallets / Y cases"
+    packages_str = ""
+    if total_pallets:
+        packages_str = f"{total_pallets} pallets"
+    if total_cases:
+        packages_str += f" / {total_cases} cases" if packages_str else f"{total_cases} cases"
+
     # Build replacement map
-    shipper_full = first.shipper_name or "" if first else ""
-    if first and first.shipper_address:
-        shipper_full += "\n" + first.shipper_address
     replacements = {
         "SHIPPER_NAME": shipper_full,
-        "BILL_OF_LADING_ID": f"{pl.order.reference}-BL",
+        "BILL_OF_LADING_ID": bl_number,
         "BOOKING_CONFIRMATION_TOWT": pl.order.reference or "",
-        "CONSIGNEE_ORDER_ADRESS": (first.consignee_address if first else "") or "",
-        "NOTIFY_ADRESS": (first.notify_address if first else "") or "",
+        "CONSIGNEE_ORDER_ADRESS": consignee_full,
+        "NOTIFY_ADRESS": notify_full,
         "VESSEL": pl.order.leg.vessel.name if pl.order.leg and pl.order.leg.vessel else "",
-        "VOYAGE_ID": pl.order.leg.leg_code if pl.order.leg else "",
+        "VOYAGE_ID": voyage_id,
         "POL_NAME": pl.order.leg.departure_port.name if pl.order.leg and pl.order.leg.departure_port else "",
         "POD_NAME": pl.order.leg.arrival_port.name if pl.order.leg and pl.order.leg.arrival_port else "",
-        "Maximum_de_CASES_QUANTITY": str(total_cases) if total_cases else "—",
+        "Maximum_de_CASES_QUANTITY": packages_str or "—",
         "Nombre_de_PALLET_ID": str(total_pallets) if total_pallets else "—",
         "Maximum_de_WEIGHT_KG": str(int(total_weight)) if total_weight else "—",
-        "TYPE_OF_GOODS": goods_types or "—",
+        "TYPE_OF_GOODS": goods_descriptions or goods_types or "—",
+        "NUMBER_OF_OBL": "3",
     }
 
     # Clone template and do replacement in document.xml
@@ -510,11 +558,224 @@ async def bill_of_lading(
     # Cleanup
     shutil.rmtree(work_dir, ignore_errors=True)
 
-    filename = f"BOL_{pl.order.reference}_{datetime.now().strftime('%Y%m%d')}.docx"
+    filename = f"{bl_number}_{datetime.now().strftime('%Y%m%d')}.docx"
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# === HTML BILL OF LADING VIEW ===
+@router.get("/{pl_id}/bol/view", response_class=HTMLResponse)
+async def bill_of_lading_view(
+    pl_id: int, request: Request,
+    user: User = Depends(require_permission("cargo", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Render Bill of Lading as printable HTML page."""
+    result = await db.execute(
+        select(PackingList).options(
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.vessel),
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.departure_port),
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.arrival_port),
+            selectinload(PackingList.batches),
+        ).where(PackingList.id == pl_id)
+    )
+    pl = result.scalar_one_or_none()
+    if not pl:
+        raise HTTPException(404)
+
+    first = pl.batches[0] if pl.batches else None
+    voyage_id = pl.order.leg.leg_code if pl.order.leg else ""
+    leg_id = pl.order.leg.id if pl.order.leg else None
+    bl_seq = 1
+    if leg_id:
+        all_pls_result = await db.execute(
+            select(PackingList.id).join(Order).where(Order.leg_id == leg_id).order_by(PackingList.id)
+        )
+        all_pl_ids = [r[0] for r in all_pls_result.fetchall()]
+        bl_seq = all_pl_ids.index(pl.id) + 1 if pl.id in all_pl_ids else 1
+    bl_number = f"TUAW_{voyage_id}_{bl_seq:03d}"
+
+    def _addr(batch, prefix):
+        if not batch:
+            return "—"
+        parts = filter(None, [
+            getattr(batch, f"{prefix}_name", None),
+            getattr(batch, f"{prefix}_address", None),
+            " ".join(filter(None, [getattr(batch, f"{prefix}_postal", None), getattr(batch, f"{prefix}_city", None)])),
+            getattr(batch, f"{prefix}_country", None),
+        ])
+        return "\n".join(parts) or "—"
+
+    return templates.TemplateResponse("cargo/bill_of_lading.html", {
+        "request": request, "pl": pl, "bl_number": bl_number,
+        "shipper_address": _addr(first, "shipper"),
+        "consignee_address": _addr(first, "consignee"),
+        "notify_address": _addr(first, "notify"),
+        "now": datetime.now(),
+    })
+
+
+# === ARRIVAL NOTICE (PDF) ===
+@router.get("/{pl_id}/arrival-notice")
+async def arrival_notice(
+    pl_id: int, request: Request,
+    user: User = Depends(require_permission("cargo", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate Arrival Notice document from packing list data."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+    result = await db.execute(
+        select(PackingList).options(
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.vessel),
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.departure_port),
+            selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.arrival_port),
+            selectinload(PackingList.batches),
+        ).where(PackingList.id == pl_id)
+    )
+    pl = result.scalar_one_or_none()
+    if not pl:
+        raise HTTPException(404)
+
+    leg = pl.order.leg if pl.order else None
+    if not leg:
+        raise HTTPException(404, detail="Aucun leg associé à cette commande")
+    first = pl.batches[0] if pl.batches else None
+    total_pallets = sum(b.pallet_quantity or 0 for b in pl.batches)
+    total_weight = sum(b.weight_kg or 0 for b in pl.batches)
+    total_volume = sum(b.volume_m3 or 0 for b in pl.batches)
+    goods_types = ", ".join(set(b.type_of_goods for b in pl.batches if b.type_of_goods))
+
+    # Build BL number
+    voyage_id = leg.leg_code if leg else ""
+    leg_id_val = leg.id if leg else None
+    bl_seq = 1
+    if leg_id_val:
+        all_pls_result = await db.execute(
+            select(PackingList.id).join(Order).where(Order.leg_id == leg_id_val).order_by(PackingList.id)
+        )
+        all_pl_ids = [r[0] for r in all_pls_result.fetchall()]
+        bl_seq = all_pl_ids.index(pl.id) + 1 if pl.id in all_pl_ids else 1
+    bl_number = f"TUAW_{voyage_id}_{bl_seq:03d}"
+
+    def _addr(batch, prefix):
+        if not batch:
+            return "—"
+        parts = filter(None, [
+            getattr(batch, f"{prefix}_name", None),
+            getattr(batch, f"{prefix}_address", None),
+            " ".join(filter(None, [getattr(batch, f"{prefix}_postal", None), getattr(batch, f"{prefix}_city", None)])),
+            getattr(batch, f"{prefix}_country", None),
+        ])
+        return "\n".join(parts) or "—"
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=20*mm, bottomMargin=15*mm, leftMargin=15*mm, rightMargin=15*mm)
+    styles = getSampleStyleSheet()
+    hdr_color = colors.HexColor("#095561")
+    elements = []
+
+    # Title
+    title_style = ParagraphStyle("ANTitle", parent=styles["Heading1"], fontSize=18, textColor=hdr_color, spaceAfter=4)
+    elements.append(Paragraph("ARRIVAL NOTICE", title_style))
+
+    sub_style = ParagraphStyle("Sub", parent=styles["Normal"], fontSize=10, textColor=colors.HexColor("#555"), spaceAfter=2)
+    elements.append(Paragraph("TOWT — Transport à la Voile", sub_style))
+    elements.append(Spacer(1, 8*mm))
+
+    # Header info table
+    info_data = [
+        ["B/L Number", bl_number, "Booking Ref.", pl.order.reference or "—"],
+        ["Vessel", leg.vessel.name if leg and leg.vessel else "—", "Voyage", voyage_id or "—"],
+        ["Port of Loading", (leg.departure_port.name if leg and leg.departure_port else "—"), "Port of Discharge", (leg.arrival_port.name if leg and leg.arrival_port else "—")],
+        ["ETA", leg.eta.strftime("%d/%m/%Y %H:%M") if leg and leg.eta else "TBC", "ETD", leg.etd.strftime("%d/%m/%Y %H:%M") if leg and leg.etd else "TBC"],
+    ]
+    info_t = Table(info_data, colWidths=[100, 170, 100, 170])
+    info_t.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#ddd")),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f7f8")),
+        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#f0f7f8")),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(info_t)
+    elements.append(Spacer(1, 6*mm))
+
+    # Parties
+    parties_data = [
+        ["Consignee", _addr(first, "consignee")],
+        ["Notify Party", _addr(first, "notify")],
+        ["Shipper", _addr(first, "shipper")],
+    ]
+    parties_t = Table(parties_data, colWidths=[100, 440])
+    parties_t.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#ddd")),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f0f7f8")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(parties_t)
+    elements.append(Spacer(1, 6*mm))
+
+    # Cargo summary
+    cargo_hdr = ParagraphStyle("CH", parent=styles["Heading2"], fontSize=12, textColor=hdr_color, spaceAfter=4)
+    elements.append(Paragraph("Cargo Summary", cargo_hdr))
+
+    cargo_data = [["Description", "Pallets", "Packages", "Gross Weight (kg)", "Volume (m³)"]]
+    for b in pl.batches:
+        cargo_data.append([
+            b.description_of_goods or b.type_of_goods or "—",
+            str(b.pallet_quantity or "—"),
+            str(b.cases_quantity or "—"),
+            str(b.weight_kg or "—"),
+            str(b.volume_m3 or "—"),
+        ])
+    cargo_data.append(["TOTAL", str(total_pallets), "", f"{int(total_weight)}", f"{total_volume:.2f}" if total_volume else "—"])
+
+    cargo_t = Table(cargo_data, colWidths=[200, 60, 60, 100, 80])
+    cargo_t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), hdr_color),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#ddd")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#f9fafb")]),
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#f0f7f8")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(cargo_t)
+    elements.append(Spacer(1, 10*mm))
+
+    # Footer
+    footer_style = ParagraphStyle("Footer", parent=styles["Normal"], fontSize=8, textColor=colors.HexColor("#aaa"))
+    elements.append(Paragraph(
+        f"Generated on {datetime.now().strftime('%d/%m/%Y %H:%M')} — TOWT Operations Platform<br/>"
+        f"Number of Original Bills of Lading: THREE (3)",
+        footer_style,
+    ))
+
+    doc.build(elements)
+    buf.seek(0)
+
+    fname = f"ArrivalNotice_{bl_number}_{datetime.now().strftime('%Y%m%d')}.pdf"
+    return StreamingResponse(
+        buf, media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
     )
 
 
@@ -605,6 +866,7 @@ def apply_batch_fields(batch, form_data):
     batch.cases_quantity = pi(form_data.get('cases_quantity'))
     batch.units_per_case = pi(form_data.get('units_per_case'))
     batch.imo_product_class = form_data.get('imo_product_class', batch.imo_product_class)
+    batch.un_number = form_data.get('un_number', batch.un_number)
     batch.pallet_quantity = pi(form_data.get('pallet_quantity'))
     batch.length_cm = pf(form_data.get('length_cm'))
     batch.width_cm = pf(form_data.get('width_cm'))
@@ -612,6 +874,25 @@ def apply_batch_fields(batch, form_data):
     batch.weight_kg = pf(form_data.get('weight_kg'))
     batch.cargo_value_usd = pf(form_data.get('cargo_value_usd'))
     batch.compute_dimensions()
+
+
+# IMDG validation — returns list of warnings for dangerous goods
+IMDG_REQUIRED_FIELDS = {
+    "un_number": "UN Number",
+    "type_of_goods": "Description des marchandises",
+    "weight_kg": "Poids",
+}
+
+
+def validate_imdg(batch) -> list[str]:
+    """Validate IMDG requirements for dangerous goods batches."""
+    warnings = []
+    if batch.imo_product_class and batch.imo_product_class != "Non-Dangerous Goods":
+        for field, label in IMDG_REQUIRED_FIELDS.items():
+            val = getattr(batch, field, None)
+            if val is None or (isinstance(val, str) and not val.strip()):
+                warnings.append(f"Batch #{batch.batch_number}: {label} requis pour marchandises dangereuses ({batch.imo_product_class})")
+    return warnings
 
 
 # === EXPLOITATION EDIT BATCHES (with audit) ===
@@ -944,7 +1225,11 @@ def _lang(request):
     lang = request.query_params.get('lang') or request.cookies.get('towt_lang') or 'fr'
     return lang if lang in VALID_LANGS else 'fr'
 
-async def _get_pl(token, db):
+async def _get_pl(token, db, request=None):
+    from datetime import datetime, timezone as tz
+    from app.utils.portal_security import check_token_rate_limit, record_token_attempt, log_portal_access
+    if request:
+        check_token_rate_limit(request)
     result = await db.execute(
         select(PackingList).options(
             selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.vessel),
@@ -955,7 +1240,15 @@ async def _get_pl(token, db):
     )
     pl = result.scalar_one_or_none()
     if not pl:
+        if request:
+            record_token_attempt(request)
         raise HTTPException(404, detail="Lien invalide ou expiré")
+    # Check token expiration
+    if pl.token_expires_at and pl.token_expires_at < datetime.now(tz.utc):
+        raise HTTPException(404, detail="Lien invalide ou expiré")
+    # Audit trail
+    if request:
+        await log_portal_access(db, request, "cargo", token, packing_list_id=pl.id)
     return pl
 
 async def _unread_count(pl_id, db):
@@ -969,14 +1262,34 @@ async def _unread_count(pl_id, db):
     return r.scalar() or 0
 
 
-# ── Page 1: Packing List (default) ────────────────────────────
+# ── Default: redirect to Voyage ───────────────────────────────
 @ext_router.get("/{token}", response_class=HTMLResponse)
+async def client_portal_default(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db, request)
+    lang = _lang(request)
+    return RedirectResponse(url=f"/p/{token}/voyage?lang={lang}", status_code=303)
+
+
+# ── Privacy policy ────────────────────────────────────────────
+@ext_router.get("/{token}/privacy", response_class=HTMLResponse)
+async def client_portal_privacy(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db, request)
+    lang = _lang(request)
+    return templates.TemplateResponse("cargo/portal_privacy.html", {
+        "request": request, "pl": pl,
+        "lang": lang, "active_page": "privacy", "page_suffix": "/privacy",
+        "unread_messages": await _unread_count(pl.id, db),
+    })
+
+
+# ── Page 1: Packing List ─────────────────────────────────────
+@ext_router.get("/{token}/packing", response_class=HTMLResponse)
 async def client_portal_packing(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     return templates.TemplateResponse("cargo/portal_packing.html", {
         "request": request, "pl": pl, "imo_classes": IMO_CLASSES,
-        "lang": lang, "active_page": "packing",
+        "lang": lang, "active_page": "packing", "page_suffix": "/packing",
         "unread_messages": await _unread_count(pl.id, db),
     })
 
@@ -984,7 +1297,7 @@ async def client_portal_packing(token: str, request: Request, db: AsyncSession =
 # ── Page 2: Vessel ────────────────────────────────────────────
 @ext_router.get("/{token}/vessel", response_class=HTMLResponse)
 async def client_portal_vessel(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     vessel = pl.order.leg.vessel if pl.order.leg else None
     return templates.TemplateResponse("cargo/portal_vessel.html", {
@@ -997,7 +1310,7 @@ async def client_portal_vessel(token: str, request: Request, db: AsyncSession = 
 # ── Page 3: Voyage ────────────────────────────────────────────
 @ext_router.get("/{token}/voyage", response_class=HTMLResponse)
 async def client_portal_voyage(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     leg = pl.order.leg
     itinerary = []
@@ -1035,11 +1348,10 @@ async def client_portal_voyage(token: str, request: Request, db: AsyncSession = 
 # ── Page 3b: Stowage Position ─────────────────────────────────
 @ext_router.get("/{token}/stowage", response_class=HTMLResponse)
 async def client_portal_stowage(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     leg = pl.order.leg
 
-    # Get stowage plans for this packing list's batches
     from app.models.stowage import (
         StowagePlan, ZONE_DEFINITIONS, LOADING_ORDER, DANGEROUS_ZONES, get_zone_label
     )
@@ -1073,7 +1385,7 @@ async def client_portal_stowage(token: str, request: Request, db: AsyncSession =
 # ── Page 4: Documents ─────────────────────────────────────────
 @ext_router.get("/{token}/documents", response_class=HTMLResponse)
 async def client_portal_docs(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     return templates.TemplateResponse("cargo/portal_docs.html", {
         "request": request, "pl": pl,
@@ -1085,7 +1397,7 @@ async def client_portal_docs(token: str, request: Request, db: AsyncSession = De
 # ── Page 5: Messages ──────────────────────────────────────────
 @ext_router.get("/{token}/messages", response_class=HTMLResponse)
 async def client_portal_messages(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     # Load messages
     msg_result = await db.execute(
@@ -1108,7 +1420,7 @@ async def client_portal_messages(token: str, request: Request, db: AsyncSession 
 
 @ext_router.post("/{token}/messages/send", response_class=HTMLResponse)
 async def client_portal_send_message(token: str, request: Request, db: AsyncSession = Depends(get_db)):
-    pl = await _get_pl(token, db)
+    pl = await _get_pl(token, db, request)
     lang = _lang(request)
     form = await request.form()
     message_text = form.get("message", "").strip()
@@ -1163,7 +1475,7 @@ async def client_add_batch(token: str, request: Request, db: AsyncSession = Depe
     )
     db.add(batch)
     await db.flush()
-    return RedirectResponse(url=f"/p/{token}", status_code=303)
+    return RedirectResponse(url=f"/p/{token}/packing", status_code=303)
 
 
 @ext_router.post("/{token}/save", response_class=HTMLResponse)
@@ -1185,7 +1497,7 @@ async def client_save_batches(token: str, request: Request, db: AsyncSession = D
     if pl.status == "draft":
         pl.status = "submitted"
     await db.flush()
-    return RedirectResponse(url=f"/p/{token}?saved=1", status_code=303)
+    return RedirectResponse(url=f"/p/{token}/packing?saved=1", status_code=303)
 
 
 @ext_router.delete("/{token}/batch/{batch_id}", response_class=HTMLResponse)
@@ -1209,4 +1521,186 @@ async def client_delete_batch(token: str, batch_id: int, request: Request, db: A
     if batch:
         await db.delete(batch)
         await db.flush()
-    return RedirectResponse(url=f"/p/{token}", status_code=303)
+    return RedirectResponse(url=f"/p/{token}/packing", status_code=303)
+
+
+# ── Excel Template Download (external portal) ────────────────
+@ext_router.get("/{token}/template")
+async def client_download_template(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    """Generate and download an Excel template pre-filled with TOWT data for this packing list."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    pl = await _get_pl(token, db, request)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Packing List"
+
+    # Headers
+    headers = [
+        "CUSTOMER_NAME", "FREIGHT_FORWARDER", "CODE_TRANSITAIRE",
+        "SHIPPER_NAME", "PO_NUMBER", "CUSTOMER_BATCH_ID",
+        "NOTIFY_ADRESS", "CONSIGNEE_ORDER_ADRESS",
+        "PALLET_TYPE", "TYPE_OF_GOODS", "DESCRIPTION_OF_GOODS",
+        "BIO_PRODUCTS", "CASES_QUANTITY", "UNITS_PER_CASE",
+        "IMO_PRODUCT_CLASS", "PALLET_QUANTITY_PER_BATCH",
+        "LENGTH_CM", "WIDTH_CM", "HEIGHT_CM", "WEIGHT_KG",
+        "CARGO_VALUE_USD",
+    ]
+
+    hdr_fill = PatternFill(start_color="095561", end_color="095561", fill_type="solid")
+    hdr_font = Font(bold=True, color="FFFFFF", size=10)
+    yellow_fill = PatternFill(start_color="FFF9C4", end_color="FFF9C4", fill_type="solid")
+    thin_border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin"),
+    )
+
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = hdr_font
+        cell.fill = hdr_fill
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = thin_border
+
+    # Pre-fill rows from existing batches
+    for i, batch in enumerate(pl.batches, 2):
+        row_data = [
+            batch.customer_name, batch.freight_forwarder, batch.code_transitaire,
+            batch.shipper_name, batch.po_number, batch.customer_batch_id,
+            batch.notify_address, batch.consignee_address,
+            batch.pallet_type, batch.type_of_goods, batch.description_of_goods,
+            batch.bio_products, batch.cases_quantity, batch.units_per_case,
+            batch.imo_product_class, batch.pallet_quantity,
+            batch.length_cm, batch.width_cm, batch.height_cm, batch.weight_kg,
+            batch.cargo_value_usd,
+        ]
+        for col, val in enumerate(row_data, 1):
+            cell = ws.cell(row=i, column=col, value=val)
+            cell.fill = yellow_fill
+            cell.border = thin_border
+
+    # If no batches, add one empty yellow row
+    if not pl.batches:
+        for col in range(1, len(headers) + 1):
+            cell = ws.cell(row=2, column=col, value="")
+            cell.fill = yellow_fill
+            cell.border = thin_border
+
+    # Auto-width columns
+    for col in range(1, len(headers) + 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = max(15, len(headers[col - 1]) + 2)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    ref = pl.order.reference if pl.order else "PL"
+    fname = f"PackingList_Template_{ref}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+# ── Excel Import (external portal) ───────────────────────────
+@ext_router.post("/{token}/import", response_class=HTMLResponse)
+async def client_import_excel(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    """Import a filled Excel template into the packing list (external portal)."""
+    import openpyxl
+
+    pl = await _get_pl(token, db, request)
+    if pl.is_locked:
+        raise HTTPException(403, detail="Packing list verrouillée")
+
+    form = await request.form()
+    file = form.get("file")
+    if not file:
+        raise HTTPException(400, detail="Aucun fichier")
+
+    content = await file.read()
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+    except Exception:
+        raise HTTPException(400, detail="Fichier Excel invalide")
+
+    ws = wb.active
+    headers = [cell.value for cell in ws[1] if cell.value]
+    if not headers:
+        raise HTTPException(400, detail="Format invalide — en-têtes manquants")
+
+    header_map = {h: idx for idx, h in enumerate(headers)}
+
+    EXCEL_TO_FIELD = {
+        "CUSTOMER_NAME": "customer_name",
+        "FREIGHT_FORWARDER": "freight_forwarder",
+        "CODE_TRANSITAIRE": "code_transitaire",
+        "SHIPPER_NAME": "shipper_name",
+        "PO_NUMBER": "po_number",
+        "CUSTOMER_BATCH_ID": "customer_batch_id",
+        "NOTIFY_ADRESS": "notify_address",
+        "CONSIGNEE_ORDER_ADRESS": "consignee_address",
+        "PALLET_TYPE": "pallet_type",
+        "TYPE_OF_GOODS": "type_of_goods",
+        "DESCRIPTION_OF_GOODS": "description_of_goods",
+        "BIO_PRODUCTS": "bio_products",
+        "CASES_QUANTITY": "cases_quantity",
+        "UNITS_PER_CASE": "units_per_case",
+        "IMO_PRODUCT_CLASS": "imo_product_class",
+        "PALLET_QUANTITY_PER_BATCH": "pallet_quantity",
+        "LENGTH_CM": "length_cm",
+        "WIDTH_CM": "width_cm",
+        "HEIGHT_CM": "height_cm",
+        "WEIGHT_KG": "weight_kg",
+        "CARGO_VALUE_USD": "cargo_value_usd",
+    }
+
+    # Delete existing batches
+    for b in pl.batches:
+        await db.delete(b)
+    await db.flush()
+
+    batch_num = 0
+    for row in ws.iter_rows(min_row=2, values_only=False):
+        values = [cell.value for cell in row]
+        if not any(values):
+            continue
+        batch_num += 1
+        batch = PackingListBatch(packing_list_id=pl.id, batch_number=batch_num)
+
+        # Pre-fill TOWT fields
+        batch.booking_confirmation = pl.order.reference
+        batch.customer_name = pl.order.client_name
+        batch.freight_rate = pl.order.unit_price
+        if pl.order.leg:
+            leg = pl.order.leg
+            batch.voyage_id = leg.leg_code
+            batch.vessel = leg.vessel.name if leg.vessel else None
+            batch.loading_date = leg.etd.date() if leg.etd else None
+            batch.pol_code = leg.departure_port.locode if leg.departure_port else None
+            batch.pod_code = leg.arrival_port.locode if leg.arrival_port else None
+            batch.pol_name = leg.departure_port.name if leg.departure_port else None
+            batch.pod_name = leg.arrival_port.name if leg.arrival_port else None
+
+        # Apply Excel data
+        for excel_col, model_field in EXCEL_TO_FIELD.items():
+            if excel_col in header_map:
+                idx = header_map[excel_col]
+                if idx < len(values) and values[idx] is not None:
+                    setattr(batch, model_field, values[idx])
+
+        batch.compute_dimensions()
+        db.add(batch)
+
+        db.add(PackingListAudit(
+            packing_list_id=pl.id, batch_id=None,
+            field_name="excel_import",
+            old_value=None,
+            new_value=f"Batch #{batch_num} importé depuis Excel (portail client)",
+            changed_by="Client",
+        ))
+
+    await db.flush()
+    return RedirectResponse(url=f"/p/{token}/packing?saved=1", status_code=303)

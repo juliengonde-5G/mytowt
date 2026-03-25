@@ -161,6 +161,7 @@
             {% endif %}
             
             <form method="POST" action="/login">
+                {{ csrf_input(request) }}
                 <div class="form-group">
                     <label class="form-label" for="username">Identifiant</label>
                     <input type="text" id="username" name="username" class="form-input" 

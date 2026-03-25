@@ -46,6 +46,7 @@
             {{ t('account_language', lang) }}
         </h3>
         <form method="POST" action="/admin/my-account/language">
+            {{ csrf_input(request) }}
             <div style="display:flex;flex-direction:column;gap:12px;">
                 <select name="language" class="form-select">
                     {% for code, label in languages.items() %}
@@ -67,6 +68,7 @@
             {{ t('account_change_password', lang) }}
         </h3>
         <form method="POST" action="/admin/my-account/password">
+            {{ csrf_input(request) }}
             <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;align-items:end;">
                 <div class="form-group">
                     <label class="form-label">{{ t('account_current_password', lang) }}</label>

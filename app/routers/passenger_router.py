@@ -42,6 +42,7 @@ def _gen_ref():
 async def passenger_list(
     request: Request,
     status: Optional[str] = Query(None),
+    leg_id: Optional[int] = Query(None),
     user: User = Depends(require_permission("passengers", "C")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -60,6 +61,8 @@ async def passenger_list(
     )
     if status:
         query = query.where(PassengerBooking.status == status)
+    if leg_id:
+        query = query.where(PassengerBooking.leg_id == leg_id)
 
     result = await db.execute(query)
     bookings = result.scalars().all()
@@ -75,11 +78,20 @@ async def passenger_list(
         vc = b.vessel.code if b.vessel else None
         cabin_labels[b.id] = get_cabin_label(vc, b.cabin_number)
 
+    # Load legs for filter dropdown
+    legs_result = await db.execute(
+        select(Leg).options(selectinload(Leg.departure_port), selectinload(Leg.arrival_port), selectinload(Leg.vessel))
+        .order_by(Leg.etd.asc().nulls_last())
+    )
+    legs = legs_result.scalars().all()
+
     return templates.TemplateResponse("passengers/index.html", {
         "request": request, "user": user,
         "bookings": bookings, "stats": stats,
         "cabin_labels": cabin_labels,
         "selected_status": status,
+        "selected_leg_id": leg_id,
+        "legs": legs,
         "booking_statuses": BOOKING_STATUSES,
         "active_module": "passengers",
     })
@@ -96,7 +108,7 @@ async def booking_create_form(
 ):
     legs_result = await db.execute(
         select(Leg).options(selectinload(Leg.departure_port), selectinload(Leg.arrival_port), selectinload(Leg.vessel))
-        .where(Leg.status != "cancelled")
+        .where(Leg.status.notin_(["cancelled", "completed"]))
         .order_by(Leg.etd.asc().nulls_last(), Leg.leg_code.asc())
     )
     legs = legs_result.scalars().all()
@@ -158,9 +170,12 @@ async def booking_create_submit(
     pax2_passport: str = Form(""),
     pax2_emergency_name: str = Form(""), pax2_emergency_phone: str = Form(""),
     notes: str = Form(""),
+    discount_rate: float = Form(0),
     user: User = Depends(require_permission("passengers", "M")),
     db: AsyncSession = Depends(get_db),
 ):
+    discount_rate = min(max(discount_rate, 0), 100)
+
     # Get leg and vessel
     leg = await db.get(Leg, leg_id)
     if not leg:
@@ -189,7 +204,11 @@ async def booking_create_submit(
     )
     price_entry = price_result.scalar_one_or_none()
 
-    price_total = float(price_entry.price) if price_entry else None
+    if price_entry:
+        catalog_price = float(price_entry.price)
+        price_total = round(catalog_price * (1 - discount_rate / 100), 2) if discount_rate > 0 else catalog_price
+    else:
+        price_total = None
     deposit_pct = price_entry.deposit_pct if price_entry else 30
     price_deposit = round(price_total * deposit_pct / 100, 2) if price_total else None
     price_balance = round(price_total - price_deposit, 2) if price_total and price_deposit else None
@@ -204,6 +223,7 @@ async def booking_create_submit(
         price_total=price_total,
         price_deposit=price_deposit,
         price_balance=price_balance,
+        discount_rate=discount_rate,
         contact_email=contact_email.strip() or None,
         contact_phone=contact_phone.strip() or None,
         notes=notes.strip() or None,
@@ -766,6 +786,184 @@ async def crossing_book_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={fname}"},
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  CONFIRMATION LETTER PDF
+# ═══════════════════════════════════════════════════════════════
+@router.get("/{booking_id}/confirmation-letter", response_class=HTMLResponse)
+async def confirmation_letter_pdf(
+    booking_id: int, request: Request,
+    user: User = Depends(require_permission("passengers", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    from fastapi.responses import Response
+    from app.utils.passenger_pdfs import generate_confirmation_letter
+    from app.config import settings
+
+    result = await db.execute(
+        select(PassengerBooking).options(
+            selectinload(PassengerBooking.passengers),
+            selectinload(PassengerBooking.leg).selectinload(Leg.departure_port),
+            selectinload(PassengerBooking.leg).selectinload(Leg.arrival_port),
+            selectinload(PassengerBooking.leg).selectinload(Leg.vessel),
+            selectinload(PassengerBooking.vessel),
+        ).where(PassengerBooking.id == booking_id)
+    )
+    booking = result.scalar_one_or_none()
+    if not booking:
+        raise HTTPException(404)
+
+    portal_url = f"{settings.SITE_URL}/passenger/{booking.token}"
+    content = generate_confirmation_letter(booking, booking.leg, booking.passengers, portal_url)
+    fname = f"Confirmation_{booking.reference}.pdf"
+    return Response(content=content, media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename={fname}"})
+
+
+# ═══════════════════════════════════════════════════════════════
+#  DIPLOMA PDF
+# ═══════════════════════════════════════════════════════════════
+@router.get("/{booking_id}/diploma", response_class=HTMLResponse)
+async def diploma_pdf(
+    booking_id: int, request: Request,
+    user: User = Depends(require_permission("passengers", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    from fastapi.responses import Response
+    from app.utils.passenger_pdfs import generate_diploma
+
+    result = await db.execute(
+        select(PassengerBooking).options(
+            selectinload(PassengerBooking.passengers),
+            selectinload(PassengerBooking.leg).selectinload(Leg.departure_port),
+            selectinload(PassengerBooking.leg).selectinload(Leg.arrival_port),
+            selectinload(PassengerBooking.leg).selectinload(Leg.vessel),
+            selectinload(PassengerBooking.vessel),
+        ).where(PassengerBooking.id == booking_id)
+    )
+    booking = result.scalar_one_or_none()
+    if not booking:
+        raise HTTPException(404)
+
+    leg = booking.leg
+    vessel = booking.vessel or (leg.vessel if leg else None)
+    dep_port = leg.departure_port.name if leg and leg.departure_port else "—"
+    arr_port = leg.arrival_port.name if leg and leg.arrival_port else "—"
+    dep_date = leg.atd or leg.etd if leg else None
+    arr_date = leg.ata or leg.eta if leg else None
+    distance = getattr(leg, 'distance_nm', None) if leg else None
+
+    # Generate one diploma per passenger
+    pax_list = list(booking.passengers)
+    if not pax_list:
+        raise HTTPException(404, detail="No passengers")
+
+    # For single passenger, generate one PDF. For multiple, use first.
+    pax = pax_list[0]
+    content = generate_diploma(
+        passenger_name=pax.full_name,
+        vessel_name=vessel.name if vessel else "—",
+        departure_port=dep_port,
+        arrival_port=arr_port,
+        departure_date=dep_date,
+        arrival_date=arr_date,
+        leg_code=leg.leg_code if leg else "—",
+        distance_nm=distance,
+    )
+    fname = f"Diplome_{booking.reference}_{pax.last_name}.pdf"
+    return Response(content=content, media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename={fname}"})
+
+
+# ═══════════════════════════════════════════════════════════════
+#  SATISFACTION QUESTIONNAIRE
+# ═══════════════════════════════════════════════════════════════
+@router.get("/{booking_id}/satisfaction", response_class=HTMLResponse)
+async def satisfaction_form(
+    booking_id: int, request: Request,
+    user: User = Depends(require_permission("passengers", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.passenger import SatisfactionResponse, SATISFACTION_QUESTIONS
+    result = await db.execute(
+        select(PassengerBooking).options(
+            selectinload(PassengerBooking.passengers),
+            selectinload(PassengerBooking.leg).selectinload(Leg.departure_port),
+            selectinload(PassengerBooking.leg).selectinload(Leg.arrival_port),
+            selectinload(PassengerBooking.leg).selectinload(Leg.vessel),
+            selectinload(PassengerBooking.vessel),
+        ).where(PassengerBooking.id == booking_id)
+    )
+    booking = result.scalar_one_or_none()
+    if not booking:
+        raise HTTPException(404)
+
+    # Load existing responses
+    resp_result = await db.execute(
+        select(SatisfactionResponse).where(SatisfactionResponse.booking_id == booking_id)
+    )
+    responses = {r.passenger_id: r for r in resp_result.scalars().all()}
+
+    return templates.TemplateResponse("passengers/satisfaction.html", {
+        "request": request, "user": user, "booking": booking,
+        "responses": responses, "questions": SATISFACTION_QUESTIONS,
+        "active_module": "passengers",
+    })
+
+
+@router.post("/{booking_id}/satisfaction", response_class=HTMLResponse)
+async def satisfaction_submit(
+    booking_id: int, request: Request,
+    user: User = Depends(require_permission("passengers", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.passenger import SatisfactionResponse
+    result = await db.execute(
+        select(PassengerBooking).options(
+            selectinload(PassengerBooking.passengers),
+        ).where(PassengerBooking.id == booking_id)
+    )
+    booking = result.scalar_one_or_none()
+    if not booking:
+        raise HTTPException(404)
+
+    form = await request.form()
+    for pax in booking.passengers:
+        prefix = f"pax_{pax.id}_"
+        # Check if any response for this passenger
+        has_data = any(k.startswith(prefix) for k in form.keys())
+        if not has_data:
+            continue
+
+        # Check if already exists
+        existing = await db.execute(
+            select(SatisfactionResponse).where(
+                SatisfactionResponse.booking_id == booking_id,
+                SatisfactionResponse.passenger_id == pax.id,
+            )
+        )
+        resp = existing.scalar_one_or_none()
+        if not resp:
+            resp = SatisfactionResponse(booking_id=booking_id, passenger_id=pax.id)
+            db.add(resp)
+
+        # Set all rated fields
+        for field in ["q_info_clarity", "q_route_diversity", "q_customer_service", "q_booking_ease",
+                      "q_crew_welcome", "q_cabin_comfort", "q_common_areas", "q_equipment_state",
+                      "q_decarb_info", "q_onboard_measures", "q_eco_perception",
+                      "q_overall", "q_recommend", "q_final_rating"]:
+            val = form.get(f"{prefix}{field}")
+            if val:
+                setattr(resp, field, int(val))
+
+        for field in ["q_appreciated", "q_improvements", "q_eco_comments"]:
+            val = form.get(f"{prefix}{field}")
+            if val is not None:
+                setattr(resp, field, val.strip() or None)
+
+    await db.flush()
+    return RedirectResponse(url=f"/passengers/{booking_id}", status_code=303)
 
 
 # ═══════════════════════════════════════════════════════════════

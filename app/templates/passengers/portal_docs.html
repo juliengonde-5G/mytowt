@@ -5,13 +5,27 @@
 <h1>📄 {% if lang == 'en' %}Contractual Documents{% else %}Documentation contractuelle{% endif %}</h1>
 
 <div class="card">
-    <h2>{% if lang == 'en' %}Crossing book{% else %}Book de traversée{% endif %}</h2>
-    <p style="font-size:13px;color:#666;margin-bottom:12px;">{% if lang == 'en' %}Your complete crossing book with vessel information, safety procedures, and voyage details.{% else %}Votre book de traversée complet avec les informations du navire, les procédures de sécurité et les détails du voyage.{% endif %}</p>
+    <h2>{% if lang == 'en' %}Your Documents{% else %}Vos documents{% endif %}</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:12px;">{% if lang == 'en' %}Download your crossing documents.{% else %}Téléchargez vos documents de traversée.{% endif %}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="/passenger/{{ token }}/confirmation-letter" class="btn btn-secondary">📄 {% if lang == 'en' %}Confirmation Letter{% else %}Lettre de confirmation{% endif %}</a>
         <a href="/passenger/{{ token }}/book" class="btn btn-primary">📖 Book FR (PDF)</a>
         <a href="/passenger/{{ token }}/book/en" class="btn btn-primary" style="background:#0a6b7a;">📖 Book EN (PDF)</a>
+        {% if booking.status in ('embarked', 'completed') %}
+        {% for pax in booking.passengers %}
+        <a href="/passenger/{{ token }}/diploma" class="btn btn-secondary" style="background:#87BD2B;color:white;border-color:#87BD2B;">🎓 {% if lang == 'en' %}Diploma{% else %}Diplôme{% endif %} — {{ pax.first_name }}</a>
+        {% endfor %}
+        {% endif %}
     </div>
 </div>
+
+{% if booking.status == 'completed' %}
+<div class="card" style="border-left:3px solid #87BD2B;">
+    <h2>⭐ {% if lang == 'en' %}Satisfaction Survey{% else %}Questionnaire de satisfaction{% endif %}</h2>
+    <p style="font-size:13px;color:#666;margin-bottom:12px;">{% if lang == 'en' %}Help us improve by sharing your feedback about your crossing.{% else %}Aidez-nous à nous améliorer en partageant votre avis sur votre traversée.{% endif %}</p>
+    <a href="/passenger/{{ token }}/satisfaction?lang={{ lang }}" class="btn btn-primary">{% if lang == 'en' %}Fill out the survey{% else %}Répondre au questionnaire{% endif %}</a>
+</div>
+{% endif %}
 
 <div class="card content-section">
     <h2>{% if lang == 'en' %}General conditions of transport{% else %}Conditions générales de transport{% endif %}</h2>
@@ -50,5 +64,32 @@
     <h3>5. Responsabilité</h3>
     <p>TOWT est responsable du transport sûr des passagers conformément au droit maritime. Les passagers doivent suivre toutes les consignes de sécurité de l'équipage en permanence.</p>
     {% endif %}
+
+    <!-- CGV Acceptance -->
+    <div style="margin-top:20px;padding:16px;background:{% if booking.cgv_accepted %}#e8f5e9{% else %}#fff3e0{% endif %};border-radius:10px;border:1px solid {% if booking.cgv_accepted %}#66bb6a{% else %}#ffb74d{% endif %};">
+        {% if booking.cgv_accepted %}
+            <p style="margin:0;font-weight:600;color:#2e7d32;">
+                ✅ {% if lang == 'en' %}You have accepted the General Conditions of Transport on {{ booking.cgv_accepted_at.strftime('%d/%m/%Y at %H:%M') if booking.cgv_accepted_at else '—' }}.{% else %}Vous avez accepté les Conditions Générales de Transport le {{ booking.cgv_accepted_at.strftime('%d/%m/%Y à %H:%M') if booking.cgv_accepted_at else '—' }}.{% endif %}
+            </p>
+        {% else %}
+            <form method="POST" action="/passenger/{{ token }}/accept-cgv">
+                {{ csrf_input(request) }}
+                <input type="hidden" name="lang" value="{{ lang }}">
+                <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+                    <input type="checkbox" name="cgv_accepted" required style="margin-top:4px;width:18px;height:18px;">
+                    <span style="font-size:13px;">
+                        {% if lang == 'en' %}
+                        I have read and accept the General Conditions of Transport above. I understand that this crossing is an adventure on a cargo sailing vessel and that schedules may vary.
+                        {% else %}
+                        J'ai lu et j'accepte les Conditions Générales de Transport ci-dessus. Je comprends que cette traversée est une aventure sur un voilier-cargo et que les horaires peuvent varier.
+                        {% endif %}
+                    </span>
+                </label>
+                <button type="submit" class="btn btn-primary" style="margin-top:12px;">
+                    {% if lang == 'en' %}Accept conditions{% else %}Accepter les conditions{% endif %}
+                </button>
+            </form>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}

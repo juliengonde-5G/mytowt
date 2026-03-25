@@ -7,6 +7,7 @@
 
         <form method="POST" id="leg-form"
               action="{{ '/planning/legs/' ~ edit_leg.id ~ '/edit' if edit_leg else '/planning/legs/create' }}">
+            {{ csrf_input(request) }}
 
             <div class="modal-body">
                 {% if error %}
@@ -90,7 +91,15 @@
                 </p>
                 <div class="form-group">
                     <label class="form-label">ETD (départ prévu) *</label>
-                    <input type="datetime-local" name="etd" class="form-input" required>
+                    <div class="tz-input-wrap">
+                        <input type="datetime-local" name="etd" class="form-input" required>
+                        <select name="etd_tz" class="tz-select">
+                            {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                            <option value="{{ code }}" {% if code == 'UTC' %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <span class="tz-utc-hint"></span>
                 </div>
                 {% elif not edit_leg %}
                 <p style="font-size:12px;color:var(--towt-blue);margin-bottom:8px;">
@@ -100,8 +109,16 @@
                 </p>
                 <div class="form-group">
                     <label class="form-label">ETD (départ prévu)</label>
-                    <input type="datetime-local" name="etd" class="form-input"
-                           value="{{ computed_etd_str }}" style="background:#f0faf0;">
+                    <div class="tz-input-wrap">
+                        <input type="datetime-local" name="etd" class="form-input"
+                               value="{{ computed_etd_str }}" style="background:#f0faf0;">
+                        <select name="etd_tz" class="tz-select">
+                            {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                            <option value="{{ code }}" {% if code == 'UTC' %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <span class="tz-utc-hint"></span>
                 </div>
                 {% endif %}
 
@@ -109,26 +126,58 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">ETD (départ prévu)</label>
-                        <input type="datetime-local" name="etd" class="form-input"
-                               value="{{ edit_leg.etd.strftime('%Y-%m-%dT%H:%M') if edit_leg.etd else '' }}">
+                        <div class="tz-input-wrap">
+                            <input type="datetime-local" name="etd" class="form-input"
+                                   value="{{ edit_leg.etd.strftime('%Y-%m-%dT%H:%M') if edit_leg.etd else '' }}">
+                            <select name="etd_tz" class="tz-select">
+                                {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                                <option value="{{ code }}" {% if code == 'UTC' %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <span class="tz-utc-hint"></span>
                     </div>
                     <div class="form-group">
                         <label class="form-label">ETA (arrivée prévue)</label>
-                        <input type="datetime-local" name="eta" class="form-input"
-                               value="{{ edit_leg.eta.strftime('%Y-%m-%dT%H:%M') if edit_leg.eta else '' }}">
+                        <div class="tz-input-wrap">
+                            <input type="datetime-local" name="eta" class="form-input"
+                                   value="{{ edit_leg.eta.strftime('%Y-%m-%dT%H:%M') if edit_leg.eta else '' }}">
+                            <select name="eta_tz" class="tz-select">
+                                {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                                <option value="{{ code }}" {% if code == 'UTC' %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <span class="tz-utc-hint"></span>
                     </div>
                 </div>
                 <div class="form-section-title">Réalisé</div>
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">ATD (départ réel)</label>
-                        <input type="datetime-local" name="atd" class="form-input"
-                               value="{{ edit_leg.atd.strftime('%Y-%m-%dT%H:%M') if edit_leg.atd else '' }}">
+                        <div class="tz-input-wrap">
+                            <input type="datetime-local" name="atd" class="form-input"
+                                   value="{{ edit_leg.atd.strftime('%Y-%m-%dT%H:%M') if edit_leg.atd else '' }}">
+                            <select name="atd_tz" class="tz-select">
+                                {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                                <option value="{{ code }}" {% if code == 'UTC' %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <span class="tz-utc-hint"></span>
                     </div>
                     <div class="form-group">
                         <label class="form-label">ATA (arrivée réelle)</label>
-                        <input type="datetime-local" name="ata" class="form-input"
-                               value="{{ edit_leg.ata.strftime('%Y-%m-%dT%H:%M') if edit_leg.ata else '' }}">
+                        <div class="tz-input-wrap">
+                            <input type="datetime-local" name="ata" class="form-input"
+                                   value="{{ edit_leg.ata.strftime('%Y-%m-%dT%H:%M') if edit_leg.ata else '' }}">
+                            <select name="ata_tz" class="tz-select">
+                                {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                                <option value="{{ code }}" {% if code == 'UTC' %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <span class="tz-utc-hint"></span>
                     </div>
                 </div>
                 <div class="form-group">

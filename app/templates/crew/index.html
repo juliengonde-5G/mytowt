@@ -3,11 +3,29 @@
 {% block page_title %}Gestion d'équipage{% endblock %}
 
 {% block topbar_actions %}
+<a href="/crew/compliance" class="btn btn-secondary btn-sm" title="Conformité immigration"><i data-lucide="shield-check"></i> Conformité</a>
+<div class="dropdown-wrap" style="position:relative;display:inline-block;">
+    <button class="btn btn-secondary btn-sm" onclick="this.parentElement.classList.toggle('open')"><i data-lucide="file-text"></i> Crew List</button>
+    <div class="dropdown-menu">
+        {% for v in vessels %}
+        <a href="/crew/border-police/{{ v.id }}" target="_blank"><i data-lucide="ship" style="width:14px;height:14px;"></i> {{ v.name }}</a>
+        {% endfor %}
+    </div>
+</div>
 <button class="btn btn-primary btn-sm" onclick="loadModal('/crew/members/create')"><i data-lucide="plus"></i> Nouveau marin</button>
 {% endblock %}
 
 {% block content %}
 <div class="crew-page">
+    {% if compliance_alerts %}
+    <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span>⚠️</span>
+        <span><strong>{{ compliance_alerts|length }} alerte{{ 's' if compliance_alerts|length > 1 }}</strong> — Documents expirant sous 30 jours :
+            {% for m in compliance_alerts %}{{ m.full_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </span>
+        <a href="/crew/compliance" style="margin-left:auto;font-weight:600;color:#D97706;">Voir détails →</a>
+    </div>
+    {% endif %}
     <!-- Stats -->
     <div class="stats-grid" style="margin-bottom:20px;">
         <div class="stat-card"><div class="stat-card-icon blue"><i data-lucide="users"></i></div><div class="stat-card-body"><span class="stat-card-value">{{ stats.total }}</span><span class="stat-card-label">Équipage total</span></div></div>
@@ -33,6 +51,7 @@
                 <div class="bordee-member">
                     <span class="crew-role-badge {{ md.member.role }}">{{ md.member.role_label }}</span>
                     <span>{{ md.member.full_name }}</span>
+                    {% if md.member.is_foreign %}<span class="foreign-badge">Étranger</span>{% endif %}
                 </div>
                 {% endfor %}
                 {% if not b.crew %}<span style="font-size:11px;color:#aaa;">Aucun membre embarqué</span>{% endif %}
@@ -58,7 +77,10 @@
                 {% for md in member_data %}
                 <tr>
                     <td><strong>{{ md.member.full_name }}</strong>{% if md.member.phone %}<br><span style="font-size:10px;color:#888;">{{ md.member.phone }}</span>{% endif %}</td>
-                    <td><span class="crew-role-badge {{ md.member.role }}">{{ md.member.role_label }}</span></td>
+                    <td>
+                        <span class="crew-role-badge {{ md.member.role }}">{{ md.member.role_label }}</span>
+                        {% if md.member.is_foreign %}<span class="foreign-badge">Étranger</span>{% endif %}
+                    </td>
                     <td>
                         {% if md.status == 'active' %}
                         <span class="badge badge-completed">🟢 En activité</span>
@@ -88,6 +110,102 @@
         <p>Ajoutez votre premier marin.</p>
     </div>
     {% endif %}
+
+    <!-- ═══ BILLETTERIE ÉQUIPAGE ═══ -->
+    <div class="section-block" style="margin-top:20px;">
+        <h3 class="section-title"><i data-lucide="ticket" style="width:16px;height:16px;"></i> Billetterie équipage ({{ crew_tickets|length }})</h3>
+
+        {% if crew_tickets %}
+        <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Membre</th><th>Type</th><th>Transport</th><th>Escale</th><th>Date billet</th><th>Réf.</th><th>PJ</th><th style="text-align:right;">Actions</th></tr></thead>
+                <tbody>
+                    {% for t in crew_tickets %}
+                    <tr>
+                        <td>
+                            <strong>{{ t.member.full_name if t.member else '—' }}</strong>
+                            {% if t.member and t.member.is_foreign %}<span class="foreign-badge">Étranger</span>{% endif %}
+                        </td>
+                        <td><span class="ticket-type-badge {{ t.ticket_type }}">{{ 'Embarq.' if t.ticket_type == 'embarquement' else 'Débarq.' }}</span></td>
+                        <td>{{ t.transport_mode|capitalize }}</td>
+                        <td style="font-size:11px;">{% if t.leg %}{{ t.leg.leg_code }}{% else %}—{% endif %}</td>
+                        <td>{{ t.ticket_date.strftime('%d/%m/%Y') if t.ticket_date else '—' }}</td>
+                        <td style="font-size:11px;color:#666;">{{ t.ticket_reference or '—' }}</td>
+                        <td>
+                            {% if t.filename %}
+                            <a href="/crew/tickets/{{ t.id }}/download" class="btn btn-sm btn-secondary" title="{{ t.filename }}"><i data-lucide="download" style="width:12px;height:12px;"></i></a>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td style="text-align:right;">
+                            <button class="btn btn-sm btn-danger" hx-delete="/crew/tickets/{{ t.id }}" hx-confirm="Supprimer ce billet ?"><i data-lucide="trash-2"></i></button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color:#aaa;font-size:13px;">Aucun billet enregistré.</p>
+        {% endif %}
+
+        <form method="POST" action="/crew/tickets/create" enctype="multipart/form-data" class="ticket-add-form" id="ticket-form">
+            {{ csrf_input(request) }}
+            <div class="ticket-add-grid">
+                <div class="fg">
+                    <label class="field-label">Membre *</label>
+                    <select name="member_id" required class="fi">
+                        <option value="">— Sélectionner —</option>
+                        {% for md in member_data %}
+                        <option value="{{ md.member.id }}">{{ md.member.full_name }} ({{ md.member.role_label }}){% if md.member.is_foreign %} — Étranger{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="fg">
+                    <label class="field-label">Escale (leg) *</label>
+                    <select name="leg_id" required class="fi">
+                        <option value="">— Sélectionner —</option>
+                        {% for l in legs %}
+                        <option value="{{ l.id }}">{{ l.leg_code }} — {{ l.departure_port.name if l.departure_port else '?' }} → {{ l.arrival_port.name if l.arrival_port else '?' }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="fg">
+                    <label class="field-label">Type *</label>
+                    <select name="ticket_type" required class="fi">
+                        <option value="embarquement">Embarquement</option>
+                        <option value="debarquement">Débarquement</option>
+                    </select>
+                </div>
+                <div class="fg">
+                    <label class="field-label">Transport *</label>
+                    <select name="transport_mode" required class="fi">
+                        {% for tm in transport_modes %}
+                        <option value="{{ tm.value }}">{{ tm.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="fg">
+                    <label class="field-label">Date billet *</label>
+                    <input type="date" name="ticket_date" required class="fi">
+                </div>
+                <div class="fg">
+                    <label class="field-label">Réf. billet</label>
+                    <input type="text" name="ticket_reference" class="fi" placeholder="N° billet">
+                </div>
+                <div class="fg">
+                    <label class="field-label">Pièce jointe</label>
+                    <input type="file" name="file" class="fi" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                </div>
+                <div class="fg">
+                    <label class="field-label">Notes</label>
+                    <input type="text" name="notes" class="fi" placeholder="Notes (optionnel)">
+                </div>
+                <div class="fg" style="align-self:end;">
+                    <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="plus" style="width:14px;height:14px;"></i> Ajouter</button>
+                </div>
+            </div>
+        </form>
+    </div>
 </div>
 
 <div id="modal-container"></div>
@@ -108,9 +226,28 @@
     .crew-role-badge.lieutenant{background:rgba(96,165,250,0.1);color:#2563EB;}
     .crew-role-badge.bosco{background:rgba(16,185,129,0.1);color:#059669;}
     .crew-role-badge.marin{background:rgba(107,114,128,0.1);color:#6B7280;}
+    .crew-role-badge.eleve_officier{background:rgba(251,191,36,0.15);color:#B45309;}
+    .foreign-badge{font-size:9px;padding:1px 6px;border-radius:100px;font-weight:600;background:rgba(239,68,68,0.1);color:#DC2626;margin-left:4px;}
     .filter-bar{display:flex;gap:4px;background:white;padding:4px;border-radius:var(--radius);box-shadow:var(--shadow);width:fit-content;flex-wrap:wrap;}
     .filter-btn{padding:6px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;color:var(--towt-gray);}
     .filter-btn:hover{background:var(--towt-light);}.filter-btn.active{background:var(--towt-blue);color:white;}
+    /* Dropdown */
+    .dropdown-wrap .dropdown-menu{display:none;position:absolute;top:100%;right:0;background:white;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);min-width:180px;z-index:100;overflow:hidden;margin-top:4px;}
+    .dropdown-wrap.open .dropdown-menu{display:block;}
+    .dropdown-menu a{display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:13px;color:#333;border-bottom:1px solid #f0f0f0;}
+    .dropdown-menu a:last-child{border-bottom:none;}
+    .dropdown-menu a:hover{background:var(--towt-light);}
+    /* Billetterie */
+    .section-block{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:20px;}
+    .section-title{font-size:15px;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+    .ticket-type-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:600;}
+    .ticket-type-badge.embarquement{background:rgba(34,197,94,0.1);color:#16a34a;}
+    .ticket-type-badge.debarquement{background:rgba(239,68,68,0.1);color:#DC2626;}
+    .ticket-add-form{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;}
+    .ticket-add-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;align-items:start;}
+    @media(max-width:900px){.ticket-add-grid{grid-template-columns:1fr 1fr;}}
+    .ticket-add-grid .fg{display:flex;flex-direction:column;gap:3px;}
+    .ticket-add-grid .fi{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:Poppins,system-ui,sans-serif;}
 </style>
 
 <script>
@@ -135,5 +272,21 @@
                 .catch(function(){window.location.href='/crew';});
         });
     };
+    // Close dropdown on outside click
+    document.addEventListener('click', function(e){
+        document.querySelectorAll('.dropdown-wrap.open').forEach(function(d){
+            if(!d.contains(e.target)) d.classList.remove('open');
+        });
+    });
+    // Ticket form submit
+    var ticketForm = document.getElementById('ticket-form');
+    if (ticketForm) {
+        ticketForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            fetch(ticketForm.action, { method: 'POST', body: new FormData(ticketForm) })
+                .then(function(r){ if(r.redirected) window.location.href=r.url; else window.location.href='/crew'; })
+                .catch(function(){ window.location.reload(); });
+        });
+    }
 </script>
 {% endblock %}

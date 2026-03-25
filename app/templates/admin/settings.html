@@ -6,6 +6,7 @@
 <div class="settings-page">
     <!-- Sections as tabs -->
     <div class="settings-tabs">
+        {% if user.role in ('administrateur', 'admin', 'data_analyst') %}
         <button class="stab active" onclick="showSection('users')">👤 Utilisateurs</button>
         <button class="stab" onclick="showSection('vessels')">🚢 Navires</button>
         <button class="stab" onclick="showSection('ports')">⚓ Ports</button>
@@ -14,16 +15,20 @@
         <button class="stab" onclick="showSection('co2')">🌿 Décarbonation</button>
         <button class="stab" onclick="showSection('mrv')">⛽ MRV Fuel</button>
         <button class="stab" onclick="showSection('locks')">🔒 Verrouillage</button>
+        <button class="stab" onclick="showSection('maintenance')">&#9881; Maintenance</button>
         <button class="stab" onclick="showSection('database')">🗄️ Base de données</button>
         <button class="stab" onclick="showSection('activity')">📋 Activité</button>
         <button class="stab" onclick="showSection('language')">🌐 Langue</button>
-        <button class="stab" onclick="showSection('pricing')">🧳 Tarifs passagers</button>
+        {% endif %}
+        <button class="stab {% if user.role == 'commercial' %}active{% endif %}" onclick="showSection('pricing')">🧳 Tarifs passagers</button>
+        {% if user.role in ('administrateur', 'admin', 'data_analyst') %}
         <button class="stab" onclick="showSection('insurance')">🛡️ Assurances</button>
         <button class="stab" onclick="showSection('pipedrive')">🔗 Pipedrive</button>
+        {% endif %}
     </div>
 
     <!-- USERS -->
-    <div class="settings-section" id="sec-users">
+    <div class="settings-section" id="sec-users" {% if user.role not in ('administrateur', 'admin', 'data_analyst') %}style="display:none;"{% endif %}>
         <div class="sec-header">
             <h3>Utilisateurs</h3>
             <button class="btn btn-primary btn-sm" onclick="openModal('/admin/users/create')"><i data-lucide="plus"></i> Nouvel utilisateur</button>
@@ -83,12 +88,13 @@
         {% if port_configs %}
         <div class="table-container">
             <table class="data-table">
-                <thead><tr><th>LOCODE</th><th>Port</th><th>Accessible</th><th style="text-align:right;">Coût port (€)</th><th style="text-align:right;">Quai/jour (€)</th><th style="text-align:right;">Coût/pal. (€)</th></tr></thead>
+                <thead><tr><th>LOCODE</th><th>Port</th><th>Pays</th><th>Accessible</th><th style="text-align:right;">Coût port (€)</th><th style="text-align:right;">Quai/jour (€)</th><th style="text-align:right;">Coût/pal. (€)</th></tr></thead>
                 <tbody>
                     {% for c in port_configs %}
                     <tr {% if not c.accessible %}style="opacity:0.5;"{% endif %}>
                         <td><strong>{{ c.port_locode }}</strong></td>
                         <td>{{ c.port.name if c.port else '—' }}</td>
+                        <td>{{ c.port.country_code|flag }} {{ c.port.country_code if c.port else '—' }}</td>
                         <td>{% if c.accessible %}✓{% else %}✗{% endif %}</td>
                         <td style="text-align:right;">{{ c.port_cost_total|eur }}</td>
                         <td style="text-align:right;">{{ c.daily_quay_cost|eur }}</td>
@@ -107,6 +113,7 @@
     <div class="settings-section" id="sec-economics" style="display:none;">
         <h3>Données économiques</h3>
         <form method="POST" action="/admin/opex/update" style="max-width:400px;">
+            {{ csrf_input(request) }}
             <div class="form-group">
                 <label class="form-label">OPEX journalier en mer (€/jour)</label>
                 <input type="text" name="opex_daily_rate" class="form-input" style="text-align:right;"
@@ -122,6 +129,7 @@
         <h3>Paramètres KPI & Émissions</h3>
         <p style="font-size:12px;color:#666;margin-bottom:16px;">Facteurs d'émission utilisés pour le calcul des KPI environnementaux (CO₂, NOx, SOx par tonne par mille nautique).</p>
         <form method="POST" action="/admin/emissions/update" style="max-width:600px;">
+            {{ csrf_input(request) }}
             {% set em_params_dict = {} %}
             {% for ep in emission_params %}{% if em_params_dict.update({ep.parameter_name: ep.parameter_value}) %}{% endif %}{% endfor %}
 
@@ -184,6 +192,7 @@
         </p>
 
         <form method="POST" action="/admin/co2/update" style="max-width:600px;">
+            {{ csrf_input(request) }}
             {% for var_name, defaults in co2_defaults.items() %}
             {% set current_val = None %}
             {% for cv in co2_variables %}{% if cv.variable_name == var_name %}{% set current_val = cv %}{% endif %}{% endfor %}
@@ -227,6 +236,7 @@
         <h3>⛽ Paramètres MRV Fuel</h3>
         <p style="font-size:12px;color:#666;margin-bottom:16px;">Paramètres pour le module MRV (Monitoring, Reporting, Verification) conformité EU MRV / DNV Veracity.</p>
         <form method="POST" action="/admin/mrv/update" style="max-width:600px;">
+            {{ csrf_input(request) }}
             {% set mrv_dict = {} %}
             {% for mp in mrv_params %}{% if mrv_dict.update({mp.parameter_name: mp.parameter_value}) %}{% endif %}{% endfor %}
 
@@ -249,11 +259,47 @@
         <h3>Verrouillage des escales</h3>
         <p style="font-size:13px;color:#666;margin-bottom:16px;">Verrouiller les escales terminées empêche toute modification. Escales verrouillées : <strong>{{ locked_count }}</strong></p>
         <form method="POST" action="/admin/legs/lock" style="display:inline;">
+            {{ csrf_input(request) }}
             <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="lock"></i> Verrouiller les escales terminées (ATD renseigné)</button>
         </form>
     </div>
 
     <!-- DATABASE -->
+    <!-- ═══ MAINTENANCE MODE ═══ -->
+    <div class="settings-section" id="sec-maintenance" style="display:none;">
+        <h3>&#9881; Mode Maintenance</h3>
+        <p style="font-size:13px;color:#666;margin-bottom:20px;">
+            Activez le mode maintenance pour bloquer l'acces aux utilisateurs pendant les mises a jour.
+            Seuls les administrateurs pourront continuer a naviguer.
+        </p>
+        {% set maint_active = maintenance_active|default(false) %}
+        {% if maint_active %}
+        <div class="alert alert-warning" style="margin-bottom:16px;">
+            <strong>&#9888; Mode maintenance actif</strong> — Les utilisateurs non-admin voient une page de maintenance.
+        </div>
+        <form method="POST" action="/admin/maintenance/disable">
+            {{ csrf_input(request) }}
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Desactiver le mode maintenance ?')">
+                Desactiver le mode maintenance
+            </button>
+        </form>
+        {% else %}
+        <div class="alert alert-success" style="margin-bottom:16px;">
+            Application accessible normalement.
+        </div>
+        <form method="POST" action="/admin/maintenance/enable" style="display:flex;flex-direction:column;gap:12px;max-width:500px;">
+            {{ csrf_input(request) }}
+            <div>
+                <label class="form-label">Message affiche aux utilisateurs</label>
+                <textarea name="message" class="form-input" rows="3" placeholder="Mise a jour en cours. L'application sera de retour dans quelques instants.">Mise a jour en cours. L'application sera de retour dans quelques instants.</textarea>
+            </div>
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Activer le mode maintenance ? Les utilisateurs seront bloques.')">
+                Activer le mode maintenance
+            </button>
+        </form>
+        {% endif %}
+    </div>
+
     <div class="settings-section" id="sec-database" style="display:none;">
         <h3>🗄️ Gestion de la base de données</h3>
         <p style="font-size:13px;color:#666;margin-bottom:20px;">Outils d'import, d'export, de maintenance et de nettoyage des données de l'application.</p>
@@ -278,7 +324,19 @@
                     <span>Fichier CSV séparateur <code>;</code> avec colonnes : Leg Code, Navire, Départ LOCODE, Port Départ, Arrivée LOCODE, Port Arrivée, ETD, ETA, ATD (réel), ATA (réel), Distance Ortho (NM), Distance Réelle (NM), Vitesse (nds), Durée Est. (h), Statut. Les legs existants seront mis à jour, les nouveaux seront créés. Les ports manquants seront auto-créés.</span>
                 </div>
                 <form method="POST" action="/admin/import/planning" enctype="multipart/form-data" style="display:flex;align-items:center;gap:8px;">
+                    {{ csrf_input(request) }}
                     <input type="file" name="file" accept=".csv" required class="form-input" style="font-size:12px;padding:6px;max-width:280px;">
+                    <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="upload"></i> Importer</button>
+                </form>
+            </div>
+            <div class="db-card">
+                <div class="db-card-info">
+                    <strong>👥 Importer des utilisateurs (Excel)</strong>
+                    <span>Fichier Excel (.xlsx) avec colonnes : username, full_name, email, role, password, language, is_active. <a href="/admin/users/import/template" hx-boost="false">Télécharger le template</a>. Les utilisateurs existants (même username) seront ignorés.</span>
+                </div>
+                <form method="POST" action="/admin/users/import" enctype="multipart/form-data" style="display:flex;align-items:center;gap:8px;">
+                    {{ csrf_input(request) }}
+                    <input type="file" name="file" accept=".xlsx,.xls" required class="form-input" style="font-size:12px;padding:6px;max-width:280px;">
                     <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="upload"></i> Importer</button>
                 </form>
             </div>
@@ -307,15 +365,22 @@
                     <div class="db-checkboxes">
                         <label><input type="checkbox" name="tables" value="legs" checked> 🧭 Legs / Voyages</label>
                         <label><input type="checkbox" name="tables" value="orders"> 📦 Commandes</label>
+                        <label><input type="checkbox" name="tables" value="clients"> 🏢 Clients</label>
                         <label><input type="checkbox" name="tables" value="passengers"> 🎫 Passagers & Réservations</label>
                         <label><input type="checkbox" name="tables" value="cargo"> 📄 Packing Lists & Batches</label>
                         <label><input type="checkbox" name="tables" value="finance"> 💰 Finances</label>
+                        <label><input type="checkbox" name="tables" value="rates"> 💹 Grilles tarifaires</label>
                         <label><input type="checkbox" name="tables" value="claims"> ⚠️ Claims & Sinistres</label>
-                        <label><input type="checkbox" name="tables" value="crew"> 👷 Équipage & Affectations</label>
+                        <label><input type="checkbox" name="tables" value="crew"> 👷 Équipage, Affectations & Billets</label>
+                        <label><input type="checkbox" name="tables" value="escale"> ⚓ Escale (opérations, shifts dockers)</label>
+                        <label><input type="checkbox" name="tables" value="onboard"> 🚢 On Board (SOF attachments, ETA shifts, documents cargo)</label>
                         <label><input type="checkbox" name="tables" value="sof"> 📜 SOF Events</label>
+                        <label><input type="checkbox" name="tables" value="kpi"> 📊 KPI</label>
                         <label><input type="checkbox" name="tables" value="messages"> 💬 Messages portail</label>
                         <label><input type="checkbox" name="tables" value="notifications"> 🔔 Notifications</label>
-                        <label><input type="checkbox" name="tables" value="config"> ⚙️ Configuration (ports, navires, paramètres)</label>
+                        <label><input type="checkbox" name="tables" value="activity"> 📋 Journal d'activité</label>
+                        <label><input type="checkbox" name="tables" value="access_logs"> 🔍 Logs d'accès portail</label>
+                        <label><input type="checkbox" name="tables" value="config"> ⚙️ Configuration (ports, navires, paramètres, CO2, MRV)</label>
                     </div>
                     <button type="submit" class="btn btn-primary btn-sm"><i data-lucide="download"></i> Exporter la sélection</button>
                 </form>
@@ -342,17 +407,25 @@
                     <span>Supprime les données des modules sélectionnés. Les données de configuration et les utilisateurs ne sont pas concernés.</span>
                 </div>
                 <form method="POST" action="/admin/database/purge-selective" id="form-purge-selective">
+                    {{ csrf_input(request) }}
                     <div class="db-checkboxes">
                         <label><input type="checkbox" name="tables" value="notifications"> 🔔 Notifications</label>
                         <label><input type="checkbox" name="tables" value="messages"> 💬 Messages portail</label>
+                        <label><input type="checkbox" name="tables" value="access_logs"> 🔍 Logs d'accès portail</label>
+                        <label><input type="checkbox" name="tables" value="activity"> 📋 Journal d'activité</label>
                         <label><input type="checkbox" name="tables" value="sof"> 📜 SOF Events</label>
+                        <label><input type="checkbox" name="tables" value="onboard"> 🚢 On Board (notifications, attachments, ETA shifts, documents cargo)</label>
+                        <label><input type="checkbox" name="tables" value="escale"> ⚓ Escale (opérations, shifts dockers)</label>
                         <label><input type="checkbox" name="tables" value="claims"> ⚠️ Claims & documents</label>
                         <label><input type="checkbox" name="tables" value="cargo"> 📄 Packing Lists & Batches</label>
                         <label><input type="checkbox" name="tables" value="passengers"> 🎫 Passagers & Réservations</label>
                         <label><input type="checkbox" name="tables" value="orders"> 📦 Commandes</label>
+                        <label><input type="checkbox" name="tables" value="clients"> 🏢 Clients</label>
                         <label><input type="checkbox" name="tables" value="finance"> 💰 Données financières</label>
-                        <label><input type="checkbox" name="tables" value="crew_assignments"> 👷 Affectations équipage</label>
-                        <label><input type="checkbox" name="tables" value="legs"> 🧭 Legs (supprime aussi escale, SOF, finances liés)</label>
+                        <label><input type="checkbox" name="tables" value="rates"> 💹 Grilles tarifaires</label>
+                        <label><input type="checkbox" name="tables" value="crew_assignments"> 👷 Affectations & billets équipage</label>
+                        <label><input type="checkbox" name="tables" value="kpi"> 📊 KPI</label>
+                        <label><input type="checkbox" name="tables" value="legs"> 🧭 Legs (supprime aussi escale, SOF, finances, KPI liés)</label>
                     </div>
                     <div class="db-confirm-row">
                         <label style="font-size:12px;color:#dc2626;font-weight:600;">Tapez SUPPRIMER pour confirmer :</label>
@@ -369,6 +442,7 @@
                     <span>⚠️ Supprime <b>la totalité</b> des contenus de la base de données. Seuls les comptes utilisateurs et la configuration système sont conservés. Cette action est <b>irréversible</b>.</span>
                 </div>
                 <form method="POST" action="/admin/database/reset" id="form-reset">
+                    {{ csrf_input(request) }}
                     <div class="db-confirm-row">
                         <label style="font-size:12px;color:#dc2626;font-weight:600;">Tapez REINITIALISER pour confirmer :</label>
                         <input type="text" name="confirm_text" class="form-input" style="max-width:250px;font-size:13px;" placeholder="REINITIALISER" autocomplete="off">
@@ -400,6 +474,7 @@
                     <span>Supprime les notifications marquées comme archivées (plus de 30 jours).</span>
                 </div>
                 <form method="POST" action="/admin/database/cleanup-notifications">
+                    {{ csrf_input(request) }}
                     <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
                 </form>
             </div>
@@ -410,7 +485,72 @@
                     <span>Supprime les entrées d'audit (packing list, passager) de plus de 12 mois.</span>
                 </div>
                 <form method="POST" action="/admin/database/cleanup-audit">
+                    {{ csrf_input(request) }}
                     <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
+                </form>
+            </div>
+
+            <div class="db-card">
+                <div class="db-card-info">
+                    <strong>📋 Nettoyer le journal d'activité</strong>
+                    <span>Supprime les entrées du journal d'activité de plus de 6 mois.</span>
+                </div>
+                <form method="POST" action="/admin/database/cleanup-activity-logs">
+                    {{ csrf_input(request) }}
+                    <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
+                </form>
+            </div>
+
+            <div class="db-card">
+                <div class="db-card-info">
+                    <strong>🚢 Nettoyer les notifications On Board</strong>
+                    <span>Supprime les notifications On Board lues de plus de 30 jours.</span>
+                </div>
+                <form method="POST" action="/admin/database/cleanup-onboard-notifications">
+                    {{ csrf_input(request) }}
+                    <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
+                </form>
+            </div>
+
+            <div class="db-card">
+                <div class="db-card-info">
+                    <strong>🔍 Nettoyer les logs d'accès portail</strong>
+                    <span>Supprime les logs d'accès au portail client de plus de 6 mois.</span>
+                </div>
+                <form method="POST" action="/admin/database/cleanup-access-logs">
+                    {{ csrf_input(request) }}
+                    <button type="submit" class="btn btn-secondary btn-sm"><i data-lucide="eraser"></i> Nettoyer</button>
+                </form>
+            </div>
+
+            <!-- RGPD -->
+            <div class="db-action-card" style="border-left:4px solid #2563EB;">
+                <div>
+                    <strong>🛡️ RGPD — Droit d'accès (Art. 15)</strong>
+                    <span>Exporte toutes les données personnelles d'une réservation passager au format JSON (nom, email, documents, formulaires, paiements, messages, logs d'accès).</span>
+                </div>
+                <form id="form-rgpd-export" style="display:flex;gap:8px;align-items:center;" hx-boost="false">
+                    <input type="number" name="booking_id" placeholder="N° réservation" required
+                           style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;width:140px;font-family:'Poppins',system-ui,sans-serif;font-size:12px;">
+                    <button type="submit" class="btn btn-sm" style="background:#2563EB;color:white;border:none;"
+                            onclick="event.preventDefault();var bid=this.form.booking_id.value;if(bid)window.location.href='/admin/rgpd/export/passenger/'+bid;">
+                        <i data-lucide="download"></i> Exporter (JSON)
+                    </button>
+                </form>
+            </div>
+            <div class="db-action-card" style="border-left:4px solid #e53935;">
+                <div>
+                    <strong>🛡️ RGPD — Droit à l'effacement (Art. 17)</strong>
+                    <span>Anonymise toutes les données personnelles d'une réservation passager (nom, email, téléphone, documents, formulaires). Les données financières et statistiques sont conservées de manière anonyme.</span>
+                </div>
+                <form method="POST" id="form-rgpd-erase" style="display:flex;gap:8px;align-items:center;">
+                    {{ csrf_input(request) }}
+                    <input type="number" name="booking_id" placeholder="N° réservation" required
+                           style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;width:140px;font-family:'Poppins',system-ui,sans-serif;font-size:12px;">
+                    <button type="submit" class="btn btn-sm" style="background:#e53935;color:white;border:none;"
+                            onclick="if(!confirm('ATTENTION : Cette action est irréversible. Toutes les données personnelles de cette réservation seront effacées conformément au RGPD Art. 17. Continuer ?'))event.preventDefault();else this.form.action='/admin/rgpd/erase/'+this.form.booking_id.value;">
+                        <i data-lucide="shield-off"></i> Effacer les données
+                    </button>
                 </form>
             </div>
         </div>
@@ -504,6 +644,7 @@
         <h3>🌐 Langue de l'interface</h3>
         <p style="font-size:13px;color:#666;margin-bottom:16px;">Choisissez votre langue préférée. Le changement s'appliquera à toute la navigation.</p>
         <form method="POST" action="/admin/settings/language" style="max-width:400px;">
+            {{ csrf_input(request) }}
             <div style="display:flex;flex-direction:column;gap:12px;">
                 {% for code, label in SUPPORTED_LANGUAGES.items() %}
                 <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #eee;border-radius:8px;cursor:pointer;{% if user.language == code or (not user.language and code == 'fr') %}background:#f0f7f8;border-color:var(--towt-blue);{% endif %}">
@@ -517,45 +658,73 @@
     </div>
 
     <!-- PRICING GRID -->
-    <div class="settings-section" id="sec-pricing" style="display:none;">
-        <h3>🧳 Grille tarifaire passagers</h3>
-        <p style="font-size:13px;color:#666;margin-bottom:16px;">Prix par traversée (origine → destination) et par type de cabine. L'acompte est calculé en % du prix.</p>
+    <div class="settings-section" id="sec-pricing" style="display:{% if user.role == 'commercial' %}block{% else %}none{% endif %};">
+        <div class="sec-header">
+            <h3>Grille tarifaire passagers</h3>
+        </div>
+        <p style="font-size:13px;color:#666;margin-bottom:16px;font-family:'Poppins',system-ui,sans-serif;">Prix catalogue par traversée (origine → destination) et par type de cabine. L'acompte est calculé en % du prix. La remise se configure par réservation.</p>
+
+        <!-- Filters -->
+        <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+            <div>
+                <label class="field-label" style="font-size:11px;">Route</label>
+                <select id="pricing-filter-route" onchange="filterPricingGrid()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:'Poppins',system-ui,sans-serif;min-width:200px;">
+                    <option value="">Toutes les routes</option>
+                    {% for r in existing_routes %}
+                    <option value="{{ r.dep }}|{{ r.arr }}">{{ r.dep_name }} → {{ r.arr_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="field-label" style="font-size:11px;">Type cabine</label>
+                <select id="pricing-filter-cabin" onchange="filterPricingGrid()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:'Poppins',system-ui,sans-serif;min-width:140px;">
+                    <option value="">Tous les types</option>
+                    <option value="double">Lit double</option>
+                    <option value="twin">Lits jumeaux</option>
+                </select>
+            </div>
+        </div>
 
         {% if pricing_grid %}
-        <table class="data-table" style="margin-bottom:16px;">
-            <thead><tr><th>Origine</th><th>Destination</th><th>Type cabine</th><th>Prix (€)</th><th>Acompte %</th><th>Notes</th><th>Actif</th><th></th></tr></thead>
+        <div class="table-container">
+        <table class="data-table" id="pricing-table" style="margin-bottom:16px;">
+            <thead><tr><th>Origine</th><th>Destination</th><th>Type cabine</th><th>Prix (€)</th><th>Acompte %</th><th>Notes</th><th>Actif</th><th style="text-align:right;">Actions</th></tr></thead>
             <tbody>
             {% for pg in pricing_grid %}
-            <tr>
+            <tr data-route="{{ pg.origin_locode }}|{{ pg.destination_locode }}" data-cabin="{{ pg.cabin_type }}">
                 <form method="POST" action="/admin/settings/pricing/{{ pg.id }}/edit">
+                {{ csrf_input(request) }}
                 <td>{{ route_ports.get(pg.origin_locode, pg.origin_locode) }} <span style="font-size:10px;color:#888;">({{ pg.origin_locode }})</span></td>
                 <td>{{ route_ports.get(pg.destination_locode, pg.destination_locode) }} <span style="font-size:10px;color:#888;">({{ pg.destination_locode }})</span></td>
                 <td>{{ cabin_type_labels.get(pg.cabin_type, pg.cabin_type) }}</td>
-                <td><input type="number" name="price" value="{{ pg.price }}" step="0.01" style="width:80px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;"></td>
-                <td><input type="number" name="deposit_pct" value="{{ pg.deposit_pct }}" min="0" max="100" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;">%</td>
-                <td><input type="text" name="notes" value="{{ pg.notes or '' }}" style="width:100px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;"></td>
+                <td><input type="number" name="price" value="{{ pg.price }}" step="0.01" class="pricing-input" style="width:80px;"></td>
+                <td><input type="number" name="deposit_pct" value="{{ pg.deposit_pct }}" min="0" max="100" class="pricing-input" style="width:55px;"></td>
+                <td><input type="text" name="notes" value="{{ pg.notes or '' }}" class="pricing-input" style="width:100px;"></td>
                 <td><input type="checkbox" name="is_active" {% if pg.is_active %}checked{% endif %}></td>
-                <td style="white-space:nowrap;">
-                    <button type="submit" class="btn btn-sm btn-secondary" style="padding:3px 8px;font-size:10px;">💾</button>
-                    <button type="button" class="btn btn-sm" style="padding:3px 8px;font-size:10px;color:#dc2626;"
-                            hx-delete="/admin/settings/pricing/{{ pg.id }}" hx-confirm="Supprimer ?" hx-target="closest tr" hx-swap="outerHTML">🗑</button>
+                <td style="white-space:nowrap;text-align:right;">
+                    <button type="submit" class="btn btn-sm btn-secondary" title="Enregistrer"><i data-lucide="save"></i></button>
+                    <button type="button" class="btn btn-sm btn-danger"
+                            hx-delete="/admin/settings/pricing/{{ pg.id }}" hx-confirm="Supprimer ce tarif ?" hx-target="closest tr" hx-swap="outerHTML"
+                            title="Supprimer"><i data-lucide="trash-2"></i></button>
                 </td>
                 </form>
             </tr>
             {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}
-        <p style="color:#aaa;text-align:center;padding:20px;">Aucun tarif configuré.</p>
+        <p style="color:#aaa;text-align:center;padding:20px;font-family:'Poppins',system-ui,sans-serif;">Aucun tarif configuré.</p>
         {% endif %}
 
         <details style="margin-top:12px;">
-            <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--towt-blue);">＋ Ajouter un tarif</summary>
+            <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--towt-blue);font-family:'Poppins',system-ui,sans-serif;"><i data-lucide="plus" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i> Ajouter un tarif</summary>
             <form method="POST" action="/admin/settings/pricing/add" style="margin-top:10px;">
+                {{ csrf_input(request) }}
                 <div style="display:grid;grid-template-columns:1fr 1fr 100px 80px 1fr;gap:8px;align-items:end;">
                     <div>
-                        <label style="font-size:10px;font-weight:600;color:#888;">Route (Origine → Destination)</label>
-                        <select name="route" id="pricing-route" required onchange="var v=this.value.split('|');document.getElementById('h-origin').value=v[0]||'';document.getElementById('h-dest').value=v[1]||'';" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                        <label class="field-label" style="font-size:10px;">Route (Origine → Destination)</label>
+                        <select name="route" id="pricing-route" required onchange="var v=this.value.split('|');document.getElementById('h-origin').value=v[0]||'';document.getElementById('h-dest').value=v[1]||'';" class="pricing-select">
                             <option value="">— Choisir une route —</option>
                             {% for r in existing_routes %}
                             <option value="{{ r.dep }}|{{ r.arr }}">{{ r.dep_name }} ({{ r.dep }}) → {{ r.arr_name }} ({{ r.arr }})</option>
@@ -565,26 +734,26 @@
                         <input type="hidden" name="destination_locode" id="h-dest">
                     </div>
                     <div>
-                        <label style="font-size:10px;font-weight:600;color:#888;">Type cabine</label>
-                        <select name="cabin_type" required style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                        <label class="field-label" style="font-size:10px;">Type cabine</label>
+                        <select name="cabin_type" required class="pricing-select">
                             <option value="double">Lit double</option>
                             <option value="twin">Lits jumeaux</option>
                         </select>
                     </div>
                     <div>
-                        <label style="font-size:10px;font-weight:600;color:#888;">Prix (€)</label>
-                        <input type="number" name="price" step="0.01" required style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                        <label class="field-label" style="font-size:10px;">Prix (€)</label>
+                        <input type="number" name="price" step="0.01" required class="pricing-input-add">
                     </div>
                     <div>
-                        <label style="font-size:10px;font-weight:600;color:#888;">Acompte %</label>
-                        <input type="number" name="deposit_pct" value="30" min="0" max="100" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                        <label class="field-label" style="font-size:10px;">Acompte %</label>
+                        <input type="number" name="deposit_pct" value="30" min="0" max="100" class="pricing-input-add">
                     </div>
                     <div>
-                        <label style="font-size:10px;font-weight:600;color:#888;">Notes</label>
-                        <input type="text" name="notes" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
+                        <label class="field-label" style="font-size:10px;">Notes</label>
+                        <input type="text" name="notes" class="pricing-input-add">
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary btn-sm" style="margin-top:10px;">Ajouter</button>
+                <button type="submit" class="btn btn-primary btn-sm" style="margin-top:10px;"><i data-lucide="plus" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i> Ajouter</button>
             </form>
         </details>
     </div>
@@ -601,6 +770,7 @@
             {% for ic in insurance_contracts %}
             <tr>
                 <form method="POST" action="/admin/settings/insurance/{{ ic.id }}/edit">
+                {{ csrf_input(request) }}
                 <td><strong>{{ ic.guarantee_type }}</strong></td>
                 <td><input type="text" name="insurer_name" value="{{ ic.insurer_name }}" style="width:120px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;"></td>
                 <td><input type="text" name="insurer_email" value="{{ ic.insurer_email or '' }}" style="width:120px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;"></td>
@@ -623,6 +793,7 @@
         <details style="margin-top:12px;">
             <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--towt-blue);">＋ Ajouter un contrat</summary>
             <form method="POST" action="/admin/settings/insurance/add" style="margin-top:10px;">
+                {{ csrf_input(request) }}
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
                     <div><label style="font-size:10px;font-weight:600;color:#888;">Type de garantie</label><select name="guarantee_type" required style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;"><option value="pi">P&I</option><option value="hull_div">Hull — DIV</option><option value="war_risk">War Risk</option></select></div>
                     <div><label style="font-size:10px;font-weight:600;color:#888;">Nom assureur</label><input type="text" name="insurer_name" required style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;"></div>
@@ -647,6 +818,7 @@
         </p>
 
         <form method="POST" action="/admin/settings/pipedrive/update" style="max-width:500px;">
+            {{ csrf_input(request) }}
             <div class="form-group" style="margin-bottom:16px;">
                 <label class="form-label">Token API Pipedrive</label>
                 <div style="display:flex;gap:8px;">
@@ -706,8 +878,17 @@
 <div id="modal-container"></div>
 
 <style>
+    .pricing-input{padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;font-family:'Poppins',system-ui,sans-serif;}
+    .pricing-input:focus{border-color:var(--towt-blue);outline:none;}
+    .pricing-input-add{width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:'Poppins',system-ui,sans-serif;}
+    .pricing-input-add:focus{border-color:var(--towt-blue);outline:none;}
+    .pricing-select{width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:'Poppins',system-ui,sans-serif;}
+    .pricing-select:focus{border-color:var(--towt-blue);outline:none;}
+    #pricing-table td,#pricing-table th{font-family:'Poppins',system-ui,sans-serif;font-size:12px;}
+    #pricing-table .btn-sm{padding:4px 8px;}
+    #pricing-table .btn-sm i{width:14px;height:14px;}
     .settings-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:20px;background:white;padding:6px;border-radius:var(--radius-lg);box-shadow:var(--shadow);}
-    .stab{padding:8px 16px;border:none;background:transparent;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;color:var(--towt-gray);font-family:inherit;}
+    .stab{padding:8px 16px;border:none;background:transparent;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;color:var(--towt-gray);font-family:'Poppins',system-ui,sans-serif;}
     .stab:hover{background:var(--towt-light);}.stab.active{background:var(--towt-blue);color:white;}
     .settings-section{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:20px;margin-bottom:16px;}
     .sec-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
@@ -744,6 +925,18 @@
 </style>
 
 <script>
+    /* ─── Pricing grid filter ─── */
+    window.filterPricingGrid = function() {
+        var route = document.getElementById('pricing-filter-route').value;
+        var cabin = document.getElementById('pricing-filter-cabin').value;
+        var rows = document.querySelectorAll('#pricing-table tbody tr');
+        rows.forEach(function(tr) {
+            var rMatch = !route || tr.dataset.route === route;
+            var cMatch = !cabin || tr.dataset.cabin === cabin;
+            tr.style.display = (rMatch && cMatch) ? '' : 'none';
+        });
+    };
+
     window.showSection = function(name) {
         document.querySelectorAll('.settings-section').forEach(function(s){s.style.display='none';});
         document.querySelectorAll('.stab').forEach(function(t){t.classList.remove('active');});

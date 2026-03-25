@@ -18,6 +18,9 @@ from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg, LegStatus
 from app.models.port import Port
+from app.models.planning_share import PlanningShare
+from app.utils.timezones import get_port_timezone, utc_offset_label, TIMEZONE_CHOICES
+from app.utils.notifications import notify_delay
 
 router = APIRouter(prefix="/planning", tags=["planning"])
 
@@ -324,6 +327,7 @@ async def leg_create_form(
         "default_speed": DEFAULT_SPEED,
         "default_elongation": DEFAULT_ELONGATION,
         "default_port_stay": DEFAULT_PORT_STAY_DAYS,
+        "tz_choices": TIMEZONE_CHOICES,
         "error": None,
     })
 
@@ -368,6 +372,7 @@ async def leg_create_submit(
             "is_first_leg": True, "prev_eta_str": "",
             "default_speed": DEFAULT_SPEED, "default_elongation": DEFAULT_ELONGATION,
             "default_port_stay": DEFAULT_PORT_STAY_DAYS,
+            "tz_choices": TIMEZONE_CHOICES,
             "error": f"Port invalide: {departure_port if not dep_port else arrival_port}",
         })
 
@@ -466,6 +471,10 @@ async def leg_edit_form(
         "prev_eta_str": "",
         "default_speed": DEFAULT_SPEED, "default_elongation": DEFAULT_ELONGATION,
         "default_port_stay": DEFAULT_PORT_STAY_DAYS,
+        "tz_choices": TIMEZONE_CHOICES,
+        "port_timezone": get_port_timezone(leg.departure_port.country_code, leg.departure_port.zone_code) if leg.departure_port else "UTC",
+        "port_tz_label": leg.departure_port.name if leg.departure_port else "Port",
+        "port_tz_offset": utc_offset_label(get_port_timezone(leg.departure_port.country_code, leg.departure_port.zone_code)) if leg.departure_port else "UTC",
         "error": None,
     })
 
@@ -515,6 +524,7 @@ async def leg_edit_submit(
             "is_first_leg": leg.sequence == 1, "prev_eta_str": "",
             "default_speed": DEFAULT_SPEED, "default_elongation": DEFAULT_ELONGATION,
             "default_port_stay": DEFAULT_PORT_STAY_DAYS,
+            "tz_choices": TIMEZONE_CHOICES,
             "error": "Port invalide.",
         })
 
@@ -551,6 +561,17 @@ async def leg_edit_submit(
     # If ETD set but not ETA, recalculate
     if leg.etd and not leg.eta and leg.distance_nm:
         leg.eta = compute_eta(leg.etd, leg.distance_nm, _speed, _elongation)
+
+    # ── Delay detection: compare ETA/ETD vs reference (eta_ref/etd_ref) ──
+    vessel_name = vessel_obj.name if vessel_obj else "Navire"
+    if leg.eta and leg.eta_ref:
+        shift_h = (leg.eta - leg.eta_ref).total_seconds() / 3600
+        if abs(shift_h) >= 4:
+            await notify_delay(db, leg, vessel_name, shift_h, "eta")
+    if leg.etd and leg.etd_ref:
+        shift_h = (leg.etd - leg.etd_ref).total_seconds() / 3600
+        if abs(shift_h) >= 4:
+            await notify_delay(db, leg, vessel_name, shift_h, "etd")
 
     await db.flush()
 
@@ -773,7 +794,7 @@ async def pdf_commercial(
     if origin:
         query = query.where(Leg.departure_port_locode == origin.upper())
 
-    result = await db.execute(query.order_by(Leg.vessel_id, Leg.sequence))
+    result = await db.execute(query.order_by(Leg.etd.asc().nullslast(), Leg.vessel_id, Leg.sequence))
     legs = result.scalars().all()
 
     # If custom leg selection, filter down further
@@ -787,7 +808,7 @@ async def pdf_commercial(
         select(Leg)
         .options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
         .where(Leg.year == current_year, Leg.status != "cancelled")
-        .order_by(Leg.vessel_id, Leg.sequence)
+        .order_by(Leg.etd.asc().nullslast(), Leg.vessel_id, Leg.sequence)
     )
     all_legs_for_selector = all_q.scalars().all()
 
@@ -873,3 +894,102 @@ async def pdf_commercial(
         "lang": lang or "fr",
         "now": datetime.now(tz.utc),
     })
+
+
+# ─── SHAREABLE LINK ─────────────────────────────────────────
+@router.post("/pdf/commercial/share")
+async def create_commercial_share(
+    request: Request,
+    year: int = Form(...),
+    vessel: Optional[str] = Form(None),
+    origin: Optional[str] = Form(None),
+    destination: Optional[str] = Form(None),
+    legs_ids: Optional[str] = Form(None),
+    lang: Optional[str] = Form("fr"),
+    label: Optional[str] = Form(None),
+    recipient_name: Optional[str] = Form(None),
+    recipient_company: Optional[str] = Form(None),
+    recipient_email: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    user: User = Depends(require_permission("planning", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a shareable public link for the current commercial planning view."""
+    import uuid
+    share = PlanningShare(
+        token=uuid.uuid4().hex[:24],
+        year=year,
+        vessel_code=int(vessel) if vessel and vessel.strip() else None,
+        origin_locode=origin.upper() if origin and origin.strip() else None,
+        destination_locode=destination.upper() if destination and destination.strip() else None,
+        legs_ids=legs_ids if legs_ids and legs_ids.strip() else None,
+        lang=lang or "fr",
+        label=label,
+        recipient_name=recipient_name if recipient_name and recipient_name.strip() else None,
+        recipient_company=recipient_company if recipient_company and recipient_company.strip() else None,
+        recipient_email=recipient_email if recipient_email and recipient_email.strip() else None,
+        notes=notes if notes and notes.strip() else None,
+        created_by=user.id,
+    )
+    db.add(share)
+    await db.flush()
+
+    share_url = f"/planning/share/{share.token}"
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"url": share_url, "token": share.token})
+
+
+# ─── SHARE HISTORY ─────────────────────────────────────────
+@router.get("/pdf/commercial/shares", response_class=HTMLResponse)
+async def list_commercial_shares(
+    request: Request,
+    user: User = Depends(require_permission("planning", "C")),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all generated shareable planning links with recipient info."""
+    result = await db.execute(
+        select(PlanningShare)
+        .order_by(PlanningShare.created_at.desc())
+    )
+    shares = result.scalars().all()
+
+    # Load creator names
+    user_ids = set(s.created_by for s in shares if s.created_by)
+    users_map = {}
+    if user_ids:
+        users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
+        for u in users_result.scalars().all():
+            users_map[u.id] = u.full_name or u.username
+
+    # Load vessel names for display
+    vessels_result = await db.execute(select(Vessel).order_by(Vessel.code))
+    vessels_map = {v.code: v.name for v in vessels_result.scalars().all()}
+
+    return templates.TemplateResponse("planning/share_history.html", {
+        "request": request,
+        "user": user,
+        "shares": shares,
+        "users_map": users_map,
+        "vessels_map": vessels_map,
+        "active_module": "planning",
+    })
+
+
+@router.post("/pdf/commercial/shares/{share_id}/toggle")
+async def toggle_share(
+    request: Request,
+    share_id: int,
+    user: User = Depends(require_permission("planning", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Activate/deactivate a shared link."""
+    result = await db.execute(select(PlanningShare).where(PlanningShare.id == share_id))
+    share = result.scalar_one_or_none()
+    if not share:
+        raise HTTPException(status_code=404)
+    share.is_active = not share.is_active
+    await db.flush()
+    if request.headers.get("HX-Request"):
+        from fastapi.responses import Response
+        return Response(headers={"HX-Redirect": "/planning/pdf/commercial/shares"})
+    return RedirectResponse("/planning/pdf/commercial/shares", status_code=303)

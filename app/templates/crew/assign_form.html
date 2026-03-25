@@ -5,6 +5,7 @@
             <button class="modal-close" onclick="closeModal()"><i data-lucide="x"></i></button>
         </div>
         <form method="POST" action="/crew/members/{{ member.id }}/assign">
+            {{ csrf_input(request) }}
             <div class="modal-body">
                 <div class="form-group">
                     <label class="form-label">Navire *</label>

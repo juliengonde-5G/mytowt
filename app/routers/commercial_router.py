@@ -18,6 +18,7 @@ from app.models.order import Order, OrderAssignment, PALETTE_FORMATS, PALETTE_CO
 from app.models.kpi import LegKPI
 from app.models.co2_variable import Co2Variable, CO2_DEFAULTS
 from app.models.packing_list import PackingList, PackingListBatch
+from app.models.commercial import RateGrid, RateOffer, Client as CommClient
 from app.utils.activity import log_activity
 from app.utils.notifications import notify_order_confirmed, notify_cargo_doc_created
 from app.routers.kpi_router import compute_decarbonation, get_co2_variables
@@ -81,43 +82,111 @@ async def find_matching_leg(db: AsyncSession, order: Order):
 @router.get("/", response_class=HTMLResponse)
 async def commercial_home(
     request: Request,
+    tab: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     user: User = Depends(require_permission("commercial", "C")),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Order).options(
-        selectinload(Order.leg).selectinload(Leg.vessel),
-        selectinload(Order.leg).selectinload(Leg.arrival_port),
-    ).order_by(Order.created_at.desc())
-    if status:
-        query = query.where(Order.status == status)
-    result = await db.execute(query)
-    orders = result.scalars().all()
+    active_tab = tab if tab in ("dashboard", "grids", "offers", "orders") else "dashboard"
 
+    # ── Always needed ──
     statuses = {
         "non_affecte": "Non affecté", "reserve": "Réservé",
         "confirme": "Confirmé", "annule": "Annulé",
     }
 
-    # Compute decarbonation per order
-    co2_vars = await get_co2_variables(db)
+    orders = []
     order_decarb = {}
-    for order in orders:
-        if order.leg and order.total_weight:
-            distance = order.leg.computed_distance or (
-                order.leg.distance_nm * (order.leg.elongation_coeff or 1.25) if order.leg.distance_nm else 0
+    co2_vars = {}
+    grids = []
+    grid_kpis = {}
+    offers = []
+    kpi = {
+        "total_grids_active": 0, "total_offers": 0,
+        "total_offers_pending": 0, "total_offers_accepted": 0,
+        "total_orders": 0, "total_ca": 0,
+    }
+
+    # ── Fetch grids (dashboard + grids tabs) ──
+    if active_tab in ("dashboard", "grids"):
+        grid_q = select(RateGrid).options(
+            selectinload(RateGrid.client),
+            selectinload(RateGrid.vessel),
+            selectinload(RateGrid.lines),
+        ).order_by(RateGrid.created_at.desc())
+        grid_r = await db.execute(grid_q)
+        grids = list(grid_r.scalars().all())
+
+    # ── Fetch offers (dashboard + offers tabs) ──
+    if active_tab in ("dashboard", "offers"):
+        offer_q = select(RateOffer).options(
+            selectinload(RateOffer.client),
+            selectinload(RateOffer.rate_grid),
+        ).order_by(RateOffer.created_at.desc())
+        offer_r = await db.execute(offer_q)
+        offers = list(offer_r.scalars().all())
+
+    # ── Fetch orders (dashboard + orders tabs) ──
+    if active_tab in ("dashboard", "orders"):
+        order_q = select(Order).options(
+            selectinload(Order.leg).selectinload(Leg.vessel),
+            selectinload(Order.leg).selectinload(Leg.arrival_port),
+            selectinload(Order.rate_grid),
+        ).order_by(Order.created_at.desc())
+        if status:
+            order_q = order_q.where(Order.status == status)
+        result = await db.execute(order_q)
+        orders = list(result.scalars().all())
+
+        co2_vars = await get_co2_variables(db)
+        for order in orders:
+            if order.leg and order.total_weight:
+                distance = order.leg.computed_distance or (
+                    order.leg.distance_nm * (order.leg.elongation_coeff or 1.25) if order.leg.distance_nm else 0
+                )
+                decarb = compute_decarbonation(order.total_weight, distance, co2_vars)
+                order_decarb[order.id] = decarb
+            else:
+                order_decarb[order.id] = {"decarb_t": 0, "decarb_kg": 0, "fill_rate_pct": 0}
+
+    # ── Dashboard KPIs ──
+    if active_tab == "dashboard":
+        kpi["total_grids_active"] = sum(1 for g in grids if g.status == "active")
+        kpi["total_offers"] = len(offers)
+        kpi["total_offers_pending"] = sum(1 for o in offers if o.status in ("draft", "sent"))
+        kpi["total_offers_accepted"] = sum(1 for o in offers if o.status == "accepted")
+        # For orders KPI, count all orders (not just filtered)
+        all_orders_r = await db.execute(select(func.count(Order.id)))
+        kpi["total_orders"] = all_orders_r.scalar() or 0
+        ca_r = await db.execute(select(func.coalesce(func.sum(Order.total_price), 0)))
+        kpi["total_ca"] = float(ca_r.scalar() or 0)
+
+        # Grid KPIs
+        for grid in grids:
+            g_offers = [o for o in offers if o.rate_grid_id == grid.id]
+            g_orders_r = await db.execute(
+                select(func.count(Order.id), func.coalesce(func.sum(Order.total_price), 0))
+                .where(Order.rate_grid_id == grid.id)
             )
-            decarb = compute_decarbonation(order.total_weight, distance, co2_vars)
-            order_decarb[order.id] = decarb
-        else:
-            order_decarb[order.id] = {"decarb_t": 0, "decarb_kg": 0, "fill_rate_pct": 0}
+            row = g_orders_r.one()
+            grid_kpis[grid.id] = {
+                "nb_offers": len(g_offers),
+                "nb_offers_accepted": sum(1 for o in g_offers if o.status == "accepted"),
+                "nb_orders": row[0],
+                "ca": float(row[1]),
+            }
 
     return templates.TemplateResponse("commercial/index.html", {
         "request": request, "user": user,
+        "active_tab": active_tab,
         "orders": orders, "statuses": statuses,
         "selected_status": status,
         "order_decarb": order_decarb,
         "co2_vars": co2_vars,
+        "grids": grids,
+        "grid_kpis": grid_kpis,
+        "offers": offers,
+        "kpi": kpi,
         "active_module": "commercial",
     })
 

@@ -50,7 +50,7 @@
     <!-- ═══ LEG SUMMARY ═══ -->
     <div class="leg-summary {% if leg_locked %}locked-banner{% endif %}">
         <div class="leg-summary-left">
-            <h3 style="font-family:monospace;color:var(--towt-blue);margin:0;">{{ selected_leg.leg_code }}</h3>
+            <h3 style="font-weight:700;color:var(--towt-blue);margin:0;">{{ selected_leg.leg_code }}</h3>
             <span style="color:#888;">{{ selected_leg.vessel.name }} — {{ selected_leg.departure_port.country_code|flag }} {{ selected_leg.departure_port.name }} → {{ selected_leg.arrival_port.country_code|flag }} {{ selected_leg.arrival_port.name }}</span>
         </div>
         <div class="vessel-status-badge {{ vessel_status }}">
@@ -74,10 +74,12 @@
         <div style="margin-left:auto;display:flex;gap:6px;">
             {% if not leg_locked and leg_terminated %}
             <form method="POST" action="/escale/legs/{{ selected_leg.id }}/lock" style="display:inline;">
+                {{ csrf_input(request) }}
                 <button type="submit" class="btn btn-sm btn-secondary" title="Verrouiller"><i data-lucide="lock"></i></button>
             </form>
             {% elif leg_locked %}
             <form method="POST" action="/escale/legs/{{ selected_leg.id }}/unlock" style="display:inline;">
+                {{ csrf_input(request) }}
                 <button type="submit" class="btn btn-sm btn-secondary" title="Déverrouiller"><i data-lucide="unlock"></i></button>
             </form>
             {% endif %}
@@ -103,9 +105,17 @@
 
         {% if next_status %}
         <form method="POST" action="/escale/legs/{{ selected_leg.id }}/port-status" style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+            {{ csrf_input(request) }}
             <input type="hidden" name="new_status" value="{{ next_status }}">
-            <input type="datetime-local" name="status_time" class="form-input" style="font-size:11px;padding:4px 8px;width:180px;" 
-                   title="Horodatage (optionnel)">
+            <div class="tz-input-wrap">
+                <input type="datetime-local" name="status_time" class="form-input" style="font-size:11px;padding:4px 8px;width:180px;"
+                       title="Horodatage (optionnel)">
+                <select name="status_time_tz" class="tz-select" style="font-size:10px;padding:3px 5px;min-width:70px;">
+                    {% for code, label in tz_choices|default([('UTC','UTC'),('Europe/Paris','Paris'),('port_local','Port local')]) %}
+                    <option value="{{ code }}" {% if code == 'UTC' %}selected{% endif %}>{{ label }}{% if code == 'port_local' and port_tz_offset|default('') %} ({{ port_tz_offset }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <button type="submit" class="btn btn-primary btn-sm">{{ next_icon }} {{ next_label }}</button>
         </form>
         {% endif %}
@@ -183,6 +193,8 @@
                     {% if perf.delta_hours > 0 %}+{% endif %}{{ perf.delta_hours }} h
                     <span class="perf-sub">({% if perf.delta_pct > 0 %}+{% endif %}{{ perf.delta_pct }}%)</span>
                 </div>
+                {% endfor %}
+                {% if not pax_ops %}<div class="lane-empty">—</div>{% endif %}
             </div>
             {% if perf.opex_forecast is defined %}
             <div class="perf-card">
@@ -202,9 +214,58 @@
     </div>
     {% endif %}
 
+    <!-- ═══ COMMERCIAL VISIBILITY: Orders on this leg ═══ -->
+    {% if leg_orders %}
+    <div class="section-block">
+        <h3 class="section-title"><i data-lucide="package" style="width:16px;height:16px;"></i> Commandes affectées ({{ leg_orders_summary.count }})</h3>
+        <div class="perf-grid" style="margin-bottom:12px;">
+            <div class="perf-card">
+                <div class="perf-label">Palettes</div>
+                <div class="perf-value">{{ leg_orders_summary.palettes }}</div>
+            </div>
+            <div class="perf-card">
+                <div class="perf-label">Tonnage</div>
+                <div class="perf-value">{{ leg_orders_summary.weight }} t</div>
+            </div>
+            <div class="perf-card">
+                <div class="perf-label">CA commandes</div>
+                <div class="perf-value">{{ '{:,.0f}'.format(leg_orders_summary.revenue).replace(',', ' ') }} €</div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table compact">
+                <thead>
+                    <tr>
+                        <th>Référence</th>
+                        <th>Client</th>
+                        <th>Palettes</th>
+                        <th>Poids (t)</th>
+                        <th>Montant</th>
+                        <th>Statut</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for o in leg_orders %}
+                    <tr>
+                        <td><strong>{{ o.reference }}</strong></td>
+                        <td>{{ o.client_name or '—' }}</td>
+                        <td>{{ o.quantity_palettes or 0 }} {{ o.palette_format or 'EPAL' }}</td>
+                        <td>{{ '%.1f'|format(o.total_weight or 0) }}</td>
+                        <td>{{ '{:,.0f}'.format(o.total_price or 0).replace(',', ' ') }} €</td>
+                        <td>
+                            <span class="status-badge status-{{ o.status }}">{{ o.status }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- ═══ FLOW 2: PARALLEL ACTIVITIES ═══ -->
     {% if operations or docker_shifts %}
-    {% set crew_actions = ['embarquement', 'debarquement', 'medicale'] %}
+    {% set crew_actions = ['embarquement', 'debarquement', 'medicale', 'passage_paf'] %}
     {% set supply_actions = ['avitaillement', 'soutage', 'intervention_technique', 'inspection_technique', 'inspection_armement'] %}
     {% set ext_actions = ['relation_presse', 'relation_client', 'relation_prospect'] %}
     {% set pax_ops = operations|selectattr('action', 'in', crew_actions)|list %}
@@ -239,8 +300,9 @@
                     <div class="lane-body">
                         <strong>{{ op.action|replace('_',' ')|capitalize }}</strong>
                         <span class="lane-meta">
-                        {% if op.actual_start %}✅ {{ op.actual_start.strftime('%d/%m %H:%M') }}
-                        {% elif op.planned_start %}🕐 {{ op.planned_start.strftime('%d/%m %H:%M') }}{% endif %}
+                        {% if op.actual_start %}✅ {{ op.actual_start.strftime('%d/%m %H:%M') }}{% if op.actual_end %} → {{ op.actual_end.strftime('%H:%M') }}{% endif %}
+                        {% elif op.planned_start %}🕐 {{ op.planned_start.strftime('%d/%m %H:%M') }}{% if op.planned_end %} → {{ op.planned_end.strftime('%H:%M') }}{% endif %}{% endif %}
+                        {% if op.actual_duration_hours %} · {{ op.actual_duration_hours|round(1) }}h{% elif op.planned_duration_hours %} · ~{{ op.planned_duration_hours|round(1) }}h{% endif %}
                         {% if op.intervenant %} · 👤 {{ op.intervenant }}{% endif %}</span>
                     </div>
                 </div>
@@ -257,8 +319,9 @@
                     <div class="lane-body">
                         <strong>{{ op.action|replace('_',' ')|capitalize }}</strong>
                         <span class="lane-meta">
-                        {% if op.actual_start %}✅ {{ op.actual_start.strftime('%d/%m %H:%M') }}
-                        {% elif op.planned_start %}🕐 {{ op.planned_start.strftime('%d/%m %H:%M') }}{% endif %}
+                        {% if op.actual_start %}✅ {{ op.actual_start.strftime('%d/%m %H:%M') }}{% if op.actual_end %} → {{ op.actual_end.strftime('%H:%M') }}{% endif %}
+                        {% elif op.planned_start %}🕐 {{ op.planned_start.strftime('%d/%m %H:%M') }}{% if op.planned_end %} → {{ op.planned_end.strftime('%H:%M') }}{% endif %}{% endif %}
+                        {% if op.actual_duration_hours %} · {{ op.actual_duration_hours|round(1) }}h{% elif op.planned_duration_hours %} · ~{{ op.planned_duration_hours|round(1) }}h{% endif %}
                         {% if op.intervenant %} · 👤 {{ op.intervenant }}{% endif %}</span>
                     </div>
                 </div>
@@ -275,8 +338,9 @@
                     <div class="lane-body">
                         <strong>{{ op.action|replace('_',' ')|capitalize }}</strong>
                         <span class="lane-meta">
-                        {% if op.actual_start %}✅ {{ op.actual_start.strftime('%d/%m %H:%M') }}
-                        {% elif op.planned_start %}🕐 {{ op.planned_start.strftime('%d/%m %H:%M') }}{% endif %}
+                        {% if op.actual_start %}✅ {{ op.actual_start.strftime('%d/%m %H:%M') }}{% if op.actual_end %} → {{ op.actual_end.strftime('%H:%M') }}{% endif %}
+                        {% elif op.planned_start %}🕐 {{ op.planned_start.strftime('%d/%m %H:%M') }}{% if op.planned_end %} → {{ op.planned_end.strftime('%H:%M') }}{% endif %}{% endif %}
+                        {% if op.actual_duration_hours %} · {{ op.actual_duration_hours|round(1) }}h{% elif op.planned_duration_hours %} · ~{{ op.planned_duration_hours|round(1) }}h{% endif %}
                         {% if op.intervenant %} · 👤 {{ op.intervenant }}{% endif %}</span>
                     </div>
                 </div>
@@ -337,7 +401,7 @@
         <h3 class="section-title"><i data-lucide="package" style="width:16px;height:16px;"></i> Plan de chargement</h3>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <a href="/stowage/leg/{{ selected_leg.id }}" class="btn btn-sm btn-primary">
-                <i data-lucide="layout-grid" style="width:14px;height:14px;"></i> Gérer le plan de chargement
+                <i data-lucide="layout-grid" style="width:14px;height:14px;"></i> Gerer le plan de chargement
             </a>
             <a href="/stowage/leg/{{ selected_leg.id }}/print?lang=fr" target="_blank" class="btn btn-sm btn-secondary">
                 <i data-lucide="printer" style="width:14px;height:14px;"></i> Imprimer (FR)
@@ -384,6 +448,55 @@
         {% endif %}
     </div>
 
+    <!-- ═══ BILLETTERIE ÉQUIPAGE (lecture seule — géré depuis /crew) ═══ -->
+    <div class="section-block" style="margin-top:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <h3 class="section-title" style="margin-bottom:0;"><i data-lucide="ticket" style="width:16px;height:16px;"></i> Billetterie équipage ({{ crew_tickets|length }})</h3>
+            <a href="/crew" class="btn btn-secondary btn-sm"><i data-lucide="external-link" style="width:12px;height:12px;"></i> Gérer dans Équipage</a>
+        </div>
+
+        {% if ticket_alerts %}
+        <div class="ticket-alerts">
+            {% for alert in ticket_alerts %}
+            <div class="ticket-alert-item">
+                <i data-lucide="alert-triangle" style="width:14px;height:14px;color:#D97706;flex-shrink:0;"></i>
+                <span><strong>{{ alert.member_name }}</strong> — {{ alert.reason }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if crew_tickets %}
+        <div class="table-container">
+            <table class="data-table">
+                <thead><tr><th>Membre</th><th>Type</th><th>Transport</th><th>Date billet</th><th>Réf.</th><th>PJ</th></tr></thead>
+                <tbody>
+                    {% for t in crew_tickets %}
+                    {% set is_incompatible = ticket_alerts|selectattr('ticket', 'equalto', t)|list|length > 0 %}
+                    <tr class="{% if is_incompatible %}ticket-row-alert{% endif %}">
+                        <td>
+                            <strong>{{ t.member.full_name if t.member else '—' }}</strong>
+                            {% if t.member and t.member.is_foreign %}<span class="foreign-badge">Étranger</span>{% endif %}
+                        </td>
+                        <td><span class="ticket-type-badge {{ t.ticket_type }}">{{ 'Embarq.' if t.ticket_type == 'embarquement' else 'Débarq.' }}</span></td>
+                        <td>{{ t.transport_mode|capitalize }}</td>
+                        <td>{{ t.ticket_date.strftime('%d/%m/%Y') if t.ticket_date else '—' }}</td>
+                        <td style="font-size:11px;color:#666;">{{ t.ticket_reference or '—' }}</td>
+                        <td>
+                            {% if t.filename %}
+                            <a href="/escale/tickets/{{ t.id }}/download" class="btn btn-sm btn-secondary" title="{{ t.filename }}"><i data-lucide="download" style="width:12px;height:12px;"></i></a>
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color:#aaa;font-size:13px;">Aucun billet enregistré.</p>
+        {% endif %}
+    </div>
+
     {% elif legs|length > 0 %}
     <div class="empty-state">
         <i data-lucide="mouse-pointer-click" style="width:48px;height:48px;color:var(--towt-sky);"></i>
@@ -403,7 +516,7 @@
     .leg-chip{display:flex;flex-direction:column;gap:2px;padding:8px 14px;background:white;border-radius:var(--radius);box-shadow:var(--shadow);font-size:12px;border:2px solid transparent}
     .leg-chip:hover{border-color:var(--towt-sky)}.leg-chip.active{border-color:var(--towt-blue);background:rgba(9,85,97,0.05)}
     .leg-chip.terminated{opacity:0.5}.leg-chip.locked{opacity:0.5;background:#f8f8f8}
-    .leg-chip strong{font-family:monospace;color:var(--towt-blue)}.leg-chip span{color:#888}
+    .leg-chip strong{font-weight:700;color:var(--towt-blue)}.leg-chip span{color:#888}
     .leg-summary{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;flex-wrap:wrap;gap:16px}
     .leg-summary.locked-banner{border-left:4px solid #F59E0B;background:rgba(245,158,11,0.03)}
     .leg-summary-left{display:flex;align-items:center;gap:12px}
@@ -500,6 +613,19 @@
     .perf-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px;}
     .perf-value{font-size:18px;font-weight:700;color:#333;}
     .perf-sub{font-size:12px;font-weight:400;color:#888;}
+    /* Tickets */
+    .ticket-alerts{background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;}
+    .ticket-alert-item{display:flex;align-items:center;gap:8px;font-size:12px;color:#92400E;padding:3px 0;}
+    .ticket-type-badge{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:600;}
+    .ticket-type-badge.embarquement{background:rgba(34,197,94,0.1);color:#16a34a;}
+    .ticket-type-badge.debarquement{background:rgba(239,68,68,0.1);color:#DC2626;}
+    .ticket-row-alert{background:rgba(245,158,11,0.05);border-left:3px solid #F59E0B;}
+    .foreign-badge{font-size:9px;padding:1px 6px;border-radius:100px;font-weight:600;background:rgba(239,68,68,0.1);color:#DC2626;margin-left:4px;}
+    .ticket-add-form{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;}
+    .ticket-add-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;align-items:start;}
+    @media(max-width:900px){.ticket-add-grid{grid-template-columns:1fr 1fr;}}
+    .ticket-add-grid .fg{display:flex;flex-direction:column;gap:3px;}
+    .ticket-add-grid .fi{padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:Poppins,system-ui,sans-serif;}
 </style>
 
 <script>
@@ -538,5 +664,7 @@
                 .catch(function(){ window.location.reload(); });
         });
     };
+
+    // Billetterie is now managed from /crew page
 </script>
 {% endblock %}

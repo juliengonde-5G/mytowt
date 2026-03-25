@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query, File, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, timedelta, timezone, date
+import os
+import uuid
 
 from app.database import get_db
 from app.auth import get_current_user
@@ -13,11 +15,15 @@ from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
+from app.utils.timezones import get_port_timezone, utc_offset_label, TIMEZONE_CHOICES
 from app.models.operation import EscaleOperation, DockerShift
-from app.models.crew import CrewMember, CrewAssignment
+from app.models.crew import CrewMember, CrewAssignment, CrewTicket, TRANSPORT_MODES
 from app.models.finance import LegFinance, OpexParameter
+from app.models.order import Order, OrderAssignment
 from app.utils.activity import log_activity
 from app.utils.notifications import notify_arrival, notify_departure
+
+TICKET_UPLOAD_DIR = "/app/uploads/crew_tickets"
 
 router = APIRouter(prefix="/escale", tags=["escale"])
 
@@ -44,10 +50,49 @@ ACTIONS_BY_TYPE = {
         {"value": "medicale", "label": "Visite m\u00e9dicale"},
         {"value": "avitaillement", "label": "Avitaillement"},
         {"value": "inspection_armement", "label": "Inspection armement"},
+        {"value": "passage_paf", "label": "Passage Police Aux Frontières"},
     ],
 }
 
 CREW_ACTIONS = {"embarquement", "debarquement"}
+
+FECAMP_LOCODES = {"FRFEC"}  # Fécamp port LOCODE(s)
+
+
+def compute_ticket_alerts(tickets, leg):
+    """Check ticket dates against escale dates. Returns list of alert dicts."""
+    alerts = []
+    if not leg or not tickets:
+        return alerts
+    # Escale window: ATA (or ETA) to ATD (or ETD of next leg estimate)
+    escale_start = (leg.ata or leg.eta)
+    escale_end = leg.atd
+    if not escale_end and escale_start:
+        escale_end = escale_start + timedelta(days=leg.port_stay_days or 3)
+
+    for t in tickets:
+        if not t.ticket_date:
+            continue
+        # Convert escale dates to date for comparison
+        esc_start_date = escale_start.date() if escale_start else None
+        esc_end_date = escale_end.date() if escale_end else None
+
+        incompatible = False
+        reason = ""
+        if esc_start_date and t.ticket_date < esc_start_date - timedelta(days=1):
+            incompatible = True
+            reason = f"Billet le {t.ticket_date.strftime('%d/%m')} avant l'escale ({esc_start_date.strftime('%d/%m')})"
+        elif esc_end_date and t.ticket_date > esc_end_date + timedelta(days=1):
+            incompatible = True
+            reason = f"Billet le {t.ticket_date.strftime('%d/%m')} après l'escale ({esc_end_date.strftime('%d/%m')})"
+
+        if incompatible:
+            alerts.append({
+                "ticket": t,
+                "member_name": t.member.full_name if t.member else "?",
+                "reason": reason,
+            })
+    return alerts
 
 PORT_STATUSES = [
     {"value": "pilote_arrivee", "label": "Pilote \u00e0 bord \u2014 Arriv\u00e9e", "icon": "\U0001f6a2", "vessel_status": "en_mer"},
@@ -341,6 +386,47 @@ async def escale_home(
             perf["opex_actual"] = fin.sea_cost_actual or 0
             perf["opex_delta"] = round((fin.sea_cost_actual or 0) - (fin.sea_cost_forecast or 0), 0)
 
+    # Load crew tickets for this leg
+    crew_tickets = []
+    ticket_alerts = []
+    if selected_leg:
+        tickets_result = await db.execute(
+            select(CrewTicket).options(selectinload(CrewTicket.member))
+            .where(CrewTicket.leg_id == selected_leg.id)
+            .order_by(CrewTicket.ticket_date.asc())
+        )
+        crew_tickets = tickets_result.scalars().all()
+        ticket_alerts = compute_ticket_alerts(crew_tickets, selected_leg)
+
+    # Load active crew for ticket form dropdown
+    crew_for_tickets = []
+    if selected_leg:
+        crew_result = await db.execute(
+            select(CrewMember).where(CrewMember.is_active == True)
+            .order_by(CrewMember.role, CrewMember.last_name)
+        )
+        crew_for_tickets = crew_result.scalars().all()
+
+    # ── Commercial visibility: orders assigned to this leg ──
+    leg_orders = []
+    leg_orders_summary = {"count": 0, "palettes": 0, "weight": 0, "revenue": 0}
+    if selected_leg:
+        oa_result = await db.execute(
+            select(OrderAssignment)
+            .options(selectinload(OrderAssignment.order))
+            .where(OrderAssignment.leg_id == selected_leg.id)
+        )
+        assignments = oa_result.scalars().all()
+        for a in assignments:
+            if a.order:
+                leg_orders.append(a.order)
+                leg_orders_summary["count"] += 1
+                leg_orders_summary["palettes"] += a.order.quantity_palettes or 0
+                leg_orders_summary["weight"] += a.order.total_weight or 0
+                leg_orders_summary["revenue"] += float(a.order.total_price or 0)
+        leg_orders_summary["weight"] = round(leg_orders_summary["weight"], 1)
+        leg_orders_summary["revenue"] = round(leg_orders_summary["revenue"], 2)
+
     return templates.TemplateResponse("escale/index.html", {
         "request": request, "user": user,
         "vessels": vessels, "selected_vessel": selected_vessel, "vessel_obj": vessel_obj,
@@ -353,6 +439,14 @@ async def escale_home(
         "leg_terminated": leg_terminated, "leg_locked": leg_locked,
         "operation_types": OPERATION_TYPES, "actions_by_type": ACTIONS_BY_TYPE,
         "perf": perf,
+        "crew_tickets": crew_tickets, "ticket_alerts": ticket_alerts,
+        "crew_for_tickets": crew_for_tickets, "transport_modes": TRANSPORT_MODES,
+        "tz_choices": TIMEZONE_CHOICES,
+        "port_timezone": get_port_timezone(selected_leg.departure_port.country_code, selected_leg.departure_port.zone_code) if selected_leg and selected_leg.departure_port else "UTC",
+        "port_tz_label": selected_leg.departure_port.name if selected_leg and selected_leg.departure_port else "Port",
+        "port_tz_offset": utc_offset_label(get_port_timezone(selected_leg.departure_port.country_code, selected_leg.departure_port.zone_code)) if selected_leg and selected_leg.departure_port else "UTC",
+        "leg_orders": leg_orders,
+        "leg_orders_summary": leg_orders_summary,
         "active_module": "escale",
     })
 
@@ -494,6 +588,7 @@ async def operation_create_form(
         "quay_start": quay_start_str, "quay_end": quay_end_str, "error": None,
         "preselect_cat": cat,
         "crew_members": crew_members, "selected_crew_ids": set(),
+        "tz_choices": TIMEZONE_CHOICES,
     })
 
 
@@ -560,6 +655,7 @@ async def operation_edit_form(
         "quay_start": quay_start_str, "quay_end": quay_end_str, "error": None,
         "preselect_cat": None,
         "crew_members": crew_members, "selected_crew_ids": set(),
+        "tz_choices": TIMEZONE_CHOICES,
     })
 
 
@@ -634,6 +730,7 @@ async def docker_create_form(request: Request, leg_id: int = Query(...), user: U
     return templates.TemplateResponse("escale/docker_form.html", {
         "request": request, "user": user, "edit_ds": None, "leg_id": leg_id,
         "quay_start": quay_start_str, "quay_end": quay_end_str, "error": None,
+        "tz_choices": TIMEZONE_CHOICES,
     })
 
 
@@ -682,6 +779,7 @@ async def docker_edit_form(ds_id: int, request: Request, user: User = Depends(re
     return templates.TemplateResponse("escale/docker_form.html", {
         "request": request, "user": user, "edit_ds": ds, "leg_id": ds.leg_id,
         "quay_start": quay_start_str, "quay_end": quay_end_str, "error": None,
+        "tz_choices": TIMEZONE_CHOICES,
     })
 
 
@@ -726,6 +824,159 @@ async def docker_delete(ds_id: int, request: Request, user: User = Depends(requi
     await db.delete(ds)
     await db.flush()
     await log_activity(db, user, "escale", "delete", "DockerShift", ds_id, "Suppression docker shift")
+    leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == leg_id))
+    leg = leg_result.scalar_one_or_none()
+    url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={leg_id}" if leg else "/escale"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# ═══ CREW TICKETS (billetterie transport) ═══
+
+@router.post("/tickets/create", response_class=HTMLResponse)
+async def ticket_create(
+    request: Request,
+    leg_id: str = Form(...),
+    member_id: str = Form(...),
+    ticket_type: str = Form(...),
+    transport_mode: str = Form(...),
+    ticket_date: str = Form(...),
+    ticket_reference: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    user: User = Depends(require_permission("escale", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    _leg_id = int(leg_id)
+    _member_id = int(member_id)
+    _ticket_date = date.fromisoformat(ticket_date) if ticket_date else None
+
+    # Save file if provided
+    saved_filename = None
+    saved_path = None
+    saved_size = None
+    if file and file.filename:
+        os.makedirs(TICKET_UPLOAD_DIR, exist_ok=True)
+        ext = os.path.splitext(file.filename)[1].lower()
+        safe_name = f"{uuid.uuid4().hex}{ext}"
+        full_path = os.path.join(TICKET_UPLOAD_DIR, safe_name)
+        content = await file.read()
+        with open(full_path, "wb") as f:
+            f.write(content)
+        saved_filename = file.filename
+        saved_path = full_path
+        saved_size = len(content)
+
+    ticket = CrewTicket(
+        member_id=_member_id, leg_id=_leg_id,
+        ticket_type=ticket_type, transport_mode=transport_mode,
+        ticket_date=_ticket_date,
+        ticket_reference=ticket_reference.strip() if ticket_reference else None,
+        filename=saved_filename, file_path=saved_path, file_size=saved_size,
+        notes=notes.strip() if notes else None,
+        created_by=user.full_name,
+    )
+    db.add(ticket)
+    await db.flush()
+    await log_activity(db, user, "escale", "create", "CrewTicket", ticket.id,
+                        f"Billet {ticket_type} {transport_mode} pour membre #{_member_id}")
+
+    # ── Auto-create PAF operation if foreign crew at Fécamp ──
+    member_result = await db.execute(select(CrewMember).where(CrewMember.id == _member_id))
+    member = member_result.scalar_one_or_none()
+    leg_result = await db.execute(
+        select(Leg).options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
+        .where(Leg.id == _leg_id)
+    )
+    leg = leg_result.scalar_one_or_none()
+
+    if member and member.is_foreign and leg:
+        # Check if arrival port is Fécamp
+        arr_locode = leg.arrival_port.locode if leg.arrival_port else ""
+        if arr_locode in FECAMP_LOCODES:
+            # Check if PAF operation already exists for this leg
+            paf_result = await db.execute(
+                select(func.count(EscaleOperation.id)).where(
+                    EscaleOperation.leg_id == _leg_id,
+                    EscaleOperation.action == "passage_paf",
+                )
+            )
+            paf_count = paf_result.scalar() or 0
+            if paf_count == 0:
+                paf_op = EscaleOperation(
+                    leg_id=_leg_id,
+                    operation_type="armement",
+                    action="passage_paf",
+                    planned_start=leg.ata or leg.eta,
+                    description=f"Passage Police Aux Frontières — Personnel étranger ({member.full_name})",
+                    intervenant="PAF Fécamp",
+                )
+                db.add(paf_op)
+                await db.flush()
+                await log_activity(db, user, "escale", "create", "Operation", paf_op.id,
+                                    "Auto: Passage PAF (personnel étranger à Fécamp)")
+
+                # Create notification
+                from app.models.onboard import OnboardNotification
+                db.add(OnboardNotification(
+                    leg_id=_leg_id, category="crew",
+                    title="Passage PAF requis",
+                    detail=f"Personnel étranger {member.full_name} — Fécamp — opération PAF créée automatiquement",
+                ))
+                await db.flush()
+
+    # ── Check ticket date compatibility and create notification if needed ──
+    if _ticket_date and leg:
+        escale_start = (leg.ata or leg.eta)
+        escale_end = leg.atd
+        if not escale_end and escale_start:
+            escale_end = escale_start + timedelta(days=leg.port_stay_days or 3)
+        esc_start_date = escale_start.date() if escale_start else None
+        esc_end_date = escale_end.date() if escale_end else None
+        incompatible = False
+        if esc_start_date and _ticket_date < esc_start_date - timedelta(days=1):
+            incompatible = True
+        elif esc_end_date and _ticket_date > esc_end_date + timedelta(days=1):
+            incompatible = True
+        if incompatible:
+            from app.models.onboard import OnboardNotification
+            member_name = member.full_name if member else f"Membre #{_member_id}"
+            db.add(OnboardNotification(
+                leg_id=_leg_id, category="crew",
+                title="Billet incompatible avec les dates d'escale",
+                detail=f"{member_name} — billet {transport_mode} le {_ticket_date.strftime('%d/%m/%Y')} hors fenêtre d'escale",
+            ))
+            await db.flush()
+
+    url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={_leg_id}" if leg else "/escale"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.get("/tickets/{tid}/download")
+async def ticket_download(tid: int, user: User = Depends(require_permission("escale", "C")), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(CrewTicket).where(CrewTicket.id == tid))
+    ticket = result.scalar_one_or_none()
+    if not ticket or not ticket.file_path or not os.path.isfile(ticket.file_path):
+        raise HTTPException(404, detail="Fichier non trouvé")
+    return FileResponse(ticket.file_path, filename=ticket.filename or "ticket")
+
+
+@router.delete("/tickets/{tid}", response_class=HTMLResponse)
+async def ticket_delete(tid: int, request: Request, user: User = Depends(require_permission("escale", "S")), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(CrewTicket).where(CrewTicket.id == tid))
+    ticket = result.scalar_one_or_none()
+    if not ticket:
+        raise HTTPException(404)
+    leg_id = ticket.leg_id
+    # Remove file
+    if ticket.file_path and os.path.isfile(ticket.file_path):
+        os.remove(ticket.file_path)
+    await db.delete(ticket)
+    await db.flush()
+    await log_activity(db, user, "escale", "delete", "CrewTicket", tid, "Suppression billet")
     leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == leg_id))
     leg = leg_result.scalar_one_or_none()
     url = f"/escale?vessel={leg.vessel.code}&year={leg.year}&leg_id={leg_id}" if leg else "/escale"

@@ -1,0 +1,92 @@
+{% extends "passengers/portal_base.html" %}
+{% block portal_title %}{% if lang == 'en' %}Satisfaction Survey{% else %}Questionnaire de satisfaction{% endif %}{% endblock %}
+
+{% block portal_content %}
+<h1>⭐ {% if lang == 'en' %}Satisfaction Survey{% else %}Questionnaire de satisfaction{% endif %}</h1>
+
+<div class="card content-section">
+    <p style="font-size:13px;color:#666;">
+        {% if lang == 'en' %}
+        Thank you for sailing with TOWT! Please take a few minutes to share your feedback. Your responses will help us improve our services.
+        {% else %}
+        Merci d'avoir voyagé avec TOWT ! Veuillez prendre quelques minutes pour partager votre avis. Vos réponses nous aideront à améliorer nos services.
+        {% endif %}
+    </p>
+</div>
+
+{% set labels_1to5 = [
+    (1, 'Très insatisfait(e)' if lang != 'en' else 'Very dissatisfied'),
+    (2, 'Insatisfait(e)' if lang != 'en' else 'Dissatisfied'),
+    (3, 'Moyennement' if lang != 'en' else 'Neutral'),
+    (4, 'Satisfait(e)' if lang != 'en' else 'Satisfied'),
+    (5, 'Très satisfait(e)' if lang != 'en' else 'Very satisfied')
+] %}
+
+{% for pax in booking.passengers %}
+{% set resp = responses.get(pax.id) %}
+<div class="card">
+    <h2>👤 {{ pax.full_name }}</h2>
+
+    {% if resp %}
+    <div class="q-done">✅ {% if lang == 'en' %}Survey completed. Thank you!{% else %}Questionnaire complété. Merci !{% endif %}</div>
+
+    <div style="margin-top:16px;padding:16px;background:#f8fafb;border-radius:8px;">
+        {% for cat_key, cat_questions in questions.items() %}
+        <h3 style="font-size:12px;color:var(--towt-blue);margin:12px 0 6px;">
+            {% if cat_key == 'reservation' %}{% if lang == 'en' %}Booking{% else %}Réservation{% endif %}
+            {% elif cat_key == 'onboard' %}{% if lang == 'en' %}Life on Board{% else %}Vie à bord{% endif %}
+            {% elif cat_key == 'ecology' %}{% if lang == 'en' %}Ecology{% else %}Écologie{% endif %}
+            {% elif cat_key == 'global' %}{% if lang == 'en' %}Overall{% else %}Évaluation globale{% endif %}{% endif %}
+        </h3>
+        {% for field, label_fr, label_en in cat_questions %}
+        {% set val = resp|attr(field) %}
+        {% if val is none %}{% set val = 0 %}{% endif %}
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid #eee;">
+            <span>{{ label_en if lang == 'en' else label_fr }}</span>
+            <span style="color:#f59e0b;">{% if val %}{{ '★' * val }}{{ '☆' * (5 - val) }}{% else %}—{% endif %}</span>
+        </div>
+        {% endfor %}
+        {% endfor %}
+    </div>
+
+    {% else %}
+    <form method="POST" action="/passenger/{{ token }}/pax/{{ pax.id }}/satisfaction">
+        <input type="hidden" name="lang" value="{{ lang }}">
+
+        {% for cat_key, cat_questions in questions.items() %}
+        <h3 style="font-size:12px;margin:16px 0 8px;color:var(--towt-blue);">
+            {% if cat_key == 'reservation' %}{% if lang == 'en' %}1. Booking Experience{% else %}1. La réservation{% endif %}
+            {% elif cat_key == 'onboard' %}{% if lang == 'en' %}2. Equipment & Life on Board{% else %}2. Les équipements et la vie à bord{% endif %}
+            {% elif cat_key == 'ecology' %}{% if lang == 'en' %}3. Ecological Impact{% else %}3. L'impact écologique{% endif %}
+            {% elif cat_key == 'global' %}{% if lang == 'en' %}Overall Rating{% else %}Évaluation globale{% endif %}{% endif %}
+        </h3>
+
+        {% for field, label_fr, label_en in cat_questions %}
+        <div class="fg full" style="margin-bottom:10px;">
+            <label style="font-size:12px;font-weight:500;">{{ label_en if lang == 'en' else label_fr }}</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+                {% for val, desc in labels_1to5 %}
+                <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;padding:4px 8px;border:1px solid #ddd;border-radius:6px;">
+                    <input type="radio" name="{{ field }}" value="{{ val }}" required>
+                    {{ desc }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        {% endfor %}
+
+        <h3 style="font-size:12px;margin:16px 0 8px;color:var(--towt-blue);">
+            {% if lang == 'en' %}Open Questions{% else %}Questions ouvertes{% endif %}
+        </h3>
+
+        <div class="fg full"><label>{% if lang == 'en' %}What did you particularly enjoy?{% else %}Qu'avez-vous particulièrement apprécié ?{% endif %}</label><textarea name="q_appreciated" class="fi" rows="3"></textarea></div>
+        <div class="fg full"><label>{% if lang == 'en' %}Suggestions for improvement?{% else %}Quelles améliorations suggéreriez-vous ?{% endif %}</label><textarea name="q_improvements" class="fi" rows="3"></textarea></div>
+        <div class="fg full"><label>{% if lang == 'en' %}Comments on ecological impact?{% else %}Commentaires sur l'impact écologique ?{% endif %}</label><textarea name="q_eco_comments" class="fi" rows="3"></textarea></div>
+
+        <button type="submit" class="btn btn-primary" style="margin-top:16px;">{% if lang == 'en' %}Submit{% else %}Envoyer{% endif %}</button>
+    </form>
+    {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

@@ -9,6 +9,7 @@
 
 {% block content %}
 <form method="POST" action="/passengers/create" id="booking-form" style="max-width:900px;margin:0 auto;">
+    {{ csrf_input(request) }}
 
     <!-- STEP 1: Traversée + Cabine -->
     <div class="pf-section">
@@ -40,12 +41,22 @@
             {% endfor %}
         </div>
 
+        <!-- Discount -->
+        <div style="margin-top:12px;">
+            <label style="font-size:12px;font-weight:600;color:#555;">Remise (%)</label>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+                <input type="number" name="discount_rate" id="discount-input" value="0" min="0" max="100" step="0.01" class="fi" style="width:80px;" oninput="autoPrice()">
+                <span style="font-size:11px;color:#888;">Remise sur le tarif catalogue</span>
+            </div>
+        </div>
+
         <!-- Auto-price display -->
         <div id="price-box" style="display:none;margin-top:16px;padding:14px 18px;background:rgba(135,189,43,0.06);border:1px solid rgba(135,189,43,0.2);border-radius:8px;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
                 <div>
                     <span style="font-size:11px;color:#888;text-transform:uppercase;">Prix de la traversée</span>
                     <div style="font-size:24px;font-weight:700;color:var(--towt-blue);" id="price-display">—</div>
+                    <div id="discount-info" style="display:none;font-size:11px;color:#87BD2B;font-weight:600;margin-top:2px;"></div>
                 </div>
                 <div style="text-align:right;">
                     <div style="font-size:12px;color:#666;">Acompte : <strong id="deposit-display">—</strong></div>
@@ -115,7 +126,7 @@
     @media(max-width:600px){.pf-grid{grid-template-columns:1fr}}
     .fg{display:flex;flex-direction:column;gap:3px}.fg.full{grid-column:1/-1}
     .fg label{font-size:11px;font-weight:600;color:#666;text-transform:uppercase}
-    .fi{padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;width:100%;box-sizing:border-box}
+    .fi{padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:'Poppins',system-ui,sans-serif;width:100%;box-sizing:border-box}
     .fi:focus{border-color:var(--towt-blue);outline:none}
     .ta{resize:vertical;min-height:60px}
     .cabin-picker{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:6px}
@@ -186,10 +197,22 @@ function autoPrice() {
     });
 
     if (match) {
-        var total = match.price;
+        var catalog = match.price;
+        var discountRate = parseFloat(document.getElementById('discount-input').value) || 0;
+        var total = discountRate > 0 ? Math.round(catalog * (1 - discountRate / 100) * 100) / 100 : catalog;
         var deposit = Math.round(total * match.deposit_pct / 100 * 100) / 100;
         var balance = Math.round((total - deposit) * 100) / 100;
-        document.getElementById('price-display').textContent = total.toFixed(2) + ' €';
+
+        var priceHtml = total.toFixed(2) + ' €';
+        var discountEl = document.getElementById('discount-info');
+        if (discountRate > 0) {
+            priceHtml = '<span style="text-decoration:line-through;color:#999;font-size:16px;font-weight:400;">' + catalog.toFixed(2) + ' €</span> ' + total.toFixed(2) + ' €';
+            if (discountEl) discountEl.style.display = 'block';
+            if (discountEl) discountEl.textContent = 'Remise ' + discountRate + '% appliquée';
+        } else {
+            if (discountEl) discountEl.style.display = 'none';
+        }
+        document.getElementById('price-display').innerHTML = priceHtml;
         document.getElementById('deposit-display').textContent = deposit.toFixed(2) + ' €';
         document.getElementById('balance-display').textContent = balance.toFixed(2) + ' €';
         document.getElementById('price-box').style.display = 'block';

@@ -20,7 +20,7 @@
 @media(max-width:600px){.fg{grid-template-columns:1fr}}
 .fgi{display:flex;flex-direction:column;gap:3px}.fgi.full{grid-column:1/-1}
 .fl{font-size:11px;font-weight:600;color:#555}
-.fi,.fs,.ft{padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;transition:border-color .2s}
+.fi,.fs,.ft{padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:'Poppins',system-ui,sans-serif;transition:border-color .2s}
 .fi:focus,.fs:focus,.ft:focus{outline:none;border-color:#095561;box-shadow:0 0 0 2px rgba(9,85,97,.1)}
 .ft{resize:vertical;min-height:60px}
 .btn{padding:10px 24px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
@@ -28,6 +28,8 @@
 .bd{background:#fee2e2;color:#dc2626;font-size:12px;padding:6px 12px}.bd:hover{background:#fca5a5}
 .ba{background:#ecfdf5;color:#16a34a;border:1px dashed #86efac;width:100%;padding:14px;border-radius:12px;font-size:14px;justify-content:center}.ba:hover{background:#dcfce7}
 .ab{display:flex;justify-content:space-between;align-items:center;margin-top:20px;gap:12px;flex-wrap:wrap}
+.fh{font-size:10px;color:#888;font-style:italic;margin-top:2px}
+.btn-secondary{background:#f1f5f9;color:#475569;border:1px solid #cbd5e1}.btn-secondary:hover{background:#e2e8f0}
 {% endblock %}
 
 {% block portal_content %}
@@ -48,6 +50,7 @@
 </div>
 
 <form method="POST" action="/p/{{ pl.token }}/save">
+    {{ csrf_input(request) }}
 {% for batch in pl.batches %}
 {% set p = 'batch_' ~ batch.id ~ '_' %}
 <div class="bc">
@@ -97,13 +100,11 @@
         </select>
       </div>
       <div class="fgi"><label class="fl">{{ t('f_type_of_goods', lang) }} *</label><input type="text" name="{{ p }}type_of_goods" class="fi" value="{{ batch.type_of_goods or '' }}"></div>
-      <div class="fgi"><label class="fl">{{ t('f_bio_products', lang) }}</label>
-        <select name="{{ p }}bio_products" class="fs">
-          <option value="">—</option>
-          <option value="Yes" {% if batch.bio_products=='Yes' %}selected{% endif %}>{{ t('yes', lang) }}</option>
-          <option value="No" {% if batch.bio_products=='No' %}selected{% endif %}>{{ t('no', lang) }}</option>
-        </select>
-      </div>
+      <div class="fgi"><label class="fl" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="hidden" name="{{ p }}bio_products" value="No">
+        <input type="checkbox" name="{{ p }}bio_products" value="Yes" {% if batch.bio_products=='Yes' %}checked{% endif %} style="width:18px;height:18px;accent-color:#095561;cursor:pointer">
+        {{ t('f_bio_products', lang) }}
+      </label></div>
       <div class="fgi"><label class="fl">{{ t('f_pallet_quantity', lang) }} *</label><input type="number" name="{{ p }}pallet_quantity" class="fi" min="1" value="{{ batch.pallet_quantity or '' }}"></div>
       <div class="fgi"><label class="fl">{{ t('f_cases_quantity', lang) }}</label><input type="number" name="{{ p }}cases_quantity" class="fi" value="{{ batch.cases_quantity or '' }}"></div>
       <div class="fgi"><label class="fl">{{ t('f_units_per_case', lang) }}</label><input type="number" name="{{ p }}units_per_case" class="fi" value="{{ batch.units_per_case or '' }}"></div>
@@ -118,10 +119,10 @@
 
     <div class="st">📐 {{ t('pl_dimensions_section', lang) }}</div>
     <div class="fg">
-      <div class="fgi"><label class="fl">{{ t('f_length', lang) }}</label><input type="text" name="{{ p }}length_cm" class="fi" value="{{ batch.length_cm or '' }}"></div>
-      <div class="fgi"><label class="fl">{{ t('f_width', lang) }}</label><input type="text" name="{{ p }}width_cm" class="fi" value="{{ batch.width_cm or '' }}"></div>
-      <div class="fgi"><label class="fl">{{ t('f_height', lang) }}</label><input type="text" name="{{ p }}height_cm" class="fi" value="{{ batch.height_cm or '' }}"></div>
-      <div class="fgi"><label class="fl">{{ t('f_weight', lang) }} *</label><input type="text" name="{{ p }}weight_kg" class="fi" value="{{ batch.weight_kg or '' }}"></div>
+      <div class="fgi"><label class="fl">{{ t('f_length', lang) }} *</label><input type="text" name="{{ p }}length_cm" class="fi" value="{{ batch.length_cm or '' }}" required><span class="fh">{{ t('help_length', lang) }}</span></div>
+      <div class="fgi"><label class="fl">{{ t('f_width', lang) }} *</label><input type="text" name="{{ p }}width_cm" class="fi" value="{{ batch.width_cm or '' }}" required><span class="fh">{{ t('help_width', lang) }}</span></div>
+      <div class="fgi"><label class="fl">{{ t('f_height', lang) }} *</label><input type="text" name="{{ p }}height_cm" class="fi" value="{{ batch.height_cm or '' }}" required><span class="fh">{{ t('help_height', lang) }}</span></div>
+      <div class="fgi"><label class="fl">{{ t('f_weight', lang) }} *</label><input type="text" name="{{ p }}weight_kg" class="fi" value="{{ batch.weight_kg or '' }}" required><span class="fh">{{ t('help_weight', lang) }}</span></div>
     </div>
     {% endif %}
   </div>
@@ -130,9 +131,51 @@
 
 {% if not pl.is_locked %}
 <div class="ab">
-  <form method="POST" action="/p/{{ pl.token }}/batch/add"><button type="submit" class="btn ba">＋ {{ t('pl_add_batch', lang) }}</button></form>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <form method="POST" action="/p/{{ pl.token }}/batch/add" style="display:inline;"><button type="submit" class="btn ba" style="width:auto;padding:10px 20px;">＋ {{ t('pl_add_batch', lang) }}</button></form>
+        {{ csrf_input(request) }}
+    <a href="/p/{{ pl.token }}/template" class="btn btn-secondary">📥 {{ t('download_template', lang) }}</a>
+    <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='flex'">📤 {{ t('import_excel', lang) }}</button>
+  </div>
   <button type="submit" class="btn bp">💾 {{ t('save', lang) }}</button>
 </div>
 {% endif %}
 </form>
+
+<!-- Import Excel Modal -->
+<div id="import-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;" onclick="if(event.target===this) this.style.display='none'">
+    <div style="background:white;border-radius:12px;padding:24px;max-width:500px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+        <h3 style="margin-bottom:8px;color:#095561;">📤 {{ t('import_excel_title', lang) }}</h3>
+        <p style="font-size:12px;color:#888;margin-bottom:16px;">{{ t('import_excel_desc', lang) }}</p>
+        <form method="POST" action="/p/{{ pl.token }}/import" enctype="multipart/form-data">
+            {{ csrf_input(request) }}
+            <input type="file" name="file" accept=".xlsx,.xls" class="fi" required style="margin-bottom:16px;">
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-modal').style.display='none'">{{ t('cancel', lang) }}</button>
+                <button type="submit" class="btn bp">📤 {{ t('import_excel', lang) }}</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Auto-fill pallet dimensions based on pallet type
+var PALLET_DIMS = {
+  'EPAL':    {length: 120, width: 80},
+  'USPAL':   {length: 120, width: 100},
+  'PORTPAL': {length: 120, width: 100}
+};
+document.querySelectorAll('select[name$="_pallet_type"]').forEach(function(sel){
+  sel.addEventListener('change', function(){
+    var prefix = this.name.replace('pallet_type','');
+    var dims = PALLET_DIMS[this.value];
+    if(dims){
+      var lf = document.querySelector('input[name="'+prefix+'length_cm"]');
+      var wf = document.querySelector('input[name="'+prefix+'width_cm"]');
+      if(lf) lf.value = dims.length;
+      if(wf) wf.value = dims.width;
+    }
+  });
+});
+</script>
 {% endblock %}

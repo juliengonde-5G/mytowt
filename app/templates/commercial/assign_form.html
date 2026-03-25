@@ -6,6 +6,7 @@
             <button class="modal-close" onclick="closeModal()"><i data-lucide="x"></i></button>
         </div>
         <form method="POST" id="assign-form" action="/commercial/orders/{{ order.id }}/assign">
+            {{ csrf_input(request) }}
             <div class="modal-body">
                 {% if order.delivery_date_start or order.delivery_date_end %}
                 <div style="background:rgba(96,165,250,0.08);padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:16px;">

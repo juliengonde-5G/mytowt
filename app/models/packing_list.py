@@ -1,13 +1,21 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, Date, func
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
 
+# Token validity: 90 days from creation
+TOKEN_VALIDITY_DAYS = 90
+
 
 def generate_token():
     return uuid.uuid4().hex[:24]
+
+
+def default_token_expiry():
+    return datetime.now(timezone.utc) + timedelta(days=TOKEN_VALIDITY_DAYS)
 
 
 class PackingList(Base):
@@ -16,6 +24,7 @@ class PackingList(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
     token = Column(String(32), unique=True, nullable=False, default=generate_token, index=True)
+    token_expires_at = Column(DateTime(timezone=True), nullable=True, default=default_token_expiry)
 
     # Status: draft, submitted, locked
     status = Column(String(20), default="draft")
