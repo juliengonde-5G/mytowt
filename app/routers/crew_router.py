@@ -77,6 +77,7 @@ async def crew_list(
             "status": status,
             "location": location,
             "current_assignment": current_assignment,
+            "current_assignment_id": current_assignment.id if current_assignment else None,
             "total_days_year": sum(
                 ((a.disembark_date or today) - a.embark_date).days
                 for a in m.assignments
@@ -306,6 +307,56 @@ async def assign_submit(
     db.add(assignment)
     await db.flush()
     await log_activity(db, user, "crew", "assign", "CrewAssignment", assignment.id, f"Affectation marin")
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
+    return RedirectResponse(url="/crew", status_code=303)
+
+
+# ─── EDIT ASSIGNMENT (embark/disembark dates) ───────────────
+@router.get("/assignments/{aid}/edit", response_class=HTMLResponse)
+async def assignment_edit_form(
+    aid: int, request: Request,
+    user: User = Depends(require_permission("crew", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(CrewAssignment)
+        .options(selectinload(CrewAssignment.member), selectinload(CrewAssignment.vessel))
+        .where(CrewAssignment.id == aid)
+    )
+    assignment = result.scalar_one_or_none()
+    if not assignment:
+        raise HTTPException(404)
+    vessels_result = await db.execute(select(Vessel).where(Vessel.is_active == True).order_by(Vessel.code))
+    vessels = vessels_result.scalars().all()
+    return templates.TemplateResponse("crew/assignment_edit.html", {
+        "request": request, "user": user,
+        "assignment": assignment, "vessels": vessels,
+    })
+
+
+@router.post("/assignments/{aid}/edit", response_class=HTMLResponse)
+async def assignment_edit_submit(
+    aid: int, request: Request,
+    vessel_id: str = Form(...),
+    embark_date: str = Form(...),
+    disembark_date: Optional[str] = Form(None),
+    status: str = Form("active"),
+    notes: Optional[str] = Form(None),
+    user: User = Depends(require_permission("crew", "M")),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(CrewAssignment).where(CrewAssignment.id == aid))
+    assignment = result.scalar_one_or_none()
+    if not assignment:
+        raise HTTPException(404)
+    assignment.vessel_id = int(vessel_id)
+    assignment.embark_date = parse_date(embark_date)
+    assignment.disembark_date = parse_date(disembark_date)
+    assignment.status = status
+    assignment.notes = notes.strip() if notes else None
+    await db.flush()
+    await log_activity(db, user, "crew", "update", "CrewAssignment", aid, f"Modification affectation")
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/crew"})
     return RedirectResponse(url="/crew", status_code=303)
