@@ -271,6 +271,9 @@
                                 <button class="btn btn-sm btn-secondary" onclick="openEditOrderModal({{ order.id }})" title="Modifier"><i data-lucide="pencil"></i></button>
                                 <button class="btn btn-sm btn-secondary" onclick="openAssignModal({{ order.id }})" title="Affecter"><i data-lucide="link"></i></button>
                                 <button class="btn btn-sm btn-secondary" onclick="openUploadModal({{ order.id }})" title="PJ"><i data-lucide="paperclip"></i></button>
+                                {% if order.leg %}
+                                <a href="/stowage/leg/{{ order.leg.id }}" class="btn btn-sm btn-secondary" title="Plan de chargement"><i data-lucide="layout-grid"></i></a>
+                                {% endif %}
                                 <button class="btn btn-sm btn-danger" hx-delete="/commercial/orders/{{ order.id }}" hx-confirm="Supprimer {{ order.reference }} ?"><i data-lucide="trash-2"></i></button>
                             </div>
                         </td>

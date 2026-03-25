@@ -26,6 +26,7 @@ from app.routers.mrv_router import router as mrv_router
 from app.routers.claim_router import router as claim_router
 from app.routers.tracking_router import router as tracking_router
 from app.routers.pricing_router import router as pricing_router
+from app.routers.stowage_router import router as stowage_router
 
 import os
 import stat
@@ -142,4 +143,5 @@ app.include_router(passenger_ext_router)
 app.include_router(mrv_router, dependencies=[Depends(require_permission("mrv", "C"))])
 app.include_router(claim_router, dependencies=[Depends(require_permission("captain", "C"))])
 app.include_router(pricing_router, dependencies=[Depends(require_permission("commercial", "C"))])
+app.include_router(stowage_router)  # Stowage plan — permissions enforced per endpoint
 app.include_router(tracking_router)  # API — no auth (called by Power Automate)

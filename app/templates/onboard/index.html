@@ -53,6 +53,9 @@
             <span>{{ last_sof.event_date.strftime('%d/%m') if last_sof.event_date else '' }} {{ last_sof.event_time or '' }}</span>
         </div>
         {% endif %}
+        <a href="/stowage/onboard/{{ current_leg.id }}" class="ob-escale-btn" style="background:var(--towt-green,#28a745);">
+            <i data-lucide="package" style="width:16px;height:16px;"></i> Chargement
+        </a>
         <a href="/escale?vessel={{ selected_vessel }}&leg_id={{ current_leg.id }}" class="ob-escale-btn">
             <i data-lucide="anchor" style="width:16px;height:16px;"></i> Voir l'escale
         </a>

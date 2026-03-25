@@ -1032,6 +1032,44 @@ async def client_portal_voyage(token: str, request: Request, db: AsyncSession = 
     })
 
 
+# ── Page 3b: Stowage Position ─────────────────────────────────
+@ext_router.get("/{token}/stowage", response_class=HTMLResponse)
+async def client_portal_stowage(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db)
+    lang = _lang(request)
+    leg = pl.order.leg
+
+    # Get stowage plans for this packing list's batches
+    from app.models.stowage import (
+        StowagePlan, ZONE_DEFINITIONS, LOADING_ORDER, DANGEROUS_ZONES, get_zone_label
+    )
+    batch_positions = []
+    if leg:
+        for batch in pl.batches:
+            result = await db.execute(
+                select(StowagePlan).where(
+                    StowagePlan.leg_id == leg.id,
+                    StowagePlan.batch_id == batch.id,
+                )
+            )
+            plan = result.scalar_one_or_none()
+            batch_positions.append({
+                "batch": batch,
+                "zone_code": plan.zone_code if plan else None,
+                "zone_label": get_zone_label(plan.zone_code, lang) if plan else None,
+            })
+
+    return templates.TemplateResponse("cargo/portal_stowage.html", {
+        "request": request, "pl": pl,
+        "batch_positions": batch_positions,
+        "zone_definitions": ZONE_DEFINITIONS,
+        "loading_order": LOADING_ORDER,
+        "dangerous_zones": DANGEROUS_ZONES,
+        "lang": lang, "active_page": "stowage", "page_suffix": "/stowage",
+        "unread_messages": await _unread_count(pl.id, db),
+    })
+
+
 # ── Page 4: Documents ─────────────────────────────────────────
 @ext_router.get("/{token}/documents", response_class=HTMLResponse)
 async def client_portal_docs(token: str, request: Request, db: AsyncSession = Depends(get_db)):

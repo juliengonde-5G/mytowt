@@ -1,0 +1,101 @@
+{% extends "cargo/portal_base.html" %}
+
+{% block portal_styles %}
+.stow-section { margin-bottom: 24px; }
+.stow-title { font-size: 1.1rem; font-weight: 600; color: #1a3a5c; margin-bottom: 12px; }
+.stow-info { background: #f8f9fa; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.stow-zone { font-weight: 700; color: #1a3a5c; font-size: 1rem; }
+.stow-label { color: #6c757d; font-size: 0.85rem; }
+.stow-batch-num { background: #1a3a5c; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+.stow-no-pos { color: #6c757d; font-style: italic; }
+
+/* Mini vessel SVG */
+.mini-vessel { max-width: 500px; margin: 16px auto; }
+.mini-vessel svg { width: 100%; height: auto; }
+.mv-zone { fill: #e9ecef; stroke: #adb5bd; stroke-width: 1; }
+.mv-zone.highlighted { fill: #007bff; stroke: #0056b3; stroke-width: 2; }
+.mv-zone.highlighted-2 { fill: #28a745; stroke: #1e7e34; stroke-width: 2; }
+.mv-zone.highlighted-3 { fill: #fd7e14; stroke: #e8590c; stroke-width: 2; }
+.mv-label { font-size: 7px; fill: #6c757d; font-family: 'Poppins', system-ui; text-anchor: middle; }
+.mv-deck-label { font-size: 8px; fill: #1a3a5c; font-weight: 600; font-family: 'Poppins', system-ui; }
+{% endblock %}
+
+{% block portal_content %}
+<h1>📐 {{ "Position de votre marchandise" if lang == "fr" else "Your Cargo Position" }}</h1>
+
+{% if not batch_positions %}
+<p class="stow-no-pos">{{ "Aucune information de position disponible." if lang == "fr" else "No position information available." }}</p>
+{% else %}
+
+{# Mini vessel schematic with highlighted zones #}
+{% set highlighted_zones = batch_positions|selectattr("zone_code")|map(attribute="zone_code")|list %}
+<div class="mini-vessel">
+  <svg viewBox="0 0 600 280" xmlns="http://www.w3.org/2000/svg">
+    {# Hull outline #}
+    <path d="M 25,260 L 25,45 Q 25,30 40,25 L 90,15 Q 105,10 120,10 L 480,10 Q 510,10 540,22 L 570,40 Q 585,48 585,60 L 585,260 Q 585,268 577,268 L 33,268 Q 25,268 25,260 Z"
+          fill="none" stroke="#1a3a5c" stroke-width="2"/>
+
+    {# Deck lines #}
+    <line x1="30" y1="100" x2="580" y2="100" stroke="#1a3a5c" stroke-width="1.2"/>
+    <line x1="30" y1="175" x2="580" y2="175" stroke="#1a3a5c" stroke-width="1.2"/>
+
+    {# Hold divider #}
+    <line x1="305" y1="14" x2="305" y2="260" stroke="#1a3a5c" stroke-width="1" stroke-dasharray="5,3"/>
+
+    {# Labels #}
+    <text x="165" y="9" class="mv-deck-label" text-anchor="middle">{{ "ARRIÈRE" if lang == "fr" else "AFT" }}</text>
+    <text x="445" y="9" class="mv-deck-label" text-anchor="middle">{{ "AVANT" if lang == "fr" else "FWD" }}</text>
+    <text x="18" y="65" class="mv-deck-label" transform="rotate(-90,18,65)">SUP</text>
+    <text x="18" y="142" class="mv-deck-label" transform="rotate(-90,18,142)">MIL</text>
+    <text x="18" y="220" class="mv-deck-label" transform="rotate(-90,18,220)">INF</text>
+
+    {# Zone blocks #}
+    {% set zone_rects = {
+      "SUP_AR_AR": "35,17,85,78", "SUP_AR_MIL": "125,17,85,78", "SUP_AR_AV": "215,17,85,78",
+      "SUP_AV_AR": "310,17,85,78", "SUP_AV_MIL": "400,17,85,78", "SUP_AV_AV": "490,17,85,78",
+      "MIL_AR_AR": "35,105,85,65", "MIL_AR_MIL": "125,105,85,65", "MIL_AR_AV": "215,105,85,65",
+      "MIL_AV_AR": "310,105,85,65", "MIL_AV_MIL": "400,105,85,65", "MIL_AV_AV": "490,105,85,65",
+      "INF_AR_AR": "35,180,85,78", "INF_AR_MIL": "125,180,85,78", "INF_AR_AV": "215,180,85,78",
+      "INF_AV_AR": "310,180,85,78", "INF_AV_MIL": "400,180,85,78", "INF_AV_AV": "490,180,85,78"
+    } %}
+
+    {% set colors = ["highlighted", "highlighted-2", "highlighted-3"] %}
+
+    {% for zc, rect in zone_rects.items() %}
+      {% set parts = rect.split(",") %}
+      {% set is_hl = zc in highlighted_zones %}
+      {% set hl_idx = highlighted_zones.index(zc) if is_hl else -1 %}
+      <rect x="{{ parts[0] }}" y="{{ parts[1] }}" width="{{ parts[2] }}" height="{{ parts[3] }}" rx="3"
+            class="mv-zone{% if is_hl %} {{ colors[hl_idx % 3] }}{% endif %}"/>
+      <text x="{{ parts[0]|int + parts[2]|int // 2 }}" y="{{ parts[1]|int + parts[3]|int // 2 + 3 }}" class="mv-label"
+            {% if is_hl %}fill="white" font-weight="600" font-size="9"{% endif %}>
+        {{ zc }}
+      </text>
+    {% endfor %}
+  </svg>
+</div>
+
+{# Batch position details #}
+<div class="stow-section">
+  <h3 class="stow-title">{{ "Détail par batch" if lang == "fr" else "Batch Details" }}</h3>
+  {% for bp in batch_positions %}
+  <div class="stow-info">
+    <div>
+      <span class="stow-batch-num">Batch #{{ bp.batch.batch_number }}</span>
+      <span style="margin-left:8px">{{ bp.batch.type_of_goods or "—" }}</span>
+      <span style="margin-left:8px;color:#6c757d">{{ bp.batch.pallet_quantity or 0 }} {{ "palettes" if lang == "fr" else "pallets" }}</span>
+    </div>
+    <div>
+      {% if bp.zone_code %}
+      <span class="stow-zone">{{ bp.zone_code }}</span>
+      <span class="stow-label">{{ bp.zone_label }}</span>
+      {% else %}
+      <span class="stow-no-pos">{{ "Position non encore définie" if lang == "fr" else "Position not yet assigned" }}</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}

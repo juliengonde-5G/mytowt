@@ -14,12 +14,16 @@ class OrderStatus(str, enum.Enum):
 
 
 PALETTE_FORMATS = [
-    {"value": "EPAL", "label": "EPAL (Europe)", "coeff": 1.0},
-    {"value": "USPAL", "label": "USPAL (US)", "coeff": 1.2},
-    {"value": "PORTPAL", "label": "PORTPAL (Port)", "coeff": 1.2},
+    {"value": "EPAL", "label": "Europalette 120×80 (EPAL)", "coeff": 1.0},
+    {"value": "USPAL", "label": "US Pallet 120×100 (USPAL)", "coeff": 1.2},
+    {"value": "PORTPAL", "label": "Palette Portuaire (PORTPAL)", "coeff": 1.2},
+    {"value": "IBC", "label": "IBC (+6cm)", "coeff": 1.3},
+    {"value": "BIGBAG", "label": "Big Bag Palettisé (+3cm)", "coeff": 1.25},
+    {"value": "BARRIQUE120", "label": "Barrique 120×120 (+3cm)", "coeff": 1.5},
+    {"value": "BARRIQUE140", "label": "Barrique 140×140 (+3cm)", "coeff": 2.0},
 ]
 
-PALETTE_COEFF = {"EPAL": 1.0, "USPAL": 1.2, "PORTPAL": 1.2}
+PALETTE_COEFF = {f["value"]: f["coeff"] for f in PALETTE_FORMATS}
 
 
 class Order(Base):

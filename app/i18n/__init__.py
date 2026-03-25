@@ -411,6 +411,7 @@ TRANSLATIONS = {
     "cp_packing_list": {"fr": "Packing List", "en": "Packing List", "es": "Lista de empaque", "pt-br": "Lista de embalagem", "vi": "Danh sách đóng gói"},
     "cp_vessel": {"fr": "Le Navire", "en": "The Vessel", "es": "El Buque", "pt-br": "O Navio", "vi": "Tàu"},
     "cp_voyage": {"fr": "Le Voyage", "en": "The Voyage", "es": "El Viaje", "pt-br": "A Viagem", "vi": "Chuyến đi"},
+    "cp_stowage": {"fr": "Position", "en": "Position", "es": "Posición", "pt-br": "Posição", "vi": "Vị trí"},
     "cp_documents": {"fr": "Documentation", "en": "Documents", "es": "Documentación", "pt-br": "Documentação", "vi": "Tài liệu"},
     "cp_messages": {"fr": "Parlez avec nous", "en": "Contact us", "es": "Contáctenos", "pt-br": "Fale conosco", "vi": "Liên hệ"},
     "cp_about_vessel": {"fr": "À propos du", "en": "About", "es": "Sobre el", "pt-br": "Sobre o", "vi": "Giới thiệu"},
