@@ -551,13 +551,16 @@ async def _on_order_confirmed(db: AsyncSession, order: Order, user):
     db.add(pl)
     await db.flush()
 
-    # 4. Create default batch pre-filled with TOWT data
+    # 4. Create default batch pre-filled with TOWT data + order quantities
     batch = PackingListBatch(
         packing_list_id=pl.id,
         batch_number=1,
         booking_confirmation=order.reference,
         customer_name=order.client_name,
         freight_rate=order.unit_price,
+        pallet_quantity=order.quantity_palettes,
+        pallet_type=order.palette_format,
+        weight_kg=order.weight_per_palette * 1000 if order.weight_per_palette else None,
     )
     if leg:
         batch.voyage_id = leg.leg_code

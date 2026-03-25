@@ -200,9 +200,11 @@ async def assign_batch(
     form = await request.form()
     zone_code = form.get("zone_code", "").strip()
 
-    # Get batch
+    # Get batch with its order (for fallback data)
     result = await db.execute(
-        select(PackingListBatch).where(PackingListBatch.id == batch_id)
+        select(PackingListBatch)
+        .options(selectinload(PackingListBatch.packing_list).selectinload(PackingList.order))
+        .where(PackingListBatch.id == batch_id)
     )
     batch = result.scalar_one_or_none()
     if not batch:
@@ -218,11 +220,14 @@ async def assign_batch(
     if existing.scalar_one_or_none():
         raise HTTPException(400, "Ce batch est déjà affecté à une zone")
 
-    pallet_format = batch.pallet_type or "EPAL"
+    # Use batch data, fallback to order data if batch not yet filled
+    order = batch.packing_list.order if batch.packing_list else None
+    pallet_format = batch.pallet_type or (order.palette_format if order else None) or "EPAL"
     stackable_str = (batch.stackable or "").lower()
     stackable = stackable_str in ("oui", "yes", "true", "1")
-    qty = batch.pallet_quantity or 0
-    weight_total = (batch.weight_kg or 0) * qty
+    qty = batch.pallet_quantity or (order.quantity_palettes if order else 0) or 0
+    unit_weight = batch.weight_kg or (order.weight_per_palette * 1000 if order and order.weight_per_palette else 0) or 0
+    weight_total = unit_weight * qty
 
     # Auto-suggest if no zone specified
     if not zone_code:
@@ -312,11 +317,17 @@ async def auto_assign_all(
     username = user.full_name if hasattr(user, 'full_name') else user.username
 
     for batch in unassigned:
-        pallet_format = batch.pallet_type or "EPAL"
+        # Use batch data, fallback to order data if batch not yet filled
+        order = batch.packing_list.order if batch.packing_list else None
+        pallet_format = batch.pallet_type or (order.palette_format if order else None) or "EPAL"
         stackable_str = (batch.stackable or "").lower()
         stackable = stackable_str in ("oui", "yes", "true", "1")
-        qty = batch.pallet_quantity or 0
-        weight_total = (batch.weight_kg or 0) * qty
+        qty = batch.pallet_quantity or (order.quantity_palettes if order else 0) or 0
+        unit_weight = batch.weight_kg or (order.weight_per_palette * 1000 if order and order.weight_per_palette else 0) or 0
+        weight_total = unit_weight * qty
+
+        if qty == 0:
+            continue  # Skip batches with no pallet data
 
         zone_code = suggest_zone(batch, occupied, pallet_format)
         if not zone_code:
