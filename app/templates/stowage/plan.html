@@ -93,13 +93,14 @@
 {# Unassigned batches #}
 {% if unassigned %}
 <div class="unassigned-section">
-  <h3>{{ "Batches non assignes" if lang == "fr" else "Unassigned Batches" }} ({{ unassigned|length }})</h3>
+  <h3>{{ "Cargaisons non assignees" if lang == "fr" else "Unassigned Cargo" }} ({{ unassigned|length }})</h3>
   <div class="table-container">
     <table class="data-table">
       <thead>
         <tr>
-          <th>Batch</th>
+          <th>{{ "Ref" if lang == "fr" else "Ref" }}</th>
           <th>{{ "Client" if lang == "fr" else "Client" }}</th>
+          <th>{{ "Source" if lang == "fr" else "Source" }}</th>
           <th>{{ "Marchandise" if lang == "fr" else "Cargo" }}</th>
           <th>{{ "Palettes" if lang == "fr" else "Pallets" }}</th>
           <th>{{ "Format" if lang == "fr" else "Format" }}</th>
@@ -110,13 +111,16 @@
       </thead>
       <tbody>
         {% for batch in unassigned %}
+        {% set order = batch.packing_list.order if batch.packing_list else None %}
+        {% set has_cargo_doc = batch.type_of_goods or (batch.pallet_quantity and batch.weight_kg and batch.length_cm) %}
         <tr>
-          <td>#{{ batch.batch_number }}</td>
-          <td>{{ batch.customer_name or "—" }}</td>
-          <td>{{ batch.type_of_goods or "—" }}</td>
-          <td>{{ batch.pallet_quantity or 0 }}</td>
-          <td>{{ batch.pallet_type or "EPAL" }}</td>
-          <td>{{ batch.weight_kg or 0 }} kg</td>
+          <td>{{ order.reference if order else "#" ~ batch.batch_number }}</td>
+          <td>{{ batch.customer_name or (order.client_name if order else "—") }}</td>
+          <td>{% if has_cargo_doc %}<span style="background:#d4edda;color:#155724;padding:2px 6px;border-radius:3px;font-size:0.7rem;font-weight:600;">Cargo doc</span>{% else %}<span style="background:#fff3cd;color:#856404;padding:2px 6px;border-radius:3px;font-size:0.7rem;font-weight:600;">Commande</span>{% endif %}</td>
+          <td>{{ batch.type_of_goods or (order.description if order else "—") or "—" }}</td>
+          <td>{{ batch.pallet_quantity or (order.quantity_palettes if order else 0) }}</td>
+          <td>{{ batch.pallet_type or (order.palette_format if order else "EPAL") }}</td>
+          <td>{{ batch.weight_kg or (order.weight_per_palette * 1000 if order and order.weight_per_palette else 0)|int }} kg</td>
           <td>{% if batch.imo_product_class %}<span class="badge-dg">{{ batch.imo_product_class }}</span>{% else %}—{% endif %}</td>
           <td>
             <form method="POST" action="/stowage/leg/{{ leg.id }}/assign/{{ batch.id }}" class="assign-form">

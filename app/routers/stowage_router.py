@@ -59,6 +59,56 @@ async def _get_leg_batches(db, leg_id: int) -> list:
     return result.scalars().all()
 
 
+async def _get_leg_orders(db, leg_id: int) -> list:
+    """Get all orders assigned to a leg (including those without packing lists)."""
+    result = await db.execute(
+        select(Order).where(Order.leg_id == leg_id, Order.status != "annule")
+    )
+    return result.scalars().all()
+
+
+async def _ensure_batches_for_orders(db, leg_id: int):
+    """For orders that don't have a packing list yet, create one with a placeholder batch
+    using the order's palette data. This allows stowage planning before cargo docs are filled."""
+    orders = await _get_leg_orders(db, leg_id)
+    for order in orders:
+        # Check if packing list exists
+        pl_result = await db.execute(
+            select(PackingList).where(PackingList.order_id == order.id)
+        )
+        pl = pl_result.scalar_one_or_none()
+        if not pl:
+            # Create packing list + batch from order data
+            pl = PackingList(order_id=order.id)
+            db.add(pl)
+            await db.flush()
+
+            batch = PackingListBatch(
+                packing_list_id=pl.id,
+                batch_number=1,
+                customer_name=order.client_name,
+                booking_confirmation=order.reference,
+                pallet_quantity=order.quantity_palettes,
+                pallet_type=order.palette_format,
+                weight_kg=order.weight_per_palette * 1000 if order.weight_per_palette else None,
+            )
+            db.add(batch)
+            await db.flush()
+        else:
+            # Packing list exists — check if batch has pallet data, backfill from order if not
+            batches_result = await db.execute(
+                select(PackingListBatch).where(PackingListBatch.packing_list_id == pl.id)
+            )
+            for batch in batches_result.scalars().all():
+                if not batch.pallet_quantity and order.quantity_palettes:
+                    batch.pallet_quantity = order.quantity_palettes
+                if not batch.pallet_type and order.palette_format:
+                    batch.pallet_type = order.palette_format
+                if not batch.weight_kg and order.weight_per_palette:
+                    batch.weight_kg = order.weight_per_palette * 1000
+            await db.flush()
+
+
 async def _get_stowage_plans(db, leg_id: int) -> list:
     """Get all stowage plans for a leg."""
     result = await db.execute(
@@ -148,6 +198,10 @@ async def stowage_plan_view(
 ):
     """Main stowage plan page with graphical view and batch list."""
     leg = await _get_leg_with_vessel(db, leg_id)
+
+    # Ensure all orders have batches (create placeholder from order data if needed)
+    await _ensure_batches_for_orders(db, leg_id)
+
     plans = await _get_stowage_plans(db, leg_id)
     batches = await _get_leg_batches(db, leg_id)
     zones = _build_zone_data(plans, lang)
@@ -304,6 +358,9 @@ async def auto_assign_all(
     user=Depends(require_permission("escale", "M")),
 ):
     """Auto-assign all unassigned batches to optimal zones."""
+    # Ensure all orders have batches first
+    await _ensure_batches_for_orders(db, leg_id)
+
     batches = await _get_leg_batches(db, leg_id)
     plans = await _get_stowage_plans(db, leg_id)
     assigned_ids = {p.batch_id for p in plans}
