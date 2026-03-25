@@ -14,6 +14,18 @@ import math
 from app.database import get_db
 from app.auth import get_current_user, AuthRequired
 from app.permissions import require_permission
+
+
+def require_planning_admin():
+    """Only admin and manager_maritime can modify planning dates."""
+    async def _check(user=Depends(get_current_user)):
+        if user.role not in ("administrateur", "admin", "manager_maritime"):
+            raise HTTPException(
+                status_code=403,
+                detail="Seuls les administrateurs et managers maritimes peuvent modifier le planning"
+            )
+        return user
+    return _check
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg, LegStatus
@@ -260,7 +272,7 @@ async def leg_create_form(
     request: Request,
     vessel: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
-    user: User = Depends(require_permission("planning", "M")),
+    user: User = Depends(require_planning_admin()),
     db: AsyncSession = Depends(get_db),
 ):
     vessels_result = await db.execute(select(Vessel).where(Vessel.is_active == True).order_by(Vessel.code))
@@ -345,7 +357,7 @@ async def leg_create_submit(
     elongation_coeff: Optional[str] = Form(None),
     port_stay_days: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
-    user: User = Depends(require_permission("planning", "M")),
+    user: User = Depends(require_planning_admin()),
     db: AsyncSession = Depends(get_db),
 ):
     _vessel_id = parse_int(vessel_id)
@@ -384,6 +396,20 @@ async def leg_create_submit(
 
     # Get sequence
     sequence = await get_next_sequence(db, _vessel_id, _year)
+
+    # ── Port chain validation: departure must equal previous leg's arrival ──
+    if sequence > 1:
+        prev_leg = await get_previous_leg(db, _vessel_id, _year, sequence)
+        if prev_leg and prev_leg.arrival_port_locode != dep_port.locode:
+            from app.models.port import Port as _Port
+            prev_arr_r = await db.execute(select(_Port).where(_Port.locode == prev_leg.arrival_port_locode))
+            prev_arr = prev_arr_r.scalar_one_or_none()
+            prev_arr_name = prev_arr.name if prev_arr else prev_leg.arrival_port_locode
+            raise HTTPException(
+                400,
+                f"Le port de depart ({dep_port.name}) doit correspondre au port d'arrivee "
+                f"de l'escale precedente ({prev_arr_name} — {prev_leg.arrival_port_locode})"
+            )
 
     # Calculate distance
     distance = haversine_nm(dep_port.latitude, dep_port.longitude, arr_port.latitude, arr_port.longitude)
@@ -446,7 +472,7 @@ async def leg_create_submit(
 async def leg_edit_form(
     leg_id: int,
     request: Request,
-    user: User = Depends(require_permission("planning", "M")),
+    user: User = Depends(require_planning_admin()),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -497,7 +523,7 @@ async def leg_edit_submit(
     port_stay_days: Optional[str] = Form(None),
     status: str = Form("planned"),
     notes: Optional[str] = Form(None),
-    user: User = Depends(require_permission("planning", "M")),
+    user: User = Depends(require_planning_admin()),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Leg).where(Leg.id == leg_id))
@@ -538,14 +564,27 @@ async def leg_edit_submit(
     _elongation = parse_float(elongation_coeff, DEFAULT_ELONGATION)
     _port_stay = parse_int(port_stay_days, DEFAULT_PORT_STAY_DAYS)
 
+    # ── Date coherence validation ──
+    _etd = parse_datetime(etd)
+    _eta = parse_datetime(eta)
+    _ata = parse_datetime(ata)
+    _atd = parse_datetime(atd)
+
+    if _etd and _eta and _eta <= _etd:
+        raise HTTPException(400, f"ETA ({_eta.strftime('%d/%m %H:%M')}) doit etre apres ETD ({_etd.strftime('%d/%m %H:%M')})")
+    if _ata and _etd and _ata < _etd:
+        raise HTTPException(400, f"ATA ({_ata.strftime('%d/%m %H:%M')}) ne peut pas etre avant ETD ({_etd.strftime('%d/%m %H:%M')})")
+    if _atd and _ata and _atd < _ata:
+        raise HTTPException(400, f"ATD ({_atd.strftime('%d/%m %H:%M')}) ne peut pas etre avant ATA ({_ata.strftime('%d/%m %H:%M')})")
+
     leg.vessel_id = _vessel_id
     leg.year = _year
     leg.departure_port_locode = dep_port.locode
     leg.arrival_port_locode = arr_port.locode
-    leg.etd = parse_datetime(etd)
-    leg.eta = parse_datetime(eta)
-    leg.ata = parse_datetime(ata)
-    leg.atd = parse_datetime(atd)
+    leg.etd = _etd
+    leg.eta = _eta
+    leg.ata = _ata
+    leg.atd = _atd
     leg.speed_knots = _speed
     leg.elongation_coeff = _elongation
     leg.port_stay_days = _port_stay
@@ -590,7 +629,7 @@ async def leg_edit_submit(
 async def leg_delete(
     leg_id: int,
     request: Request,
-    user: User = Depends(require_permission("planning", "S")),
+    user: User = Depends(require_planning_admin()),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == leg_id))
