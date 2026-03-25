@@ -79,44 +79,49 @@
         <h3>&#9875; Arrivee / Depart effectif</h3>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
-        <div style="background:#f8fafb;border-radius:8px;padding:14px;border-left:4px solid var(--towt-green,#28a745);">
-            <div style="font-size:11px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:6px;">ATA — Arrivee reelle</div>
-            <p style="font-size:13px;margin:0 0 8px;color:var(--towt-blue);">
+    {% if request.query_params.get('ata_ok') %}<div class="alert alert-success" style="margin-bottom:12px;padding:10px 14px;font-size:13px;">ATA enregistree avec succes</div>{% endif %}
+    {% if request.query_params.get('atd_ok') %}<div class="alert alert-success" style="margin-bottom:12px;padding:10px 14px;font-size:13px;">ATD enregistre avec succes</div>{% endif %}
+
+    <div class="ata-atd-grid">
+        <div class="ata-card ata-card-arrival">
+            <div class="field-label">ATA — Arrivee reelle</div>
+            <p style="font-size:14px;margin:0 0 10px;color:var(--towt-blue);">
                 {% if current_leg.ata %}
                 <strong>{{ current_leg.ata.strftime('%d/%m/%Y %H:%M') }}</strong>
                 {% else %}
                 <em style="color:#aaa;">Non enregistree</em>
                 {% endif %}
             </p>
-            <form method="POST" action="/onboard/set-ata" style="display:flex;gap:6px;align-items:end;">
+            <form method="POST" action="/onboard/set-ata" style="display:flex;gap:6px;align-items:end;flex-wrap:wrap;">
                 {{ csrf_input(request) }}
                 <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
-                <div style="flex:1;">
-                    <input type="datetime-local" name="ata_date" class="fi" style="width:100%;font-size:12px;padding:6px 8px;"
+                <div style="flex:1;min-width:180px;">
+                    <input type="datetime-local" name="ata_date" id="ata-input" class="form-input" style="width:100%;font-size:13px;padding:8px 10px;"
                            value="{{ current_leg.ata.strftime('%Y-%m-%dT%H:%M') if current_leg.ata else '' }}">
                 </div>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="document.getElementById('ata-input').value=new Date().toISOString().slice(0,16)">Maintenant</button>
                 <button type="submit" class="btn btn-sm btn-success">{{ "Modifier" if current_leg.ata else "Confirmer" }}</button>
             </form>
         </div>
 
-        <div style="background:#f8fafb;border-radius:8px;padding:14px;border-left:4px solid #fd7e14;">
-            <div style="font-size:11px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:6px;">ATD — Depart reel</div>
-            <p style="font-size:13px;margin:0 0 8px;color:var(--towt-blue);">
+        <div class="ata-card ata-card-departure">
+            <div class="field-label">ATD — Depart reel</div>
+            <p style="font-size:14px;margin:0 0 10px;color:var(--towt-blue);">
                 {% if current_leg.atd %}
                 <strong>{{ current_leg.atd.strftime('%d/%m/%Y %H:%M') }}</strong>
                 {% else %}
                 <em style="color:#aaa;">Non enregistre</em>
                 {% endif %}
             </p>
-            <form method="POST" action="/onboard/set-atd" style="display:flex;gap:6px;align-items:end;">
+            <form method="POST" action="/onboard/set-atd" style="display:flex;gap:6px;align-items:end;flex-wrap:wrap;">
                 {{ csrf_input(request) }}
                 <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
-                <div style="flex:1;">
-                    <input type="datetime-local" name="atd_date" class="fi" style="width:100%;font-size:12px;padding:6px 8px;"
+                <div style="flex:1;min-width:180px;">
+                    <input type="datetime-local" name="atd_date" id="atd-input" class="form-input" style="width:100%;font-size:13px;padding:8px 10px;"
                            value="{{ current_leg.atd.strftime('%Y-%m-%dT%H:%M') if current_leg.atd else '' }}">
                 </div>
-                <button type="submit" class="btn btn-sm" style="background:#fd7e14;color:white;">{{ "Modifier" if current_leg.atd else "Confirmer" }}</button>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="document.getElementById('atd-input').value=new Date().toISOString().slice(0,16)">Maintenant</button>
+                <button type="submit" class="btn btn-sm btn-danger">{{ "Modifier" if current_leg.atd else "Confirmer" }}</button>
             </form>
         </div>
     </div>
@@ -936,6 +941,12 @@
     .eta-badge-delay{background:rgba(220,38,38,0.1);color:#DC2626}
     .eta-badge-advance{background:rgba(22,163,106,0.1);color:#16a34a}
     .eta-cascade-badge{font-size:10px;padding:2px 6px;border-radius:100px;background:rgba(245,158,11,0.1);color:#D97706;font-weight:600}
+    /* ATA/ATD responsive grid */
+    .ata-atd-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px}
+    .ata-card{background:var(--towt-light,#f2f6f7);border-radius:var(--radius,8px);padding:14px}
+    .ata-card-arrival{border-left:4px solid var(--towt-green,#87BD2B)}
+    .ata-card-departure{border-left:4px solid #fd7e14}
+    @media(max-width:700px){.ata-atd-grid{grid-template-columns:1fr}}
     /* Port agent attachment categories */
     .att-cat-port_agent{background:rgba(245,158,11,0.1);color:#D97706}
     .att-cat-bl_signed{background:rgba(59,130,246,0.1);color:#2563EB}

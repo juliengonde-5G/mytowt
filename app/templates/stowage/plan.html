@@ -3,9 +3,10 @@
 
 {% block topbar_actions %}
 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-  <a href="/escale" class="btn btn-sm btn-secondary">Escale</a>
+  <a href="/escale?vessel={{ leg.vessel.code }}&leg_id={{ leg.id }}" class="btn btn-sm btn-secondary">Escale</a>
   <a href="/stowage/leg/{{ leg.id }}/print?lang={{ lang }}" target="_blank" class="btn btn-sm btn-secondary">Imprimer</a>
   <form method="POST" action="/stowage/leg/{{ leg.id }}/auto-assign" style="display:inline">
+    {{ csrf_input(request) }}
     <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm('Affecter automatiquement tous les batches non assignés ?')">
       Auto-assign
     </button>
@@ -124,6 +125,7 @@
           <td>{% if batch.imo_product_class %}<span class="badge-dg">{{ batch.imo_product_class }}</span>{% else %}—{% endif %}</td>
           <td>
             <form method="POST" action="/stowage/leg/{{ leg.id }}/assign/{{ batch.id }}" class="assign-form">
+              {{ csrf_input(request) }}
               <select name="zone_code">
                 <option value="">Auto</option>
                 {% for zc in zone_order %}
@@ -187,6 +189,7 @@
               <td>{% if b.is_dangerous %}<span class="badge-dg">{{ b.imo_class }}</span>{% else %}—{% endif %}</td>
               <td>
                 <form method="POST" action="/stowage/leg/{{ leg.id }}/unassign/{{ b.plan_id }}" style="display:inline">
+                  {{ csrf_input(request) }}
                   <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Retirer ce batch de la zone ?')">
                     {{ "Retirer" if lang == "fr" else "Remove" }}
                   </button>

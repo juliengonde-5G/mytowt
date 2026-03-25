@@ -466,7 +466,7 @@ async def set_actual_arrival(
     await db.flush()
 
     vc = leg.vessel.code if leg.vessel else ""
-    return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}", status_code=303)
+    return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}&ata_ok=1#ata-atd", status_code=303)
 
 
 @router.post("/set-atd", response_class=HTMLResponse)
@@ -532,7 +532,7 @@ async def set_actual_departure(
     await db.flush()
 
     vc = leg.vessel.code if leg.vessel else ""
-    return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}", status_code=303)
+    return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}&atd_ok=1#ata-atd", status_code=303)
 
 
 # ═══════════════════════════════════════════════════════════════
