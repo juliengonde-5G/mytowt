@@ -73,17 +73,66 @@
     </div>
 </div>
 
+<!-- ATA / ATD SECTION -->
+<div class="ob-section" id="ata-atd">
+    <div class="ob-section-header">
+        <h3>&#9875; Arrivee / Depart effectif</h3>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+        <div style="background:#f8fafb;border-radius:8px;padding:14px;border-left:4px solid var(--towt-green,#28a745);">
+            <div style="font-size:11px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:6px;">ATA — Arrivee reelle</div>
+            <p style="font-size:13px;margin:0 0 8px;color:var(--towt-blue);">
+                {% if current_leg.ata %}
+                <strong>{{ current_leg.ata.strftime('%d/%m/%Y %H:%M') }}</strong>
+                {% else %}
+                <em style="color:#aaa;">Non enregistree</em>
+                {% endif %}
+            </p>
+            <form method="POST" action="/onboard/set-ata" style="display:flex;gap:6px;align-items:end;">
+                {{ csrf_input(request) }}
+                <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
+                <div style="flex:1;">
+                    <input type="datetime-local" name="ata_date" class="fi" style="width:100%;font-size:12px;padding:6px 8px;"
+                           value="{{ current_leg.ata.strftime('%Y-%m-%dT%H:%M') if current_leg.ata else '' }}">
+                </div>
+                <button type="submit" class="btn btn-sm btn-success">{{ "Modifier" if current_leg.ata else "Confirmer" }}</button>
+            </form>
+        </div>
+
+        <div style="background:#f8fafb;border-radius:8px;padding:14px;border-left:4px solid #fd7e14;">
+            <div style="font-size:11px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:6px;">ATD — Depart reel</div>
+            <p style="font-size:13px;margin:0 0 8px;color:var(--towt-blue);">
+                {% if current_leg.atd %}
+                <strong>{{ current_leg.atd.strftime('%d/%m/%Y %H:%M') }}</strong>
+                {% else %}
+                <em style="color:#aaa;">Non enregistre</em>
+                {% endif %}
+            </p>
+            <form method="POST" action="/onboard/set-atd" style="display:flex;gap:6px;align-items:end;">
+                {{ csrf_input(request) }}
+                <input type="hidden" name="leg_id" value="{{ current_leg.id }}">
+                <div style="flex:1;">
+                    <input type="datetime-local" name="atd_date" class="fi" style="width:100%;font-size:12px;padding:6px 8px;"
+                           value="{{ current_leg.atd.strftime('%Y-%m-%dT%H:%M') if current_leg.atd else '' }}">
+                </div>
+                <button type="submit" class="btn btn-sm" style="background:#fd7e14;color:white;">{{ "Modifier" if current_leg.atd else "Confirmer" }}</button>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- ETA SHIFT SECTION -->
 <div class="ob-section" id="eta-shifts">
     <div class="ob-section-header">
-        <h3>🕐 Décalage ETA</h3>
+        <h3>&#128336; Decalage ETA</h3>
     </div>
 
     <!-- ETA Shift Form -->
     <div class="eta-shift-form-wrap">
         <p class="eta-shift-current">
-            ETA actuelle : <strong>{{ current_leg.eta.strftime('%d/%m/%Y %H:%M') if current_leg.eta else '— non définie —' }}</strong>
-            {% if current_leg.etd %}· ETD : <strong>{{ current_leg.etd.strftime('%d/%m/%Y %H:%M') }}</strong>{% endif %}
+            ETA actuelle : <strong>{{ current_leg.eta.strftime('%d/%m/%Y %H:%M') if current_leg.eta else '— non definie —' }}</strong>
+            {% if current_leg.etd %} · ETD : <strong>{{ current_leg.etd.strftime('%d/%m/%Y %H:%M') }}</strong>{% endif %}
         </p>
         <form method="POST" action="/onboard/eta-shift" class="eta-shift-form">
             {{ csrf_input(request) }}
