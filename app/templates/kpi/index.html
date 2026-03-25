@@ -554,6 +554,19 @@
     {% endif %}
 </div>
 
+<!-- ═══ LEG DETAIL MODAL ═══ -->
+<div id="leg-detail-modal" class="kpi-modal-overlay">
+    <div class="kpi-modal">
+        <div class="kpi-modal-header">
+            <h3 id="leg-modal-title">—</h3>
+            <button onclick="closeLegDetail()" class="kpi-modal-close">✕</button>
+        </div>
+        <div id="leg-modal-body" class="kpi-modal-body">
+            <div style="text-align:center;padding:40px;color:#999;">Chargement…</div>
+        </div>
+    </div>
+</div>
+
 <style>
     /* ── Filters ── */
     .kpi-filters{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;}

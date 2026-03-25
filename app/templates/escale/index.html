@@ -193,6 +193,8 @@
                     {% if perf.delta_hours > 0 %}+{% endif %}{{ perf.delta_hours }} h
                     <span class="perf-sub">({% if perf.delta_pct > 0 %}+{% endif %}{{ perf.delta_pct }}%)</span>
                 </div>
+                {% endfor %}
+                {% if not pax_ops %}<div class="lane-empty">—</div>{% endif %}
             </div>
             {% if perf.opex_forecast is defined %}
             <div class="perf-card">

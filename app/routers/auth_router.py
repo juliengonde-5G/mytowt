@@ -73,6 +73,7 @@ async def login_submit(
         select(User).where(User.username == username, User.is_active == True)
     )
     user = result.scalar_one_or_none()
+    ip = get_client_ip(request)
 
     if not user or not verify_password(password, user.hashed_password):
         _record_attempt(ip)
