@@ -400,6 +400,142 @@ async def dismiss_all_notifications(
 
 
 # ═══════════════════════════════════════════════════════════════
+#  ATA / ATD — Captain records actual arrival and departure
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/set-ata", response_class=HTMLResponse)
+async def set_actual_arrival(
+    request: Request,
+    leg_id: int = Form(...),
+    ata_date: str = Form(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Captain records actual time of arrival (ATA)."""
+    from app.models.notification import Notification
+    from app.routers.planning_router import resequence_and_recalc
+
+    leg_result = await db.execute(
+        select(Leg).options(
+            selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port),
+        ).where(Leg.id == leg_id)
+    )
+    leg = leg_result.scalar_one_or_none()
+    if not leg:
+        raise HTTPException(404, "Leg non trouve")
+
+    ata_dt = None
+    if ata_date and ata_date.strip():
+        try:
+            ata_dt = datetime.fromisoformat(ata_date)
+        except ValueError:
+            raise HTTPException(400, "Format de date invalide")
+
+    if ata_dt and leg.etd and ata_dt < leg.etd:
+        raise HTTPException(400, "L'ATA ne peut pas etre avant l'ETD")
+
+    old_ata = leg.ata
+    leg.ata = ata_dt
+    await db.flush()
+
+    # Cascade to downstream legs
+    await resequence_and_recalc(db, leg.vessel_id, leg.year)
+
+    # Create SOF event
+    sof = SofEvent(
+        leg_id=leg_id,
+        event_type="EOSP",
+        event_label=f"Arrivee confirmee — ATA {ata_dt.strftime('%d/%m/%Y %H:%M') if ata_dt else 'annulee'}",
+        event_date=ata_dt.date() if ata_dt else None,
+        event_time=ata_dt.strftime("%H:%M") if ata_dt else None,
+        remarks=f"ATA enregistree par {user.full_name}" + (f" (ancien: {old_ata.strftime('%d/%m %H:%M')})" if old_ata else ""),
+        created_by=user.full_name,
+    )
+    db.add(sof)
+
+    # Notify
+    vessel_name = leg.vessel.name if leg.vessel else ""
+    port_name = leg.arrival_port.name if leg.arrival_port else leg.arrival_port_locode
+    db.add(Notification(
+        type="ata_recorded",
+        title=f"ATA {vessel_name} — {port_name}",
+        detail=f"Arrivee confirmee le {ata_dt.strftime('%d/%m/%Y %H:%M') if ata_dt else '—'} par {user.full_name}",
+        link=f"/planning?vessel={leg.vessel.code if leg.vessel else ''}&year={leg.year}",
+        leg_id=leg_id,
+    ))
+    await db.flush()
+
+    vc = leg.vessel.code if leg.vessel else ""
+    return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}", status_code=303)
+
+
+@router.post("/set-atd", response_class=HTMLResponse)
+async def set_actual_departure(
+    request: Request,
+    leg_id: int = Form(...),
+    atd_date: str = Form(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Captain records actual time of departure (ATD)."""
+    from app.models.notification import Notification
+    from app.routers.planning_router import resequence_and_recalc
+
+    leg_result = await db.execute(
+        select(Leg).options(
+            selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port),
+        ).where(Leg.id == leg_id)
+    )
+    leg = leg_result.scalar_one_or_none()
+    if not leg:
+        raise HTTPException(404, "Leg non trouve")
+
+    atd_dt = None
+    if atd_date and atd_date.strip():
+        try:
+            atd_dt = datetime.fromisoformat(atd_date)
+        except ValueError:
+            raise HTTPException(400, "Format de date invalide")
+
+    if atd_dt and leg.ata and atd_dt < leg.ata:
+        raise HTTPException(400, "L'ATD ne peut pas etre avant l'ATA")
+
+    old_atd = leg.atd
+    leg.atd = atd_dt
+    await db.flush()
+
+    # Cascade to downstream legs
+    await resequence_and_recalc(db, leg.vessel_id, leg.year)
+
+    # Create SOF event
+    sof = SofEvent(
+        leg_id=leg_id,
+        event_type="SOSP",
+        event_label=f"Depart confirme — ATD {atd_dt.strftime('%d/%m/%Y %H:%M') if atd_dt else 'annule'}",
+        event_date=atd_dt.date() if atd_dt else None,
+        event_time=atd_dt.strftime("%H:%M") if atd_dt else None,
+        remarks=f"ATD enregistre par {user.full_name}" + (f" (ancien: {old_atd.strftime('%d/%m %H:%M')})" if old_atd else ""),
+        created_by=user.full_name,
+    )
+    db.add(sof)
+
+    # Notify
+    vessel_name = leg.vessel.name if leg.vessel else ""
+    port_name = leg.departure_port.name if leg.departure_port else leg.departure_port_locode
+    db.add(Notification(
+        type="atd_recorded",
+        title=f"ATD {vessel_name} — {port_name}",
+        detail=f"Depart confirme le {atd_dt.strftime('%d/%m/%Y %H:%M') if atd_dt else '—'} par {user.full_name}",
+        link=f"/planning?vessel={leg.vessel.code if leg.vessel else ''}&year={leg.year}",
+        leg_id=leg_id,
+    ))
+    await db.flush()
+
+    vc = leg.vessel.code if leg.vessel else ""
+    return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}", status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════
 #  ETA SHIFT — Captain declares ETA/ETD change during navigation
 # ═══════════════════════════════════════════════════════════════
 @router.post("/eta-shift", response_class=HTMLResponse)
