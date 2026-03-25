@@ -97,6 +97,9 @@ class Claim(Base):
     incident_location = Column(String(200), nullable=True)
     description = Column(Text, nullable=False)
 
+    # Cargo stowage position (auto-populated from stowage plan for cargo claims)
+    cargo_zone = Column(String(20), nullable=True)  # e.g. "INF_AR_MIL"
+
     # Guarantee
     guarantee_type = Column(String(20), nullable=True)  # pi, hull_div, war_risk
     responsibility = Column(String(20), default="pending")  # company, third_party, pending, none

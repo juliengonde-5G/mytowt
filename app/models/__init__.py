@@ -23,6 +23,7 @@ from app.models.notification import Notification
 from app.models.portal_message import PortalMessage
 from app.models.vessel_position import VesselPosition
 from app.models.planning_share import PlanningShare
+from app.models.stowage import StowagePlan
 
 __all__ = [
     "User", "Port", "Vessel", "Leg",
@@ -44,4 +45,5 @@ __all__ = [
     "PortalMessage",
     "VesselPosition",
     "PlanningShare",
+    "StowagePlan",
 ]

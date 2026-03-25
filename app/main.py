@@ -30,6 +30,7 @@ from app.routers.mrv_router import router as mrv_router
 from app.routers.claim_router import router as claim_router
 from app.routers.tracking_router import router as tracking_router
 from app.routers.pricing_router import router as pricing_router
+from app.routers.stowage_router import router as stowage_router
 from app.routers.planning_ext_router import ext_router as planning_ext_router
 
 logger = logging.getLogger(__name__)
@@ -123,6 +124,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(SecurityHeadersMiddleware)
 
+# ── Maintenance mode middleware ──────────────────────────────
+from app.maintenance import MaintenanceMiddleware
+app.add_middleware(MaintenanceMiddleware)
+
 # ── CSRF middleware ──────────────────────────────────────────
 from app.csrf import CSRFMiddleware
 app.add_middleware(CSRFMiddleware)
@@ -199,5 +204,6 @@ app.include_router(boarding_redirect_router)  # Legacy /boarding/{token} → /pa
 app.include_router(mrv_router, dependencies=[Depends(require_permission("mrv", "C"))])
 app.include_router(claim_router, dependencies=[Depends(require_permission("captain", "C"))])
 app.include_router(pricing_router, dependencies=[Depends(require_permission("commercial", "C"))])
+app.include_router(stowage_router)  # Stowage plan — permissions enforced per endpoint
 app.include_router(planning_ext_router)  # Public — shareable planning links (no auth)
 app.include_router(tracking_router)  # API — no auth (called by Power Automate)

@@ -15,6 +15,7 @@
         <button class="stab" onclick="showSection('co2')">🌿 Décarbonation</button>
         <button class="stab" onclick="showSection('mrv')">⛽ MRV Fuel</button>
         <button class="stab" onclick="showSection('locks')">🔒 Verrouillage</button>
+        <button class="stab" onclick="showSection('maintenance')">&#9881; Maintenance</button>
         <button class="stab" onclick="showSection('database')">🗄️ Base de données</button>
         <button class="stab" onclick="showSection('activity')">📋 Activité</button>
         <button class="stab" onclick="showSection('language')">🌐 Langue</button>
@@ -264,6 +265,41 @@
     </div>
 
     <!-- DATABASE -->
+    <!-- ═══ MAINTENANCE MODE ═══ -->
+    <div class="settings-section" id="sec-maintenance" style="display:none;">
+        <h3>&#9881; Mode Maintenance</h3>
+        <p style="font-size:13px;color:#666;margin-bottom:20px;">
+            Activez le mode maintenance pour bloquer l'acces aux utilisateurs pendant les mises a jour.
+            Seuls les administrateurs pourront continuer a naviguer.
+        </p>
+        {% set maint_active = maintenance_active|default(false) %}
+        {% if maint_active %}
+        <div class="alert alert-warning" style="margin-bottom:16px;">
+            <strong>&#9888; Mode maintenance actif</strong> — Les utilisateurs non-admin voient une page de maintenance.
+        </div>
+        <form method="POST" action="/admin/maintenance/disable">
+            {{ csrf_input(request) }}
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Desactiver le mode maintenance ?')">
+                Desactiver le mode maintenance
+            </button>
+        </form>
+        {% else %}
+        <div class="alert alert-success" style="margin-bottom:16px;">
+            Application accessible normalement.
+        </div>
+        <form method="POST" action="/admin/maintenance/enable" style="display:flex;flex-direction:column;gap:12px;max-width:500px;">
+            {{ csrf_input(request) }}
+            <div>
+                <label class="form-label">Message affiche aux utilisateurs</label>
+                <textarea name="message" class="form-input" rows="3" placeholder="Mise a jour en cours. L'application sera de retour dans quelques instants.">Mise a jour en cours. L'application sera de retour dans quelques instants.</textarea>
+            </div>
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Activer le mode maintenance ? Les utilisateurs seront bloques.')">
+                Activer le mode maintenance
+            </button>
+        </form>
+        {% endif %}
+    </div>
+
     <div class="settings-section" id="sec-database" style="display:none;">
         <h3>🗄️ Gestion de la base de données</h3>
         <p style="font-size:13px;color:#666;margin-bottom:20px;">Outils d'import, d'export, de maintenance et de nettoyage des données de l'application.</p>

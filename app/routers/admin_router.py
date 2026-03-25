@@ -199,6 +199,7 @@ async def settings_home(
         "co2_defaults": CO2_DEFAULTS,
         "mrv_params": mrv_params, "mrv_defaults": MRV_DEFAULTS,
         "pipedrive_token": pipedrive_token,
+        "maintenance_active": __import__('app.maintenance', fromlist=['is_maintenance_mode']).is_maintenance_mode(),
         "active_module": "settings",
     })
 
@@ -1992,6 +1993,53 @@ async def rgpd_erase_booking(
                        ip_address=get_client_ip(request))
 
     url = "/admin/settings?section=database"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+# ═══════════════════════════════════════════════════════════════
+# MAINTENANCE MODE
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/maintenance/enable")
+async def maintenance_enable(
+    request: Request,
+    message: str = Form("Mise a jour en cours. L'application sera de retour dans quelques instants."),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Enable maintenance mode (admin only)."""
+    if user.role not in ("administrateur", "admin"):
+        raise HTTPException(403)
+    from app.maintenance import enable_maintenance
+    enable_maintenance(message)
+    await log_activity(db, user=user, action="maintenance_on", module="admin",
+                       entity_type="system", entity_id=0,
+                       entity_label="Mode maintenance active",
+                       ip_address=get_client_ip(request))
+    url = "/admin/settings"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": url})
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.post("/maintenance/disable")
+async def maintenance_disable(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Disable maintenance mode (admin only)."""
+    if user.role not in ("administrateur", "admin"):
+        raise HTTPException(403)
+    from app.maintenance import disable_maintenance
+    disable_maintenance()
+    await log_activity(db, user=user, action="maintenance_off", module="admin",
+                       entity_type="system", entity_id=0,
+                       entity_label="Mode maintenance desactive",
+                       ip_address=get_client_ip(request))
+    url = "/admin/settings"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
     return RedirectResponse(url=url, status_code=303)

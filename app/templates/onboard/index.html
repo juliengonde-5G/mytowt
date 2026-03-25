@@ -56,6 +56,17 @@
             <span>{{ last_sof.event_date.strftime('%d/%m') if last_sof.event_date else '' }} {{ last_sof.event_time or '' }}</span>
         </div>
         {% endif %}
+        <a href="/stowage/onboard/{{ current_leg.id }}" class="ob-escale-btn" style="background:var(--towt-green,#28a745);">
+            <i data-lucide="package" style="width:16px;height:16px;"></i> Plan chargement
+        </a>
+        {% if next_leg %}
+        <a href="/stowage/onboard/{{ next_leg.id }}" class="ob-escale-btn" style="background:#fd7e14;">
+            <i data-lucide="package-open" style="width:16px;height:16px;"></i> Plan dechargement
+        </a>
+        {% endif %}
+        <a href="/stowage/leg/{{ current_leg.id }}" class="ob-escale-btn" style="background:var(--towt-sky-dark,#2980b9);">
+            <i data-lucide="layout-grid" style="width:16px;height:16px;"></i> Gestion plan
+        </a>
         <a href="/escale?vessel={{ selected_vessel }}&leg_id={{ current_leg.id }}" class="ob-escale-btn">
             <i data-lucide="anchor" style="width:16px;height:16px;"></i> Voir l'escale
         </a>

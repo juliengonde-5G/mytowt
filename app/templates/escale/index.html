@@ -394,6 +394,22 @@
         {% endfor %}
     </div>
 
+    <!-- ═══ PLAN DE CHARGEMENT ═══ -->
+    <div class="section-block" style="margin-top:20px;">
+        <h3 class="section-title"><i data-lucide="package" style="width:16px;height:16px;"></i> Plan de chargement</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="/stowage/leg/{{ selected_leg.id }}" class="btn btn-sm btn-primary">
+                <i data-lucide="layout-grid" style="width:14px;height:14px;"></i> Gerer le plan de chargement
+            </a>
+            <a href="/stowage/leg/{{ selected_leg.id }}/print?lang=fr" target="_blank" class="btn btn-sm btn-secondary">
+                <i data-lucide="printer" style="width:14px;height:14px;"></i> Imprimer (FR)
+            </a>
+            <a href="/stowage/leg/{{ selected_leg.id }}/print?lang=en" target="_blank" class="btn btn-sm btn-secondary">
+                <i data-lucide="printer" style="width:14px;height:14px;"></i> Print (EN)
+            </a>
+        </div>
+    </div>
+
     <!-- ═══ SHIFTS DOCKERS ═══ -->
     <div class="section-block" style="margin-top:20px;">
         <h3 class="section-title"><i data-lucide="hard-hat" style="width:16px;height:16px;"></i> Shifts Dockers ({{ docker_shifts|length }})</h3>
