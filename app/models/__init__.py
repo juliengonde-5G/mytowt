@@ -8,7 +8,7 @@ from app.models.finance import PortConfig, OpexParameter, LegFinance, InsuranceC
 from app.models.emission_parameter import EmissionParameter
 from app.models.kpi import LegKPI
 from app.models.crew import CrewMember, CrewAssignment
-from app.models.packing_list import PackingList, PackingListBatch, PackingListAudit
+from app.models.packing_list import PackingList, PackingListBatch, PackingListAudit, PackingListDocument
 from app.models.onboard import SofEvent, OnboardNotification, CargoDocument
 from app.models.passenger import (
     Passenger, PassengerBooking, PassengerPayment, PassengerDocument,

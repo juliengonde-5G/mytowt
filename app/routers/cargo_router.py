@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query, UploadFile, File
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, FileResponse
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.utils.activity import log_activity, get_client_ip
@@ -16,7 +16,7 @@ from app.models.user import User
 from app.models.order import Order
 from app.models.leg import Leg
 from app.models.vessel import Vessel
-from app.models.packing_list import PackingList, PackingListBatch, PackingListAudit
+from app.models.packing_list import PackingList, PackingListBatch, PackingListAudit, PackingListDocument
 from app.models.portal_message import PortalMessage
 from app.utils.notifications import notify_cargo_progress
 from app.routers.kpi_router import compute_decarbonation, get_co2_variables
@@ -1382,16 +1382,113 @@ async def client_portal_stowage(token: str, request: Request, db: AsyncSession =
     })
 
 
+# ── Page: Guide ──────────────────────────────────────────────
+@ext_router.get("/{token}/guide", response_class=HTMLResponse)
+async def client_portal_guide(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db, request)
+    lang = _lang(request)
+    return templates.TemplateResponse("cargo/client_guide.html", {
+        "request": request, "pl": pl, "token": token,
+        "lang": lang, "active_page": "guide", "page_suffix": "/guide",
+        "unread_messages": await _unread_count(pl.id, db),
+    })
+
+
 # ── Page 4: Documents ─────────────────────────────────────────
+CARGO_UPLOAD_DIR = "/app/uploads/cargo_docs"
+
 @ext_router.get("/{token}/documents", response_class=HTMLResponse)
 async def client_portal_docs(token: str, request: Request, db: AsyncSession = Depends(get_db)):
     pl = await _get_pl(token, db, request)
     lang = _lang(request)
+    docs_result = await db.execute(
+        select(PackingListDocument)
+        .where(PackingListDocument.packing_list_id == pl.id)
+        .order_by(PackingListDocument.created_at.desc())
+    )
+    uploaded_docs = docs_result.scalars().all()
     return templates.TemplateResponse("cargo/portal_docs.html", {
         "request": request, "pl": pl,
+        "uploaded_docs": uploaded_docs,
         "lang": lang, "active_page": "docs", "page_suffix": "/documents",
         "unread_messages": await _unread_count(pl.id, db),
     })
+
+
+@ext_router.post("/{token}/documents/upload", response_class=HTMLResponse)
+async def client_upload_doc(
+    token: str, request: Request,
+    file: UploadFile = File(...),
+    notes: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    import os, uuid
+    pl = await _get_pl(token, db, request)
+    lang = _lang(request)
+
+    if not file.filename:
+        raise HTTPException(400, "Fichier manquant")
+    content = await file.read()
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(400, "Fichier trop volumineux (max 20 Mo)")
+
+    os.makedirs(CARGO_UPLOAD_DIR, exist_ok=True)
+    ext = os.path.splitext(file.filename)[1]
+    safe_name = f"{pl.id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = os.path.join(CARGO_UPLOAD_DIR, safe_name)
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    doc = PackingListDocument(
+        packing_list_id=pl.id,
+        filename=file.filename,
+        file_path=file_path,
+        file_size=len(content),
+        uploaded_by="Client",
+        notes=notes.strip() or None,
+    )
+    db.add(doc)
+    await db.flush()
+
+    from app.models.notification import Notification
+    db.add(Notification(
+        type="cargo_document_uploaded",
+        title=f"Document depose — {pl.order.reference}",
+        detail=file.filename,
+        link=f"/cargo/{pl.id}",
+    ))
+    await db.flush()
+
+    return RedirectResponse(url=f"/p/{token}/documents?lang={lang}&uploaded=1", status_code=303)
+
+
+@ext_router.get("/{token}/documents/{doc_id}/download")
+async def client_download_doc(token: str, doc_id: int, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db)
+    doc = await db.get(PackingListDocument, doc_id)
+    if not doc or doc.packing_list_id != pl.id:
+        raise HTTPException(404)
+    import os
+    if not os.path.exists(doc.file_path):
+        raise HTTPException(404, "Fichier introuvable")
+    return FileResponse(doc.file_path, filename=doc.filename)
+
+
+@ext_router.post("/{token}/documents/{doc_id}/delete", response_class=HTMLResponse)
+async def client_delete_doc(token: str, doc_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    pl = await _get_pl(token, db, request)
+    lang = _lang(request)
+    doc = await db.get(PackingListDocument, doc_id)
+    if not doc or doc.packing_list_id != pl.id:
+        raise HTTPException(404)
+    if doc.uploaded_by != "Client":
+        raise HTTPException(403, "Vous ne pouvez supprimer que vos propres documents")
+    import os
+    if os.path.exists(doc.file_path):
+        os.remove(doc.file_path)
+    await db.delete(doc)
+    await db.flush()
+    return RedirectResponse(url=f"/p/{token}/documents?lang={lang}", status_code=303)
 
 
 # ── Page 5: Messages ──────────────────────────────────────────
