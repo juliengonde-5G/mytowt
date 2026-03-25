@@ -91,7 +91,39 @@ async def claim_create_submit(request: Request, claim_type:str=Form(...), vessel
         try: inc_date = datetime.fromisoformat(incident_date)
         except: pass
     if not guarantee_type: guarantee_type = {"cargo":"pi","crew":"pi","hull":"hull_div"}.get(claim_type,"")
-    claim = Claim(reference=ref, claim_type=claim_type, status="open", vessel_id=vessel_id, leg_id=leg_id, order_assignment_id=_to_int(order_assignment_id) if claim_type=="cargo" else None, crew_member_id=_to_int(crew_member_id) if claim_type=="crew" else None, passenger_id=_to_int(passenger_id) if claim_type=="crew" else None, context=context or None, incident_date=inc_date, incident_location=incident_location or None, description=description, guarantee_type=guarantee_type or None, responsibility=responsibility, provision_amount=_pf(provision_amount), franchise_amount=_pf(franchise_amount), declared_by=user.full_name, notes=notes or None)
+    # Auto-retrieve cargo zone from stowage plan for cargo claims
+    cargo_zone = None
+    if claim_type == "cargo" and _to_int(order_assignment_id):
+        from app.models.stowage import StowagePlan
+        from app.models.packing_list import PackingList, PackingListBatch
+        oa_result = await db.execute(
+            select(OrderAssignment).where(OrderAssignment.id == _to_int(order_assignment_id))
+        )
+        oa = oa_result.scalar_one_or_none()
+        if oa:
+            # Find batches for this order and check stowage plans
+            pl_result = await db.execute(
+                select(PackingList).where(PackingList.order_id == oa.order_id)
+            )
+            pl = pl_result.scalar_one_or_none()
+            if pl:
+                batch_result = await db.execute(
+                    select(PackingListBatch).where(PackingListBatch.packing_list_id == pl.id)
+                )
+                batches = batch_result.scalars().all()
+                for batch in batches:
+                    sp_result = await db.execute(
+                        select(StowagePlan).where(
+                            StowagePlan.leg_id == leg_id,
+                            StowagePlan.batch_id == batch.id,
+                        )
+                    )
+                    sp = sp_result.scalar_one_or_none()
+                    if sp:
+                        cargo_zone = sp.zone_code
+                        break  # Use first batch zone found
+
+    claim = Claim(reference=ref, claim_type=claim_type, status="open", vessel_id=vessel_id, leg_id=leg_id, order_assignment_id=_to_int(order_assignment_id) if claim_type=="cargo" else None, crew_member_id=_to_int(crew_member_id) if claim_type=="crew" else None, passenger_id=_to_int(passenger_id) if claim_type=="crew" else None, context=context or None, incident_date=inc_date, incident_location=incident_location or None, description=description, guarantee_type=guarantee_type or None, responsibility=responsibility, provision_amount=_pf(provision_amount), franchise_amount=_pf(franchise_amount), declared_by=user.full_name, notes=notes or None, cargo_zone=cargo_zone)
     db.add(claim); await db.flush()
     await log_activity(db, user=user, action="create", module="claims",
                        entity_type="claim", entity_id=claim.id,

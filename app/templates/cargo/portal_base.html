@@ -80,6 +80,7 @@ body{font-family:'Poppins',sans-serif;background:#f4f7f8;color:#333;min-height:1
       <a href="/p/{{ pl.token }}?lang={{ lang }}" class="{% if active_page=='packing' %}active{% endif %}"><span class="ni">📦</span>{{ t('cp_packing_list', lang) }}</a>
       <a href="/p/{{ pl.token }}/vessel?lang={{ lang }}" class="{% if active_page=='vessel' %}active{% endif %}"><span class="ni">🚢</span>{{ t('cp_vessel', lang) }}</a>
       <a href="/p/{{ pl.token }}/voyage?lang={{ lang }}" class="{% if active_page=='voyage' %}active{% endif %}"><span class="ni">🗺️</span>{{ t('cp_voyage', lang) }}</a>
+      <a href="/p/{{ pl.token }}/stowage?lang={{ lang }}" class="{% if active_page=='stowage' %}active{% endif %}"><span class="ni">📐</span>{{ t('cp_stowage', lang) if t('cp_stowage', lang) != 'cp_stowage' else 'Position' }}</a>
       <div class="ndiv"></div>
       <a href="/p/{{ pl.token }}/documents?lang={{ lang }}" class="{% if active_page=='docs' %}active{% endif %}"><span class="ni">📄</span>{{ t('cp_documents', lang) }}</a>
       <a href="/p/{{ pl.token }}/messages?lang={{ lang }}" class="{% if active_page=='messages' %}active{% endif %}"><span class="ni">💬</span>{{ t('cp_messages', lang) }}{% if unread_messages %}<span class="nbdg">{{ unread_messages }}</span>{% endif %}</a>
