@@ -3,7 +3,7 @@
 
 {% block topbar_actions %}
 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-  <a href="/onboard/{{ leg.id }}" class="btn btn-sm btn-secondary">On Board</a>
+  <a href="/onboard?vessel={{ leg.vessel.code }}&leg_id={{ leg.id }}" class="btn btn-sm btn-secondary">On Board</a>
   <a href="/stowage/leg/{{ leg.id }}/print" target="_blank" class="btn btn-sm btn-secondary">Imprimer</a>
 </div>
 {% endblock %}

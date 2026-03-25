@@ -22,11 +22,11 @@
 <h1>{{ t('cp_documents', lang) }}</h1>
 
 {% if request.query_params.get('uploaded') %}
-<div class="upload-ok">{% if lang == 'en' %}Document uploaded successfully{% elif lang == 'es' %}Documento subido con exito{% elif lang == 'pt-br' %}Documento enviado com sucesso{% else %}Document depose avec succes{% endif %}</div>
+<div class="upload-ok">{% if lang == 'en' %}Document uploaded successfully{% elif lang == 'es' %}Documento subido con éxito{% elif lang == 'pt-br' %}Documento enviado com sucesso{% else %}Document déposé avec succès{% endif %}</div>
 {% endif %}
 
 <div class="card">
-  <h2>{% if lang == 'en' %}Upload documents{% elif lang == 'es' %}Subir documentos{% elif lang == 'pt-br' %}Enviar documentos{% else %}Deposer des documents{% endif %}</h2>
+  <h2>{% if lang == 'en' %}Upload documents{% elif lang == 'es' %}Subir documentos{% elif lang == 'pt-br' %}Enviar documentos{% else %}Déposer des documents{% endif %}</h2>
   <form method="POST" action="/p/{{ pl.token }}/documents/upload" enctype="multipart/form-data" id="upload-form">
     {{ csrf_input(request) }}
     <label class="upload-zone" id="drop-zone" for="file-input">
@@ -49,7 +49,7 @@
 
 {% if uploaded_docs %}
 <div class="card">
-  <h2>{% if lang == 'en' %}Uploaded documents{% elif lang == 'es' %}Documentos subidos{% elif lang == 'pt-br' %}Documentos enviados{% else %}Documents deposes{% endif %} ({{ uploaded_docs|length }})</h2>
+  <h2>{% if lang == 'en' %}Uploaded documents{% elif lang == 'es' %}Documentos subidos{% elif lang == 'pt-br' %}Documentos enviados{% else %}Documents déposés{% endif %} ({{ uploaded_docs|length }})</h2>
   <div class="doc-list">
     {% for d in uploaded_docs %}
     <div class="doc-item">
@@ -64,7 +64,7 @@
         </div>
       </div>
       <div class="doc-actions">
-        <a href="/p/{{ pl.token }}/documents/{{ d.id }}/download" class="doc-btn doc-btn-dl">{% if lang == 'en' %}Download{% else %}Telecharger{% endif %}</a>
+        <a href="/p/{{ pl.token }}/documents/{{ d.id }}/download" class="doc-btn doc-btn-dl">{% if lang == 'en' %}Download{% else %}Télécharger{% endif %}</a>
         {% if d.uploaded_by == 'Client' %}
         <form method="POST" action="/p/{{ pl.token }}/documents/{{ d.id }}/delete" style="margin:0;">
           {{ csrf_input(request) }}

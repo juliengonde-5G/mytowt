@@ -1262,12 +1262,12 @@ async def _unread_count(pl_id, db):
     return r.scalar() or 0
 
 
-# ── Default: redirect to Voyage ───────────────────────────────
+# ── Default: redirect to Packing List (primary client action) ─
 @ext_router.get("/{token}", response_class=HTMLResponse)
 async def client_portal_default(token: str, request: Request, db: AsyncSession = Depends(get_db)):
     pl = await _get_pl(token, db, request)
     lang = _lang(request)
-    return RedirectResponse(url=f"/p/{token}/voyage?lang={lang}", status_code=303)
+    return RedirectResponse(url=f"/p/{token}/packing?lang={lang}", status_code=303)
 
 
 # ── Privacy policy ────────────────────────────────────────────
