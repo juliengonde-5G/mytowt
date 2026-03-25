@@ -2,18 +2,20 @@
 {% from "stowage/vessel_svg.html" import vessel_lateral, vessel_topdown, vessel_legend %}
 
 {% block topbar_actions %}
-<a href="/escale" class="btn-outline">Escale</a>
-<a href="/stowage/leg/{{ leg.id }}/print?lang={{ lang }}" target="_blank" class="btn-outline">Imprimer</a>
-<form method="POST" action="/stowage/leg/{{ leg.id }}/auto-assign" style="display:inline">
-  <button type="submit" class="btn-outline" onclick="return confirm('Affecter automatiquement tous les batches non assignés ?')">
-    Auto-assign
-  </button>
-</form>
-{% if lang == "fr" %}
-<a href="/stowage/leg/{{ leg.id }}?lang=en" class="btn-outline">EN</a>
-{% else %}
-<a href="/stowage/leg/{{ leg.id }}?lang=fr" class="btn-outline">FR</a>
-{% endif %}
+<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+  <a href="/escale" class="btn btn-sm btn-secondary">Escale</a>
+  <a href="/stowage/leg/{{ leg.id }}/print?lang={{ lang }}" target="_blank" class="btn btn-sm btn-secondary">Imprimer</a>
+  <form method="POST" action="/stowage/leg/{{ leg.id }}/auto-assign" style="display:inline">
+    <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm('Affecter automatiquement tous les batches non assignés ?')">
+      Auto-assign
+    </button>
+  </form>
+  {% if lang == "fr" %}
+  <a href="/stowage/leg/{{ leg.id }}?lang=en" class="btn btn-sm btn-secondary">EN</a>
+  {% else %}
+  <a href="/stowage/leg/{{ leg.id }}?lang=fr" class="btn btn-sm btn-secondary">FR</a>
+  {% endif %}
+</div>
 {% endblock %}
 
 {% block content %}
@@ -94,11 +96,8 @@
   </div>
 </div>
 
-{# Vessel views #}
+{# Vessel views — top-down per deck #}
 <div class="vessel-views">
-  {{ vessel_lateral(zones, dangerous_zones, interactive=false, lang=lang) }}
-  {{ vessel_legend(lang) }}
-
   <div class="deck-plans">
     {{ vessel_topdown(zones, dangerous_zones, "SUP",
         "Cale supérieure / Upper hold" if lang == "fr" else "Upper Hold", lang=lang) }}
@@ -107,6 +106,7 @@
     {{ vessel_topdown(zones, dangerous_zones, "INF",
         "Cale inférieure / Lower hold" if lang == "fr" else "Lower Hold", lang=lang) }}
   </div>
+  {{ vessel_legend(lang) }}
 </div>
 
 {# Unassigned batches #}
