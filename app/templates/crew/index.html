@@ -93,8 +93,11 @@
                     <td style="text-align:right;">
                         <div style="display:flex;gap:4px;justify-content:flex-end;">
                             <a href="/crew/members/{{ md.member.id }}/calendar" class="btn btn-sm btn-secondary" title="Calendrier"><i data-lucide="calendar"></i></a>
+                            {% if md.current_assignment_id %}
+                            <button class="btn btn-sm btn-warning" onclick="loadModal('/crew/assignments/{{ md.current_assignment_id }}/edit')" title="Modifier embarquement"><i data-lucide="calendar-clock"></i></button>
+                            {% endif %}
                             <button class="btn btn-sm btn-primary" onclick="loadModal('/crew/members/{{ md.member.id }}/assign')" title="Embarquer"><i data-lucide="ship"></i></button>
-                            <button class="btn btn-sm btn-secondary" onclick="loadModal('/crew/members/{{ md.member.id }}/edit')" title="Modifier"><i data-lucide="pencil"></i></button>
+                            <button class="btn btn-sm btn-secondary" onclick="loadModal('/crew/members/{{ md.member.id }}/edit')" title="Modifier fiche"><i data-lucide="pencil"></i></button>
                             <button class="btn btn-sm btn-danger" hx-delete="/crew/members/{{ md.member.id }}" hx-confirm="Supprimer ?" title="Supprimer"><i data-lucide="trash-2"></i></button>
                         </div>
                     </td>
