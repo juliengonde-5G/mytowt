@@ -48,13 +48,12 @@ async def _get_leg_with_vessel(db, leg_id: int) -> Leg:
 
 
 async def _get_leg_batches(db, leg_id: int) -> list:
-    """Get all batches assigned to a leg via order assignments."""
+    """Get all batches for orders assigned to a leg (via Order.leg_id)."""
     result = await db.execute(
         select(PackingListBatch)
         .join(PackingList, PackingListBatch.packing_list_id == PackingList.id)
         .join(Order, PackingList.order_id == Order.id)
-        .join(OrderAssignment, OrderAssignment.order_id == Order.id)
-        .where(OrderAssignment.leg_id == leg_id)
+        .where(Order.leg_id == leg_id)
         .options(selectinload(PackingListBatch.packing_list).selectinload(PackingList.order))
     )
     return result.scalars().all()
