@@ -491,8 +491,8 @@ async def leg_create_submit(
                        detail=f"{leg.departure_port_locode} → {leg.arrival_port_locode}",
                        ip_address=get_client_ip(request))
 
-    # Resequence all legs
-    await resequence_and_recalc(db, _vessel_id, _year)
+    # DO NOT recalculate existing legs — only the new leg's dates are set at creation
+    # The resequence_and_recalc was overwriting all manual adjustments on other legs
 
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": f"/planning?vessel={vessel_obj.code}&year={_year}"})

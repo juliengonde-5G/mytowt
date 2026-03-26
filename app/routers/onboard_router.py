@@ -439,7 +439,7 @@ async def set_actual_arrival(
     await db.flush()
 
     # Cascade to downstream legs
-    await resequence_and_recalc(db, leg.vessel_id, leg.year)
+    await resequence_and_recalc(db, leg.vessel_id, leg.year, edited_leg_id=leg.id)
 
     # Create SOF event
     sof = SofEvent(
@@ -505,7 +505,7 @@ async def set_actual_departure(
     await db.flush()
 
     # Cascade to downstream legs
-    await resequence_and_recalc(db, leg.vessel_id, leg.year)
+    await resequence_and_recalc(db, leg.vessel_id, leg.year, edited_leg_id=leg.id)
 
     # Create SOF event
     sof = SofEvent(
@@ -600,7 +600,7 @@ async def eta_shift_declare(
     await db.flush()
 
     # Cascade recalculation to all subsequent legs
-    await resequence_and_recalc(db, leg.vessel_id, leg.year)
+    await resequence_and_recalc(db, leg.vessel_id, leg.year, edited_leg_id=leg.id)
 
     # Count affected downstream legs
     downstream_result = await db.execute(
