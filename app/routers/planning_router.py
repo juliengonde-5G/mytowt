@@ -117,37 +117,63 @@ async def get_previous_leg(db: AsyncSession, vessel_id: int, year: int, current_
 
 
 async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int, edited_leg_id: int = None):
-    """Resequence all legs for a vessel/year by ETD, update codes, and recalculate dates chain.
-    edited_leg_id: if provided, this leg's dates are preserved (user just edited them manually)."""
+    """Recalculate dates chain for all legs of a vessel/year.
+
+    Rules:
+    - Order is FIXED by sequence (never reordered by ETD — preserves POL/POD chain)
+    - Leg codes are NOT regenerated (stable references)
+    - For the edited leg: its ETD and ETA are preserved as-is
+    - For legs after the edited one (or all if no edit):
+      - If leg has ATD: skip entirely (completed, dates are final)
+      - If leg has ATA but no ATD: only recalculate ETD from prev ETA if not manually set
+      - Otherwise: ETD = prev_leg ETA + port_stay, then ETA = computed from ETD + navigation
+    - ETA is always recalculated from ETD unless ATA is set (actual arrival is final)
+    """
     result = await db.execute(
         select(Leg)
         .options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
         .where(Leg.vessel_id == vessel_id, Leg.year == year)
-        .order_by(Leg.etd.asc().nulls_last(), Leg.id.asc())
+        .order_by(Leg.sequence.asc())  # FIXED order by sequence, never by ETD
     )
     legs = result.scalars().all()
 
-    for i, leg in enumerate(legs):
-        leg.sequence = i + 1
-        # Update leg code
-        leg.leg_code = leg.generate_leg_code(
-            vessel_code=leg.vessel.code,
-            dep_country=leg.departure_port.country_code,
-            arr_country=leg.arrival_port.country_code,
-        )
+    # Find the index of the edited leg (if any)
+    edited_idx = None
+    if edited_leg_id:
+        for i, leg in enumerate(legs):
+            if leg.id == edited_leg_id:
+                edited_idx = i
+                break
 
-        # Skip the leg that was just manually edited — preserve its dates
-        if edited_leg_id and leg.id == edited_leg_id:
+    for i, leg in enumerate(legs):
+        # Never touch completed legs (ATD set = departed, dates are final)
+        if leg.atd:
             continue
 
-        # Recalculate dates chain (skip first leg and completed legs)
-        if i > 0 and not leg.atd:
-            prev_leg = legs[i - 1]
-            prev_eta = prev_leg.ata or prev_leg.eta
-            if prev_eta:
-                leg.etd = prev_eta + timedelta(days=leg.port_stay_days or DEFAULT_PORT_STAY_DAYS)
+        # Preserve the manually-edited leg's dates entirely
+        if edited_leg_id and leg.id == edited_leg_id:
+            # Only recalculate ETA if user changed ETD but ETA is now before ETD
+            if leg.etd and leg.eta and leg.eta <= leg.etd and leg.distance_nm and not leg.ata:
+                speed = leg.speed_knots or DEFAULT_SPEED
+                elong = leg.elongation_coeff or DEFAULT_ELONGATION
+                leg.eta = compute_eta(leg.etd, leg.distance_nm, speed, elong)
+                leg.computed_distance = round(leg.distance_nm * elong, 1)
+                leg.estimated_duration_hours = compute_navigation_duration(leg.distance_nm, speed, elong)
+            continue
 
-        # Recalculate ETA from ETD (only if no ATA — completed legs keep their dates)
+        # For legs AFTER the edited one (cascade downstream)
+        # For legs before the edited one: don't touch (they haven't changed)
+        if edited_idx is not None and i < edited_idx:
+            continue
+
+        # Cascade: ETD = previous leg's arrival + port stay
+        if i > 0:
+            prev_leg = legs[i - 1]
+            prev_arrival = prev_leg.ata or prev_leg.eta  # Actual takes priority
+            if prev_arrival:
+                leg.etd = prev_arrival + timedelta(days=leg.port_stay_days or DEFAULT_PORT_STAY_DAYS)
+
+        # Recalculate ETA from ETD (only if no ATA — actual arrival is final)
         if leg.etd and leg.distance_nm and not leg.ata:
             speed = leg.speed_knots or DEFAULT_SPEED
             elong = leg.elongation_coeff or DEFAULT_ELONGATION
