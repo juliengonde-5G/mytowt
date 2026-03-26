@@ -14,6 +14,7 @@ import os, json, subprocess
 
 from app.database import get_db
 from app.auth import get_current_user
+from app.permissions import require_permission
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.port import Port
