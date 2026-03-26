@@ -201,23 +201,24 @@ async def planning_home(
     for leg in legs:
         if leg.status == "completed":
             continue  # locked
-        if leg.atd:
-            # Departed = completed
+        if leg.ata and leg.atd:
+            # Has both actual arrival and departure = completed
             if leg.status != "completed":
                 leg.status = "completed"
                 status_changed = True
-        elif leg.ata or (leg.eta and leg.eta <= now and not leg.atd):
-            # Arrived or ETA passed = in_progress
+        elif leg.ata and not leg.atd:
+            # Arrived but not yet departed = in port (in_progress)
             if leg.status != "in_progress":
                 leg.status = "in_progress"
                 status_changed = True
         elif leg.etd and leg.etd <= now and not leg.ata:
-            # Departed (ETD passed) but no ATA = in_progress (en mer)
+            # ETD passed but no ATA yet = at sea (in_progress)
             if leg.status != "in_progress":
                 leg.status = "in_progress"
                 status_changed = True
         else:
-            if leg.status not in ("planned", "in_progress"):
+            # Future leg = planned
+            if leg.status != "planned":
                 leg.status = "planned"
                 status_changed = True
     if status_changed:
