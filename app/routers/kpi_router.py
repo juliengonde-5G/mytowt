@@ -558,7 +558,6 @@ async def kpi_dashboard(
     }
 
     # ── Claims statistics for KPI dashboard ──
-    from app.models.claim import Claim
     claims_query = select(Claim).join(Leg, Claim.leg_id == Leg.id).where(Leg.year == current_year)
     if vessel_obj:
         claims_query = claims_query.where(Claim.vessel_id == vessel_obj.id)
