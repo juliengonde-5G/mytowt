@@ -78,7 +78,10 @@
     <div class="batch-card {% if pl.is_locked %}locked{% endif %}">
         <div class="batch-header">
             <h4>Batch #{{ batch.batch_number }}{% if batch.customer_batch_id %} — {{ batch.customer_batch_id }}{% endif %}</h4>
-            <span style="font-size:11px;color:#888;">{% if batch.pallet_quantity %}{{ batch.pallet_quantity }} pal.{% endif %}{% if batch.weight_kg %} · {{ batch.weight_kg }} kg{% endif %}</span>
+            <div style="display:flex;gap:6px;align-items:center;">
+                <a href="/cargo/{{ pl.id }}/bol/{{ batch.id }}" class="btn btn-sm btn-primary" title="Generer le Bill of Lading pour ce batch"><i data-lucide="file-text" style="width:14px;height:14px;"></i> BL</a>
+                <span style="font-size:11px;color:#888;">{% if batch.pallet_quantity %}{{ batch.pallet_quantity }} pal.{% endif %}{% if batch.weight_kg %} · {{ batch.weight_kg }} kg{% endif %}</span>
+            </div>
         </div>
         <div class="batch-grid">
             <div class="batch-section">
@@ -90,6 +93,7 @@
                 <div class="field-row"><span class="fl">POD</span><span class="fv">{{ batch.pod_code or '—' }}</span></div>
                 <div class="field-row"><span class="fl">Booking</span><span class="fv">{{ batch.booking_confirmation or '—' }}</span></div>
                 <div class="field-row"><span class="fl">Fret/pal.</span><span class="fv">{{ batch.freight_rate or '—' }} €</span></div>
+                <div class="field-row"><span class="fl">N° BL</span><span class="fv" style="font-weight:600;color:var(--towt-blue);">{{ batch.bill_of_lading_id or '—' }}</span></div>
             </div>
             <div class="batch-section">
                 <h5>👤 Client</h5>
