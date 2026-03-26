@@ -116,33 +116,64 @@ async def get_previous_leg(db: AsyncSession, vessel_id: int, year: int, current_
     return result.scalar_one_or_none()
 
 
-async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int):
-    """Resequence all legs for a vessel/year by ETD, update codes, and recalculate dates chain."""
+async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int, edited_leg_id: int = None):
+    """Recalculate dates chain for all legs of a vessel/year.
+
+    Rules:
+    - Order is FIXED by sequence (never reordered by ETD — preserves POL/POD chain)
+    - Leg codes are NOT regenerated (stable references)
+    - For the edited leg: its ETD and ETA are preserved as-is
+    - For legs after the edited one (or all if no edit):
+      - If leg has ATD: skip entirely (completed, dates are final)
+      - If leg has ATA but no ATD: only recalculate ETD from prev ETA if not manually set
+      - Otherwise: ETD = prev_leg ETA + port_stay, then ETA = computed from ETD + navigation
+    - ETA is always recalculated from ETD unless ATA is set (actual arrival is final)
+    """
     result = await db.execute(
         select(Leg)
         .options(selectinload(Leg.vessel), selectinload(Leg.departure_port), selectinload(Leg.arrival_port))
         .where(Leg.vessel_id == vessel_id, Leg.year == year)
-        .order_by(Leg.etd.asc().nulls_last(), Leg.id.asc())
+        .order_by(Leg.sequence.asc())  # FIXED order by sequence, never by ETD
     )
     legs = result.scalars().all()
 
+    # Find the index of the edited leg (if any)
+    edited_idx = None
+    if edited_leg_id:
+        for i, leg in enumerate(legs):
+            if leg.id == edited_leg_id:
+                edited_idx = i
+                break
+
     for i, leg in enumerate(legs):
-        leg.sequence = i + 1
-        # Update leg code
-        leg.leg_code = leg.generate_leg_code(
-            vessel_code=leg.vessel.code,
-            dep_country=leg.departure_port.country_code,
-            arr_country=leg.arrival_port.country_code,
-        )
-        # Recalculate dates chain (skip first leg - its ETD is manual)
+        # Never touch completed legs (ATD set = departed, dates are final)
+        if leg.atd:
+            continue
+
+        # Preserve the manually-edited leg's dates entirely
+        if edited_leg_id and leg.id == edited_leg_id:
+            # Only recalculate ETA if user changed ETD but ETA is now before ETD
+            if leg.etd and leg.eta and leg.eta <= leg.etd and leg.distance_nm and not leg.ata:
+                speed = leg.speed_knots or DEFAULT_SPEED
+                elong = leg.elongation_coeff or DEFAULT_ELONGATION
+                leg.eta = compute_eta(leg.etd, leg.distance_nm, speed, elong)
+                leg.computed_distance = round(leg.distance_nm * elong, 1)
+                leg.estimated_duration_hours = compute_navigation_duration(leg.distance_nm, speed, elong)
+            continue
+
+        # For legs AFTER the edited one (cascade downstream)
+        # For legs before the edited one: don't touch (they haven't changed)
+        if edited_idx is not None and i < edited_idx:
+            continue
+
+        # Cascade: ETD = previous leg's arrival + port stay
         if i > 0:
             prev_leg = legs[i - 1]
-            prev_eta = prev_leg.ata or prev_leg.eta  # Use actual if available
-            if prev_eta and not leg.atd:
-                # ETD = previous ETA + port stay duration
-                leg.etd = prev_eta + timedelta(days=leg.port_stay_days or DEFAULT_PORT_STAY_DAYS)
+            prev_arrival = prev_leg.ata or prev_leg.eta  # Actual takes priority
+            if prev_arrival:
+                leg.etd = prev_arrival + timedelta(days=leg.port_stay_days or DEFAULT_PORT_STAY_DAYS)
 
-        # Recalculate ETA from ETD
+        # Recalculate ETA from ETD (only if no ATA — actual arrival is final)
         if leg.etd and leg.distance_nm and not leg.ata:
             speed = leg.speed_knots or DEFAULT_SPEED
             elong = leg.elongation_coeff or DEFAULT_ELONGATION
@@ -196,23 +227,24 @@ async def planning_home(
     for leg in legs:
         if leg.status == "completed":
             continue  # locked
-        if leg.atd:
-            # Departed = completed
+        if leg.ata and leg.atd:
+            # Has both actual arrival and departure = completed
             if leg.status != "completed":
                 leg.status = "completed"
                 status_changed = True
-        elif leg.ata or (leg.eta and leg.eta <= now and not leg.atd):
-            # Arrived or ETA passed = in_progress
+        elif leg.ata and not leg.atd:
+            # Arrived but not yet departed = in port (in_progress)
             if leg.status != "in_progress":
                 leg.status = "in_progress"
                 status_changed = True
         elif leg.etd and leg.etd <= now and not leg.ata:
-            # Departed (ETD passed) but no ATA = in_progress (en mer)
+            # ETD passed but no ATA yet = at sea (in_progress)
             if leg.status != "in_progress":
                 leg.status = "in_progress"
                 status_changed = True
         else:
-            if leg.status not in ("planned", "in_progress"):
+            # Future leg = planned
+            if leg.status != "planned":
                 leg.status = "planned"
                 status_changed = True
     if status_changed:
@@ -459,8 +491,8 @@ async def leg_create_submit(
                        detail=f"{leg.departure_port_locode} → {leg.arrival_port_locode}",
                        ip_address=get_client_ip(request))
 
-    # Resequence all legs
-    await resequence_and_recalc(db, _vessel_id, _year)
+    # DO NOT recalculate existing legs — only the new leg's dates are set at creation
+    # The resequence_and_recalc was overwriting all manual adjustments on other legs
 
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": f"/planning?vessel={vessel_obj.code}&year={_year}"})
@@ -564,14 +596,27 @@ async def leg_edit_submit(
     _elongation = parse_float(elongation_coeff, DEFAULT_ELONGATION)
     _port_stay = parse_int(port_stay_days, DEFAULT_PORT_STAY_DAYS)
 
-    # ── Date coherence validation ──
+    import logging as _log
+    _log.getLogger("planning").warning(
+        f"EDIT leg {leg_id}: etd_raw='{etd}' eta_raw='{eta}' ata_raw='{ata}' atd_raw='{atd}' "
+        f"vessel={vessel_id} year={year} dep={departure_port} arr={arrival_port} status={status}"
+    )
+
+    # ── Parse dates ──
     _etd = parse_datetime(etd)
     _eta = parse_datetime(eta)
     _ata = parse_datetime(ata)
     _atd = parse_datetime(atd)
 
+    # If ETD changed and ETA is now before ETD, recalculate ETA automatically
     if _etd and _eta and _eta <= _etd:
-        raise HTTPException(400, f"ETA ({_eta.strftime('%d/%m %H:%M')}) doit etre apres ETD ({_etd.strftime('%d/%m %H:%M')})")
+        _dist = haversine_nm(dep_port.latitude, dep_port.longitude, arr_port.latitude, arr_port.longitude) if dep_port and arr_port else None
+        if _dist:
+            _eta = compute_eta(_etd, _dist, _speed, _elongation)
+        else:
+            _eta = None  # Can't compute, clear it
+
+    # Validate actual dates coherence (these are hard constraints)
     if _ata and _etd and _ata < _etd:
         raise HTTPException(400, f"ATA ({_ata.strftime('%d/%m %H:%M')}) ne peut pas etre avant ETD ({_etd.strftime('%d/%m %H:%M')})")
     if _atd and _ata and _atd < _ata:
@@ -614,8 +659,8 @@ async def leg_edit_submit(
 
     await db.flush()
 
-    # Resequence and recalculate chain
-    await resequence_and_recalc(db, _vessel_id, _year)
+    # Resequence and recalculate chain (preserve this leg's manually-set dates)
+    await resequence_and_recalc(db, _vessel_id, _year, edited_leg_id=leg.id)
     if old_vessel_id != _vessel_id or old_year != _year:
         await resequence_and_recalc(db, old_vessel_id, old_year)
 
@@ -637,6 +682,18 @@ async def leg_delete(
     if not leg:
         raise HTTPException(status_code=404)
 
+    # Safety checks: warn if leg has linked data
+    from sqlalchemy import func as sa_func
+    orders_count = (await db.execute(
+        select(sa_func.count()).select_from(Order).where(Order.leg_id == leg_id)
+    )).scalar() or 0
+    if orders_count > 0:
+        raise HTTPException(
+            400,
+            f"Impossible de supprimer {leg.leg_code} : {orders_count} commande(s) affectee(s). "
+            f"Desaffectez les commandes d'abord."
+        )
+
     vessel_code = leg.vessel.code
     vessel_id = leg.vessel_id
     year = leg.year
@@ -648,7 +705,9 @@ async def leg_delete(
 
     await db.delete(leg)
     await db.flush()
-    await resequence_and_recalc(db, vessel_id, year)
+
+    # DO NOT recalculate remaining legs — preserve their manual dates
+    # The user must manually adjust dates if needed after deletion
 
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": f"/planning?vessel={vessel_code}&year={year}"})

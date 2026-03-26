@@ -304,7 +304,7 @@
     </div>
 
     <div class="ob-card">
-        <h3>📦 Cargo <span class="ob-badge">{{ cargo_summary.get('orders', 0) }} cmd.</span></h3>
+        <h3>📦 Cargo — Import ({{ current_leg.arrival_port.name if current_leg.arrival_port else '' }}) <span class="ob-badge">{{ cargo_summary.get('orders', 0) }} cmd.</span></h3>
         {% if cargo_summary.get('orders', 0) > 0 %}
         <div class="ob-stats-grid">
             <div class="ob-stat"><span class="ob-stat-val">{{ cargo_summary.palettes_ordered }}</span><span class="ob-stat-lbl">Pal. cmdées</span></div>
@@ -319,6 +319,16 @@
         <p class="ob-empty">Aucune commande assignée.</p>
         {% endif %}
     </div>
+
+    {% if next_leg %}
+    <div class="ob-card" style="border-left:3px solid #fd7e14;">
+        <h3>📦 Cargo — Export ({{ next_leg.departure_port.name if next_leg.departure_port else '' }} → {{ next_leg.arrival_port.name if next_leg.arrival_port else '' }}) <span class="ob-badge" style="background:rgba(253,126,20,0.1);color:#fd7e14;">{{ next_leg.leg_code }}</span></h3>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+            <a href="/stowage/leg/{{ next_leg.id }}" class="btn btn-sm btn-secondary">Voir le plan de chargement</a>
+            <a href="/cargo/voyage/{{ next_leg.id }}/excel" class="btn btn-sm btn-secondary">Packing List Excel</a>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="ob-card ob-card-pax">
         {% set all_pax = [] %}

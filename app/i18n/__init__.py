@@ -424,6 +424,289 @@ TRANSLATIONS = {
     "cp_vessel": {"fr": "Le Navire", "en": "The Vessel", "es": "El Buque", "pt-br": "O Navio", "vi": "Tàu"},
     "cp_voyage": {"fr": "Le Voyage", "en": "The Voyage", "es": "El Viaje", "pt-br": "A Viagem", "vi": "Chuyến đi"},
     "cp_stowage": {"fr": "Position", "en": "Position", "es": "Posicion", "pt-br": "Posicao", "vi": "Vi tri"},
+    "cp_guide": {"fr": "Guide client", "en": "Client Guide"},
+    "guide_toc": {"fr": "Sommaire", "en": "Table of Contents"},
+    "guide_tip": {"fr": "Conseil", "en": "Tip"},
+    "guide_important": {"fr": "Important", "en": "Important"},
+    "guide_field": {"fr": "Champ", "en": "Field"},
+    "guide_required": {"fr": "Obligatoire", "en": "Required"},
+    "guide_description": {"fr": "Description", "en": "Description"},
+    "guide_example": {"fr": "Exemple", "en": "Example"},
+    "guide_optional": {"fr": "Optionnel", "en": "Optional"},
+    "guide_recommended": {"fr": "Recommandé", "en": "Recommended"},
+    "guide_situation": {"fr": "Situation", "en": "Situation"},
+    "guide_fee": {"fr": "Frais", "en": "Fee"},
+
+    # Section 1 — Overview
+    "guide_s1_title": {"fr": "Présentation du portail", "en": "Portal Overview"},
+    "guide_s1_p1": {
+        "fr": "Ce portail vous permet de renseigner et suivre vos expéditions de marchandises à bord des voiliers-cargos TOWT. Vous y trouverez toutes les informations nécessaires pour compléter votre packing list, suivre le voyage de vos marchandises et communiquer avec notre équipe opérations.",
+        "en": "This portal allows you to enter and track your cargo shipments aboard TOWT sailing cargo vessels. Here you will find all the information needed to complete your packing list, track your cargo's voyage and communicate with our operations team.",
+    },
+    "guide_s1_p2": {
+        "fr": "Chaque onglet du menu latéral correspond à une étape du processus : packing list, informations navire, suivi du voyage, documents et messagerie.",
+        "en": "Each tab in the sidebar corresponds to a step in the process: packing list, vessel information, voyage tracking, documents and messaging.",
+    },
+    "guide_s1_tip": {
+        "fr": "Vous pouvez changer la langue du portail à tout moment en cliquant sur les drapeaux en haut à droite.",
+        "en": "You can change the portal language at any time by clicking the language buttons in the top right corner.",
+    },
+
+    # Section 2 — Steps
+    "guide_s2_title": {"fr": "Les étapes de votre expédition", "en": "Your Shipment Steps"},
+    "guide_step1_title": {"fr": "Remplir la packing list", "en": "Fill in the packing list"},
+    "guide_step1_desc": {
+        "fr": "Complétez tous les champs obligatoires (*) pour chaque lot de marchandises : informations expéditeur, nature des marchandises, dimensions et poids.",
+        "en": "Complete all required fields (*) for each cargo batch: shipper information, goods description, dimensions and weight.",
+    },
+    "guide_step2_title": {"fr": "Soumettre pour validation", "en": "Submit for validation"},
+    "guide_step2_desc": {
+        "fr": "Une fois tous les champs remplis, cliquez sur « Enregistrer ». Notre équipe opérations vérifiera les informations et vous contactera si des corrections sont nécessaires.",
+        "en": "Once all fields are filled, click 'Save'. Our operations team will review the information and contact you if corrections are needed.",
+    },
+    "guide_step3_title": {"fr": "Émission du Bill of Lading", "en": "Bill of Lading issuance"},
+    "guide_step3_desc": {
+        "fr": "Après validation de la packing list, le Bill of Lading (BL) est généré. Vous le retrouverez dans l'onglet Documents.",
+        "en": "After packing list validation, the Bill of Lading (BL) is generated. You will find it in the Documents tab.",
+    },
+    "guide_step3_warning": {
+        "fr": "Toute modification après émission du BL entraînera des frais d'amendement (voir section Frais).",
+        "en": "Any modification after BL issuance will incur amendment fees (see Fees section).",
+    },
+    "guide_step4_title": {"fr": "Suivi du voyage", "en": "Voyage tracking"},
+    "guide_step4_desc": {
+        "fr": "Suivez la progression de votre cargaison dans l'onglet Voyage : position du navire, ETA au port de déchargement, alertes en cas de modification.",
+        "en": "Track your cargo's progress in the Voyage tab: vessel position, ETA at discharge port, alerts for any changes.",
+    },
+    "guide_step5_title": {"fr": "Réception des marchandises", "en": "Cargo reception"},
+    "guide_step5_desc": {
+        "fr": "À l'arrivée au port de déchargement, vous serez notifié par email. Les documents finaux (BL original, certificat de transport à la voile) seront disponibles dans l'onglet Documents.",
+        "en": "Upon arrival at the discharge port, you will be notified by email. Final documents (original BL, sailing transport certificate) will be available in the Documents tab.",
+    },
+
+    # Section 3 — Field reference
+    "guide_s3_title": {"fr": "Référence des champs", "en": "Field Reference"},
+    "guide_s3_intro": {
+        "fr": "Voici le détail de chaque champ de la packing list. Les champs marqués * sont obligatoires.",
+        "en": "Below is a detailed description of each packing list field. Fields marked * are required.",
+    },
+    "guide_f_customer_name_desc": {
+        "fr": "Raison sociale complète du client / chargeur",
+        "en": "Full legal name of the client / shipper",
+    },
+    "guide_f_freight_forwarder_desc": {
+        "fr": "Nom du transitaire si applicable",
+        "en": "Freight forwarder name if applicable",
+    },
+    "guide_f_code_transitaire_desc": {
+        "fr": "Code interne du transitaire",
+        "en": "Freight forwarder internal code",
+    },
+    "guide_f_shipper_name_desc": {
+        "fr": "Nom complet de l'expéditeur (figurera sur le BL)",
+        "en": "Full shipper name (will appear on the BL)",
+    },
+    "guide_f_shipper_address_desc": {
+        "fr": "Adresse complète de l'expéditeur",
+        "en": "Full shipper address",
+    },
+    "guide_f_po_number_desc": {
+        "fr": "Numéro de bon de commande client",
+        "en": "Client purchase order number",
+    },
+    "guide_f_batch_id_desc": {
+        "fr": "Identifiant interne du lot",
+        "en": "Internal batch identifier",
+    },
+    "guide_f_notify_desc": {
+        "fr": "Partie à notifier à l'arrivée (nom + adresse complète). Obligatoire pour l'émission du BL.",
+        "en": "Party to notify upon arrival (name + full address). Required for BL issuance.",
+    },
+    "guide_f_consignee_desc": {
+        "fr": "Destinataire final de la marchandise (nom + adresse complète). Obligatoire pour l'émission du BL.",
+        "en": "Final cargo recipient (name + full address). Required for BL issuance.",
+    },
+    "guide_f_pallet_type_desc": {
+        "fr": "Type de palette utilisée. EPAL (80×120 cm) ou USPAL (100×120 cm) recommandé.",
+        "en": "Pallet type used. EPAL (80×120 cm) or USPAL (100×120 cm) recommended.",
+    },
+    "guide_f_goods_desc": {
+        "fr": "Nature générale des marchandises",
+        "en": "General nature of goods",
+    },
+    "guide_f_goods_example": {
+        "fr": "Vin, café, cosmétiques",
+        "en": "Wine, coffee, cosmetics",
+    },
+    "guide_f_bio_desc": {
+        "fr": "Indiquer si les produits sont certifiés biologiques",
+        "en": "Indicate if products are certified organic",
+    },
+    "guide_f_qty_desc": {
+        "fr": "Nombre total de palettes pour ce lot",
+        "en": "Total number of pallets for this batch",
+    },
+    "guide_f_cases_desc": {
+        "fr": "Nombre de caisses/cartons par palette",
+        "en": "Number of cases/cartons per pallet",
+    },
+    "guide_f_units_desc": {
+        "fr": "Nombre d'unités (bouteilles, pots…) par caisse",
+        "en": "Number of units (bottles, jars…) per case",
+    },
+    "guide_f_imo_desc": {
+        "fr": "Classe IMO si marchandises dangereuses (ex : classe 3 — liquides inflammables)",
+        "en": "IMO class if dangerous goods (e.g. class 3 — flammable liquids)",
+    },
+    "guide_f_value_desc": {
+        "fr": "Valeur déclarée de la marchandise en euros (pour assurance)",
+        "en": "Declared cargo value in euros (for insurance purposes)",
+    },
+    "guide_f_length_desc": {
+        "fr": "Longueur extérieure de la palette, emballage compris (cm)",
+        "en": "Outer pallet length including packaging (cm)",
+    },
+    "guide_f_width_desc": {
+        "fr": "Largeur extérieure de la palette, emballage compris (cm)",
+        "en": "Outer pallet width including packaging (cm)",
+    },
+    "guide_f_height_desc": {
+        "fr": "Hauteur totale du sol au sommet de la marchandise, palette incluse (cm)",
+        "en": "Total height from floor to top of goods, pallet included (cm)",
+    },
+    "guide_f_weight_desc": {
+        "fr": "Poids brut par palette : marchandise + palette + emballage (kg)",
+        "en": "Gross weight per pallet: goods + pallet + wrapping (kg)",
+    },
+    "guide_height_warning": {
+        "fr": "La hauteur maximale autorisée par palette est de 190 cm. Les palettes excédant cette hauteur seront soumises à validation par le Responsable Opérations et le Commandant lors du chargement. Des frais supplémentaires pourront être facturés.",
+        "en": "Maximum allowed pallet height is 190 cm. Pallets exceeding this height will require approval from the Operations Manager and Captain during loading. Additional fees may apply.",
+    },
+
+    # Section 4 — Batches
+    "guide_s4_title": {"fr": "Gestion des lots", "en": "Batch Management"},
+    "guide_s4_p1": {
+        "fr": "Chaque packing list peut contenir plusieurs lots (batches). Utilisez des lots séparés lorsque :",
+        "en": "Each packing list can contain multiple batches. Use separate batches when:",
+    },
+    "guide_s4_li1": {
+        "fr": "Les marchandises ont des caractéristiques différentes (nature, dimensions, poids)",
+        "en": "Goods have different characteristics (type, dimensions, weight)",
+    },
+    "guide_s4_li2": {
+        "fr": "Les destinataires (consignee/notify) sont différents",
+        "en": "Recipients (consignee/notify) are different",
+    },
+    "guide_s4_tip": {
+        "fr": "Chaque lot génère une ligne séparée sur le Bill of Lading. Regroupez les palettes identiques dans un même lot pour simplifier le BL.",
+        "en": "Each batch generates a separate line on the Bill of Lading. Group identical pallets in the same batch to simplify the BL.",
+    },
+
+    # Section 5 — Packaging
+    "guide_s5_title": {"fr": "Exigences d'emballage", "en": "Packaging Requirements"},
+    "guide_s5_general_title": {"fr": "Règles générales", "en": "General Rules"},
+    "guide_s5_li1": {
+        "fr": "Les marchandises doivent être correctement emballées et filmées sur palette pour résister aux conditions de transport maritime (mouvements de roulis et tangage).",
+        "en": "Goods must be properly packaged and stretch-wrapped on pallets to withstand maritime transport conditions (rolling and pitching movements).",
+    },
+    "guide_s5_li2": {
+        "fr": "L'étiquetage doit être clairement visible sur chaque palette : référence de lot, destination, poids brut.",
+        "en": "Labelling must be clearly visible on each pallet: batch reference, destination, gross weight.",
+    },
+    "guide_s5_pallet_title": {"fr": "Normes de palettisation", "en": "Palletisation Standards"},
+    "guide_s5_pli1": {
+        "fr": "Palettes EPAL (80×120 cm) ou USPAL (100×120 cm) recommandées. Autres formats sur validation préalable.",
+        "en": "EPAL (80×120 cm) or USPAL (100×120 cm) pallets recommended. Other formats subject to prior approval.",
+    },
+    "guide_s5_pli2": {
+        "fr": "Hauteur maximale recommandée : 190 cm (palette incluse). Au-delà, validation requise.",
+        "en": "Maximum recommended height: 190 cm (pallet included). Above this, approval required.",
+    },
+
+    # Section 6 — Fees
+    "guide_s6_title": {"fr": "Frais documentaires", "en": "Documentary Fees"},
+    "guide_s6_intro": {
+        "fr": "Les frais suivants s'appliquent aux services documentaires liés au Bill of Lading :",
+        "en": "The following fees apply to documentary services related to the Bill of Lading:",
+    },
+    "guide_fee_bl": {
+        "fr": "Émission du Bill of Lading (par BL)",
+        "en": "Bill of Lading issuance (per BL)",
+    },
+    "guide_fee_amend1": {
+        "fr": "Amendement avant chargement (par modification)",
+        "en": "Amendment before loading (per change)",
+    },
+    "guide_fee_amend2": {
+        "fr": "Amendement après chargement (par modification)",
+        "en": "Amendment after loading (per change)",
+    },
+    "guide_fee_resubmit": {
+        "fr": "Re-soumission après rejet (données incorrectes)",
+        "en": "Re-submission after rejection (incorrect data)",
+    },
+    "guide_fee_urgent": {
+        "fr": "Traitement urgent (< 24h avant chargement)",
+        "en": "Urgent processing (< 24h before loading)",
+    },
+    "guide_fee_late": {
+        "fr": "Soumission tardive (après deadline communiquée)",
+        "en": "Late submission (after communicated deadline)",
+    },
+    "guide_fee_reissue": {
+        "fr": "Ré-émission d'un BL (duplicata)",
+        "en": "BL re-issuance (duplicate)",
+    },
+    "guide_fee_courier_dom": {
+        "fr": "Envoi courrier BL original (France métropolitaine)",
+        "en": "Original BL courier (domestic France)",
+    },
+    "guide_fee_courier_intl": {
+        "fr": "Envoi courrier BL original (international)",
+        "en": "Original BL courier (international)",
+    },
+    "guide_fee_manifest": {
+        "fr": "Correction manifeste de cargaison (après clôture)",
+        "en": "Cargo manifest correction (after closure)",
+    },
+
+    # Section 7 — US specific
+    "guide_s7_title": {"fr": "Spécificités USA (AMS / ISF)", "en": "US-Specific Requirements (AMS / ISF)"},
+    "guide_s7_ams": {
+        "fr": "Pour toute expédition à destination des États-Unis, la déclaration AMS (Automated Manifest System) doit être soumise au moins 24 heures avant le chargement. TOWT se charge de cette déclaration à partir des données de votre packing list.",
+        "en": "For all shipments to the United States, the AMS (Automated Manifest System) declaration must be submitted at least 24 hours before loading. TOWT handles this declaration based on your packing list data.",
+    },
+    "guide_s7_isf": {
+        "fr": "L'importateur américain (ou son courtier en douane) doit déposer l'ISF (Importer Security Filing / 10+2) au plus tard 24 heures avant le chargement au port d'origine. Assurez-vous que votre importateur est informé des délais.",
+        "en": "The US importer (or their customs broker) must file the ISF (Importer Security Filing / 10+2) no later than 24 hours before loading at the origin port. Ensure your importer is aware of the deadlines.",
+    },
+    "guide_s7_warning": {
+        "fr": "Le non-respect des délais AMS/ISF peut entraîner des pénalités douanières et le refus de chargement de la marchandise.",
+        "en": "Failure to comply with AMS/ISF deadlines may result in customs penalties and refusal to load the cargo.",
+    },
+
+    # Section 8 — FAQ
+    "guide_s8_title": {"fr": "Questions fréquentes", "en": "Frequently Asked Questions"},
+    "guide_faq1_q": {
+        "fr": "Puis-je modifier ma packing list après soumission ?",
+        "en": "Can I modify my packing list after submission?",
+    },
+    "guide_faq1_a": {
+        "fr": "Oui, tant que le Bill of Lading n'a pas été émis. Après émission du BL, toute modification entraînera des frais d'amendement. Utilisez la messagerie du portail pour contacter notre équipe.",
+        "en": "Yes, as long as the Bill of Lading has not been issued. After BL issuance, any modification will incur amendment fees. Use the portal messaging to contact our team.",
+    },
+
+    # Section 9 — Contact
+    "guide_s9_title": {"fr": "Contact", "en": "Contact"},
+    "guide_s9_p1": {
+        "fr": "Pour toute question relative à votre expédition, utilisez en priorité la messagerie intégrée au portail (onglet Messages). Vous pouvez également nous contacter directement :",
+        "en": "For any questions about your shipment, please use the portal messaging (Messages tab) first. You can also contact us directly:",
+    },
+    "guide_s9_p2": {
+        "fr": "Notre équipe opérations est disponible du lundi au vendredi, 9h-18h (heure de Paris).",
+        "en": "Our operations team is available Monday to Friday, 9am-6pm (Paris time).",
+    },
+
     "cp_documents": {"fr": "Documentation", "en": "Documents", "es": "Documentación", "pt-br": "Documentação", "vi": "Tài liệu"},
     "cp_messages": {"fr": "Parlez avec nous", "en": "Contact us", "es": "Contáctenos", "pt-br": "Fale conosco", "vi": "Liên hệ"},
     "cp_about_vessel": {"fr": "À propos du", "en": "About", "es": "Sobre el", "pt-br": "Sobre o", "vi": "Giới thiệu"},
