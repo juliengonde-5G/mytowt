@@ -575,14 +575,21 @@ async def leg_edit_submit(
         f"vessel={vessel_id} year={year} dep={departure_port} arr={arrival_port} status={status}"
     )
 
-    # ── Date coherence validation ──
+    # ── Parse dates ──
     _etd = parse_datetime(etd)
     _eta = parse_datetime(eta)
     _ata = parse_datetime(ata)
     _atd = parse_datetime(atd)
 
+    # If ETD changed and ETA is now before ETD, recalculate ETA automatically
     if _etd and _eta and _eta <= _etd:
-        raise HTTPException(400, f"ETA ({_eta.strftime('%d/%m %H:%M')}) doit etre apres ETD ({_etd.strftime('%d/%m %H:%M')})")
+        _dist = haversine_nm(dep_port.latitude, dep_port.longitude, arr_port.latitude, arr_port.longitude) if dep_port and arr_port else None
+        if _dist:
+            _eta = compute_eta(_etd, _dist, _speed, _elongation)
+        else:
+            _eta = None  # Can't compute, clear it
+
+    # Validate actual dates coherence (these are hard constraints)
     if _ata and _etd and _ata < _etd:
         raise HTTPException(400, f"ATA ({_ata.strftime('%d/%m %H:%M')}) ne peut pas etre avant ETD ({_etd.strftime('%d/%m %H:%M')})")
     if _atd and _ata and _atd < _ata:
