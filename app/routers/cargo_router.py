@@ -412,7 +412,29 @@ async def bill_of_lading_batch(
         raise HTTPException(500, detail="Template BOL non trouve")
 
     voyage_id = pl.order.leg.leg_code if pl.order.leg else ""
-    bl_number = batch.bill_of_lading_id or f"TUAW_{voyage_id}_{batch.batch_number:02d}"
+    leg_id = pl.order.leg.id if pl.order.leg else None
+
+    # BL number: use manual value if set, otherwise compute unique sequential number
+    # across ALL batches of the leg (not just this packing list)
+    bl_number = batch.bill_of_lading_id
+    if not bl_number and leg_id:
+        # Get all batch IDs for this leg, ordered by packing_list_id then batch_id
+        all_batches_result = await db.execute(
+            select(PackingListBatch.id)
+            .join(PackingList, PackingListBatch.packing_list_id == PackingList.id)
+            .join(Order, PackingList.order_id == Order.id)
+            .where(Order.leg_id == leg_id)
+            .order_by(PackingList.id, PackingListBatch.id)
+        )
+        all_batch_ids = [r[0] for r in all_batches_result.fetchall()]
+        seq = all_batch_ids.index(batch_id) + 1 if batch_id in all_batch_ids else 1
+        bl_number = f"TUAW_{voyage_id}_{seq:02d}"
+
+        # Persist the BL number on the batch so it stays stable
+        batch.bill_of_lading_id = bl_number
+        await db.flush()
+    elif not bl_number:
+        bl_number = f"TUAW_{voyage_id}_01"
 
     def _build_addr(b, prefix):
         if not b:
