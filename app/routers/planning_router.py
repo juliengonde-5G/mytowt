@@ -682,6 +682,18 @@ async def leg_delete(
     if not leg:
         raise HTTPException(status_code=404)
 
+    # Safety checks: warn if leg has linked data
+    from sqlalchemy import func as sa_func
+    orders_count = (await db.execute(
+        select(sa_func.count()).select_from(Order).where(Order.leg_id == leg_id)
+    )).scalar() or 0
+    if orders_count > 0:
+        raise HTTPException(
+            400,
+            f"Impossible de supprimer {leg.leg_code} : {orders_count} commande(s) affectee(s). "
+            f"Desaffectez les commandes d'abord."
+        )
+
     vessel_code = leg.vessel.code
     vessel_id = leg.vessel_id
     year = leg.year
@@ -693,7 +705,9 @@ async def leg_delete(
 
     await db.delete(leg)
     await db.flush()
-    await resequence_and_recalc(db, vessel_id, year)
+
+    # DO NOT recalculate remaining legs — preserve their manual dates
+    # The user must manually adjust dates if needed after deletion
 
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": f"/planning?vessel={vessel_code}&year={year}"})

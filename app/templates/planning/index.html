@@ -95,7 +95,7 @@
                             <div style="display:flex;gap:4px;justify-content:flex-end;">
                                 {% if not is_completed %}
                                 <button class="btn btn-sm btn-secondary" onclick="openEditLegModal({{ leg.id }})"><i data-lucide="pencil"></i></button>
-                                <button class="btn btn-sm btn-danger" hx-delete="/planning/legs/{{ leg.id }}" hx-confirm="Supprimer {{ leg.leg_code }} ?"><i data-lucide="trash-2"></i></button>
+                                <button class="btn btn-sm btn-danger" hx-delete="/planning/legs/{{ leg.id }}" hx-confirm="ATTENTION : Supprimer {{ leg.leg_code }} ({{ leg.departure_port_locode }} → {{ leg.arrival_port_locode }}) ? Les dates des autres escales ne seront PAS recalculees."><i data-lucide="trash-2"></i></button>
                                 {% else %}
                                 <button class="btn btn-sm btn-secondary" onclick="openEditLegModal({{ leg.id }})" title="Consulter"><i data-lucide="eye"></i></button>
                                 {% endif %}
@@ -372,6 +372,16 @@
                     '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;background:rgba(255,255,255,0.9);padding:16px 24px;border-radius:8px;color:#c00;font-size:14px;">Erreur lors du chargement des données de la carte.</div>');
             });
     }
+
+    // Handle HTMX errors (e.g. delete blocked by linked orders)
+    document.body.addEventListener('htmx:responseError', function(evt) {
+        try {
+            var detail = JSON.parse(evt.detail.xhr.responseText);
+            alert(detail.detail || 'Erreur');
+        } catch(e) {
+            alert('Erreur: ' + evt.detail.xhr.statusText);
+        }
+    });
 </script>
 
 {% endblock %}
