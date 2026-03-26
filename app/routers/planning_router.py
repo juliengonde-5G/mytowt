@@ -569,6 +569,12 @@ async def leg_edit_submit(
     _elongation = parse_float(elongation_coeff, DEFAULT_ELONGATION)
     _port_stay = parse_int(port_stay_days, DEFAULT_PORT_STAY_DAYS)
 
+    import logging as _log
+    _log.getLogger("planning").warning(
+        f"EDIT leg {leg_id}: etd_raw='{etd}' eta_raw='{eta}' ata_raw='{ata}' atd_raw='{atd}' "
+        f"vessel={vessel_id} year={year} dep={departure_port} arr={arrival_port} status={status}"
+    )
+
     # ── Date coherence validation ──
     _etd = parse_datetime(etd)
     _eta = parse_datetime(eta)
