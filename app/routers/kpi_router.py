@@ -573,7 +573,7 @@ async def kpi_dashboard(
         "total_provision": sum(float(c.provision_amount or 0) for c in all_claims),
         "total_indemnity": sum(float(c.indemnity_amount or 0) for c in all_claims),
     }
-    claims_per_leg = round(claims_stats["total"] / totals["leg_count"], 2) if totals["leg_count"] > 0 else 0
+    claims_per_leg = round(claims_stats["total"] / env_totals["leg_count"], 2) if env_totals["leg_count"] > 0 else 0
 
     return templates.TemplateResponse("kpi/index.html", {
         "request": request,
