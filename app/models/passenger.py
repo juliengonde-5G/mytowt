@@ -144,7 +144,7 @@ class PassengerBooking(Base):
     __tablename__ = "passenger_bookings"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    leg_id = Column(Integer, ForeignKey("legs.id", ondelete="SET NULL"), nullable=False)
+    leg_id = Column(Integer, ForeignKey("legs.id", ondelete="SET NULL"), nullable=True)
     vessel_id = Column(Integer, ForeignKey("vessels.id"), nullable=False)
     cabin_number = Column(Integer, nullable=False)  # 1-4
 
