@@ -42,9 +42,18 @@ mytowt/
 │   │   ├── passenger.py      # Booking, Passenger, Payment, Document, CabinPriceGrid
 │   │   ├── crew.py           # CrewMember + CrewAssignment
 │   │   ├── finance.py        # PortConfig, OpexParameter, LegFinance
-│   │   └── kpi.py            # LegKPI
+│   │   ├── kpi.py            # LegKPI
+│   │   ├── claim.py          # Claim (réclamations cargo)
+│   │   ├── mrv.py            # MRV emissions reporting
+│   │   ├── commercial.py     # CommClient (Pipedrive sync)
+│   │   ├── stowage.py        # StowagePlan, StowageItem
+│   │   ├── planning_share.py # PlanningShareLink
+│   │   ├── vessel_position.py # VesselPosition (tracking)
+│   │   ├── activity_log.py   # ActivityLog (audit trail)
+│   │   └── co2_variable.py   # CO2 emission variables
 │   ├── routers/              # One router per module
 │   │   ├── planning_router.py    # /planning
+│   │   ├── planning_ext_router.py # /planning/share/{token} (public)
 │   │   ├── commercial_router.py  # /commercial
 │   │   ├── cargo_router.py       # /cargo + /p/{token} (client portal)
 │   │   ├── escale_router.py      # /escale
@@ -54,6 +63,11 @@ mytowt/
 │   │   ├── crew_router.py        # /crew
 │   │   ├── finance_router.py     # /finance
 │   │   ├── kpi_router.py         # /kpi
+│   │   ├── claim_router.py       # /claims (cargo claims)
+│   │   ├── mrv_router.py         # /mrv (emissions)
+│   │   ├── pricing_router.py     # /pricing (grilles tarifaires)
+│   │   ├── stowage_router.py     # /stowage (plan d'arrimage)
+│   │   ├── tracking_router.py    # /tracking (API vessel positions)
 │   │   ├── admin_router.py       # /admin
 │   │   ├── dashboard_router.py   # /
 │   │   ├── auth_router.py        # /login, /logout
@@ -66,7 +80,23 @@ mytowt/
 │   │   ├── img/              # Logos (SVG + PNG)
 │   │   └── BILL_OF_LADING_TEMPLATE.docx
 │   └── utils/
-│       └── crossing_book.py  # Passenger crossing book PDF
+│       ├── crossing_book.py  # Passenger crossing book PDF
+│       ├── file_validation.py # File upload validation
+│       ├── navigation.py     # Navigation helpers
+│       ├── notifications.py  # Notification system
+│       ├── passenger_pdfs.py # Passenger document PDFs
+│       ├── pipedrive.py      # Pipedrive CRM integration
+│       ├── portal_security.py # Portal token security
+│       ├── revolut.py        # Revolut payment integration
+│       ├── timezones.py      # Timezone utilities
+│       └── activity.py       # Activity logging
+├── scripts/
+│   ├── backup_db.sh          # Database backup (pg_dump + rotation)
+│   ├── import_crew.py        # Import 44 crew members
+│   ├── import_tonnage.py     # Import vessel tonnage data
+│   ├── purge_access_logs.py  # Purge old portal access logs
+│   └── seed_demo_data.py     # Seed demo data
+├── rapports/                 # Daily audit reports
 ├── CLAUDE.md                 # This file
 ├── README.md
 ├── Dockerfile
@@ -147,6 +177,13 @@ asyncio.run(migrate())
 ### Static files permissions
 ```bash
 docker exec towt-app-v2 chmod -R 755 /app/app/static/
+```
+
+### Database backup
+```bash
+./scripts/backup_db.sh        # Manual backup
+# Or via cron (daily at 2am):
+# 0 2 * * * /path/to/mytowt/scripts/backup_db.sh >> /var/log/towt-backup.log 2>&1
 ```
 
 ## Maritime Glossary
