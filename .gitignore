@@ -38,3 +38,6 @@ postgres_data/
 # Uploads & generated files
 app/static/uploads/
 app/static/generated/
+
+# Database backups
+backups/
