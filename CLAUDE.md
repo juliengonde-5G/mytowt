@@ -50,7 +50,12 @@ mytowt/
 │   │   ├── planning_share.py # PlanningShareLink
 │   │   ├── vessel_position.py # VesselPosition (tracking)
 │   │   ├── activity_log.py   # ActivityLog (audit trail)
-│   │   └── co2_variable.py   # CO2 emission variables
+│   │   ├── activity.py       # Activity (user activity tracking)
+│   │   ├── co2_variable.py   # CO2 emission variables
+│   │   ├── emission_parameter.py # EmissionParameter (CO2 factors)
+│   │   ├── notification.py   # Notification (system notifications)
+│   │   ├── portal_message.py # PortalMessage (client portal messaging)
+│   │   └── portal_access_log.py # PortalAccessLog (portal token access audit)
 │   ├── routers/              # One router per module
 │   │   ├── planning_router.py    # /planning
 │   │   ├── planning_ext_router.py # /planning/share/{token} (public)
