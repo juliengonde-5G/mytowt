@@ -40,6 +40,8 @@ _MATRIX = {
     ("administrateur", "mrv"):         {"C", "M", "S"},
     ("administrateur", "passengers"):  {"C", "M", "S"},
     ("administrateur", "claims"):      {"C", "M", "S"},
+    ("administrateur", "ticketing"):   {"C", "M", "S"},
+    ("administrateur", "chatbot"):     {"C"},
 
     # ─── OPERATION ───────────────────────────────────────
     # Planning, Commercial, Escale, KPI, On board, Passagers, Equipage, Cargo, MRV
@@ -53,6 +55,8 @@ _MATRIX = {
     ("operation", "mrv"):         {"C", "M"},
     ("operation", "passengers"):  {"C", "M"},
     ("operation", "claims"):      {"C", "M", "S"},
+    ("operation", "ticketing"):   {"C", "M", "S"},
+    ("operation", "chatbot"):     {"C"},
 
     # ─── ARMEMENT (CREW) ────────────────────────────────
     # Planning, Escale, KPI, Equipage, Passagers
@@ -63,6 +67,8 @@ _MATRIX = {
     ("armement", "crew"):        {"C", "M", "S"},
     ("armement", "passengers"):  {"C", "M"},
     ("armement", "mrv"):         {"C"},
+    ("armement", "ticketing"):   {"C", "M"},
+    ("armement", "chatbot"):     {"C"},
 
     # ─── TECHNIQUE ───────────────────────────────────────
     # Planning, Commercial, Escale, KPI, On board, Passagers, Equipage, Cargo, MRV
@@ -76,6 +82,8 @@ _MATRIX = {
     ("technique", "mrv"):         {"C", "M"},
     ("technique", "passengers"):  {"C"},
     ("technique", "claims"):      {"C"},
+    ("technique", "ticketing"):   {"C", "M"},
+    ("technique", "chatbot"):     {"C"},
 
     # ─── DATA ANALYST ────────────────────────────────────
     # Planning, Escale, Finance, KPI, MRV + admin data params
@@ -89,6 +97,7 @@ _MATRIX = {
     ("data_analyst", "cargo"):       {"C"},
     ("data_analyst", "mrv"):         {"C", "M"},
     ("data_analyst", "claims"):      {"C"},
+    ("data_analyst", "chatbot"):     {"C"},
 
     # ─── MARINS ──────────────────────────────────────────
     # Planning, Escale, KPI, Equipage — lecture seule
@@ -99,6 +108,8 @@ _MATRIX = {
     ("marins", "crew"):        {"C"},
     ("marins", "cargo"):       {"C"},
     ("marins", "mrv"):         {"C"},
+    ("marins", "ticketing"):   {"C", "M"},
+    ("marins", "chatbot"):     {"C"},
 
     # ─── COMMERCIAL ──────────────────────────────────────
     # Planning, Commercial, Escale, KPI, Passagers, Cargo
@@ -109,6 +120,7 @@ _MATRIX = {
     ("commercial", "passengers"):  {"C", "M", "S"},
     ("commercial", "cargo"):       {"C", "M"},
     ("commercial", "captain"):     {"C"},
+    ("commercial", "chatbot"):     {"C"},
 
     # ─── MANAGER MARITIME ────────────────────────────────
     # Planning, Commercial, Escale, KPI, On board, Passagers, Equipage, Cargo, MRV
@@ -122,6 +134,8 @@ _MATRIX = {
     ("manager_maritime", "mrv"):         {"C", "M"},
     ("manager_maritime", "passengers"):  {"C", "M"},
     ("manager_maritime", "claims"):      {"C", "M"},
+    ("manager_maritime", "ticketing"):   {"C", "M"},
+    ("manager_maritime", "chatbot"):     {"C"},
 }
 
 # Legacy role mapping (old roles → new roles)
@@ -149,6 +163,7 @@ ROLES = [
 MODULES = [
     "planning", "commercial", "escale", "finance",
     "kpi", "captain", "crew", "cargo", "claims", "mrv", "passengers",
+    "ticketing", "chatbot",
 ]
 
 # Module display names
@@ -164,6 +179,8 @@ MODULE_NAMES = {
     "mrv": "MRV Fuel",
     "passengers": "Passagers",
     "claims": "Claims / Sinistres",
+    "ticketing": "Ticketing",
+    "chatbot": "Chatbot",
 }
 
 

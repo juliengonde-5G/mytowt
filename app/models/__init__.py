@@ -27,6 +27,8 @@ from app.models.portal_message import PortalMessage
 from app.models.vessel_position import VesselPosition
 from app.models.planning_share import PlanningShare
 from app.models.stowage import StowagePlan
+from app.models.ticket import Ticket, TicketComment
+from app.models.chatbot import ChatSession, ChatMessage
 
 __all__ = [
     "User", "Port", "Vessel", "Leg",
@@ -50,4 +52,6 @@ __all__ = [
     "VesselPosition",
     "PlanningShare",
     "StowagePlan",
+    "Ticket", "TicketComment",
+    "ChatSession", "ChatMessage",
 ]
