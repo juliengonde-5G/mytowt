@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}my_TOWT — {% if ticket %}Modifier ticket{% else %}Nouveau ticket{% endif %}{% endblock %}
+{% block page_title %}{% if ticket %}Modifier {{ ticket.reference }}{% else %}Nouveau ticket{% endif %}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/ticketing" class="btn btn-secondary btn-sm"><i data-lucide="arrow-left"></i> Retour</a>
+{% endblock %}
+
+{% block content %}
+<div class="tkt-form-card">
+    <form method="POST" action="/ticketing/create">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+
+        <div class="tkt-form-grid">
+            <div class="form-group">
+                <label class="form-label">Titre *</label>
+                <input type="text" name="title" class="form-input" required placeholder="Resume de la demande" value="{{ ticket.title if ticket else '' }}">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Categorie *</label>
+                <select name="category" class="form-select" required>
+                    <option value="">— Choisir —</option>
+                    {% for code, label in ticket_categories %}
+                    <option value="{{ code }}" {% if ticket and ticket.category == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Priorite *</label>
+                <select name="priority" class="form-select" required>
+                    {% for code, label in ticket_priorities %}
+                    <option value="{{ code }}" {% if (ticket and ticket.priority == code) or (not ticket and code == 'normal') %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Navire *</label>
+                <select name="vessel_id" class="form-select" required>
+                    <option value="">— Choisir —</option>
+                    {% for v in vessels %}
+                    <option value="{{ v.id }}" {% if ticket and ticket.vessel_id == v.id %}selected{% endif %}>{{ v.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Leg (optionnel)</label>
+                <select name="leg_id" class="form-select">
+                    <option value="">— Aucun —</option>
+                    {% for l in legs %}
+                    <option value="{{ l.id }}" {% if ticket and ticket.leg_id == l.id %}selected{% endif %}>{{ l.leg_code }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Assigner a</label>
+                <select name="assigned_to_id" class="form-select">
+                    <option value="">— Non assigne —</option>
+                    {% for u in all_users %}
+                    <option value="{{ u.id }}" {% if ticket and ticket.assigned_to_id == u.id %}selected{% endif %}>{{ u.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-top:16px;">
+            <label class="form-label">Description *</label>
+            <textarea name="description" class="form-input" rows="6" required placeholder="Decrivez votre demande en detail...">{{ ticket.description if ticket else '' }}</textarea>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+            <a href="/ticketing" class="btn btn-secondary">Annuler</a>
+            <button type="submit" class="btn btn-primary"><i data-lucide="send"></i> Creer le ticket</button>
+        </div>
+    </form>
+</div>
+
+<style>
+.tkt-form-card{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:24px;max-width:900px}
+.tkt-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:768px){.tkt-form-grid{grid-template-columns:1fr}}
+</style>
+{% endblock %}

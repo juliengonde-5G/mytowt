@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}my_TOWT — Ticketing{% endblock %}
+{% block page_title %}Ticketing Escale{% endblock %}
+
+{% block topbar_actions %}
+{% if can_edit(user, 'ticketing') %}
+<a href="/ticketing/create" class="btn btn-primary btn-sm"><i data-lucide="plus"></i> Nouveau ticket</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="tkt-stats">
+    <div class="tkt-stat"><span class="tkt-stat-val">{{ stats.total }}</span><span class="tkt-stat-lbl">Total</span></div>
+    <div class="tkt-stat tkt-stat-open"><span class="tkt-stat-val">{{ stats.open }}</span><span class="tkt-stat-lbl">Ouverts</span></div>
+    <div class="tkt-stat tkt-stat-progress"><span class="tkt-stat-val">{{ stats.in_progress }}</span><span class="tkt-stat-lbl">En cours</span></div>
+    <div class="tkt-stat tkt-stat-waiting"><span class="tkt-stat-val">{{ stats.waiting }}</span><span class="tkt-stat-lbl">En attente</span></div>
+    <div class="tkt-stat tkt-stat-resolved"><span class="tkt-stat-val">{{ stats.resolved }}</span><span class="tkt-stat-lbl">Resolus</span></div>
+</div>
+
+<div class="tkt-filters">
+    <a href="/ticketing" class="tkt-filter {% if not selected_category and not selected_status and not selected_priority %}active{% endif %}">Tous</a>
+    <span class="tkt-sep">|</span>
+    {% for code, label in ticket_categories %}
+    <a href="/ticketing?category={{ code }}" class="tkt-filter {% if selected_category == code %}active{% endif %}">{{ label }}</a>
+    {% endfor %}
+    <span class="tkt-sep">|</span>
+    {% for code, label in ticket_statuses %}
+    <a href="/ticketing?status={{ code }}" class="tkt-filter {% if selected_status == code %}active{% endif %}">{{ label }}</a>
+    {% endfor %}
+</div>
+
+<div class="tkt-card">
+{% if tickets %}
+<table class="tkt-table">
+    <thead>
+        <tr>
+            <th>Ref.</th>
+            <th>Titre</th>
+            <th>Categorie</th>
+            <th>Navire</th>
+            <th>Leg</th>
+            <th>Priorite</th>
+            <th>Statut</th>
+            <th>Cree par</th>
+            <th>Assigne a</th>
+            <th>Date</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for t in tickets %}
+    <tr class="{% if t.status in ('resolved', 'closed') %}tkt-row-closed{% endif %}">
+        <td><a href="/ticketing/{{ t.id }}" class="tkt-ref">{{ t.reference }}</a></td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.title }}</td>
+        <td><span class="tkt-cat tkt-cat-{{ t.category }}">{{ t.category_label }}</span></td>
+        <td>{{ t.vessel.name if t.vessel else '—' }}</td>
+        <td style="font-size:11px;">{{ t.leg.leg_code if t.leg else '—' }}</td>
+        <td><span class="tkt-priority tkt-pri-{{ t.priority }}">{{ t.priority_label }}</span></td>
+        <td><span class="tkt-status tkt-st-{{ t.status }}">{{ t.status_label }}</span></td>
+        <td style="font-size:11px;">{{ t.created_by.full_name if t.created_by else '—' }}</td>
+        <td style="font-size:11px;">{{ t.assigned_to.full_name if t.assigned_to else '—' }}</td>
+        <td style="font-size:11px;">{{ t.created_at.strftime('%d/%m/%Y %H:%M') if t.created_at else '—' }}</td>
+        <td><a href="/ticketing/{{ t.id }}" class="btn btn-secondary btn-xs">Voir</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p style="text-align:center;padding:40px;color:#888;">Aucun ticket.</p>
+{% endif %}
+</div>
+
+<style>
+.tkt-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+@media(max-width:900px){.tkt-stats{grid-template-columns:repeat(3,1fr)}}
+.tkt-stat{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:14px;text-align:center}
+.tkt-stat-val{font-size:22px;font-weight:700;color:var(--towt-blue);display:block}
+.tkt-stat-lbl{font-size:10px;color:#888;text-transform:uppercase}
+.tkt-stat-open .tkt-stat-val{color:#D97706}
+.tkt-stat-progress .tkt-stat-val{color:#2563EB}
+.tkt-stat-waiting .tkt-stat-val{color:#8B5CF6}
+.tkt-stat-resolved .tkt-stat-val{color:var(--success)}
+
+.tkt-filters{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:14px;font-size:12px}
+.tkt-filter{padding:4px 10px;border-radius:20px;text-decoration:none;color:var(--towt-gray);border:1px solid #e5e7eb;background:white;transition:all .15s}
+.tkt-filter:hover,.tkt-filter.active{background:var(--towt-blue);color:white;border-color:var(--towt-blue)}
+.tkt-sep{color:#ccc}
+
+.tkt-card{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow-x:auto}
+.tkt-table{width:100%;border-collapse:collapse;font-size:12px}
+.tkt-table th{background:var(--towt-light);padding:10px 12px;text-align:left;font-size:10px;text-transform:uppercase;color:#888;font-weight:600}
+.tkt-table td{padding:10px 12px;border-bottom:1px solid #f0f0f0}
+.tkt-table tr:hover td{background:rgba(9,85,97,.03)}
+.tkt-row-closed td{opacity:.5}
+
+.tkt-ref{font-weight:600;color:var(--towt-blue);text-decoration:none;font-size:11px;font-family:'Poppins',sans-serif}
+.tkt-ref:hover{text-decoration:underline}
+
+.tkt-cat{font-size:10px;padding:2px 8px;border-radius:12px;font-weight:500;white-space:nowrap}
+.tkt-cat-approvisionnement{background:#DBEAFE;color:#1E40AF}
+.tkt-cat-maintenance{background:#FEF3C7;color:#92400E}
+.tkt-cat-administratif{background:#E0E7FF;color:#3730A3}
+.tkt-cat-logistique{background:#D1FAE5;color:#065F46}
+.tkt-cat-medical{background:#FCE7F3;color:#9D174D}
+.tkt-cat-autre{background:#F3F4F6;color:#374151}
+
+.tkt-priority{font-size:10px;padding:2px 8px;border-radius:12px;font-weight:600}
+.tkt-pri-low{background:#F3F4F6;color:#6B7280}
+.tkt-pri-normal{background:#DBEAFE;color:#1E40AF}
+.tkt-pri-high{background:#FEF3C7;color:#92400E}
+.tkt-pri-urgent{background:#FEE2E2;color:#991B1B}
+
+.tkt-status{font-size:10px;padding:2px 8px;border-radius:12px;font-weight:600}
+.tkt-st-open{background:#FEF3C7;color:#92400E}
+.tkt-st-in_progress{background:#DBEAFE;color:#1E40AF}
+.tkt-st-waiting{background:#EDE9FE;color:#5B21B6}
+.tkt-st-resolved{background:#D1FAE5;color:#065F46}
+.tkt-st-closed{background:#F3F4F6;color:#6B7280}
+</style>
+{% endblock %}

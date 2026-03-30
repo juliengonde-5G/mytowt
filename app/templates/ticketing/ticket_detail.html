@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}my_TOWT — {{ ticket.reference }}{% endblock %}
+{% block page_title %}{{ ticket.reference }} — {{ ticket.title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="/ticketing" class="btn btn-secondary btn-sm"><i data-lucide="arrow-left"></i> Retour</a>
+{% endblock %}
+
+{% block content %}
+<div class="tkt-detail-grid">
+    <!-- Left: info + description -->
+    <div class="tkt-detail-main">
+        <div class="tkt-detail-card">
+            <h3 style="margin:0 0 16px;font-size:15px;">Informations</h3>
+            <div class="tkt-info-grid">
+                <div><span class="field-label">Reference</span><span class="field-value">{{ ticket.reference }}</span></div>
+                <div><span class="field-label">Statut</span><span class="tkt-status tkt-st-{{ ticket.status }}">{{ ticket.status_label }}</span></div>
+                <div><span class="field-label">Categorie</span><span class="tkt-cat tkt-cat-{{ ticket.category }}">{{ ticket.category_label }}</span></div>
+                <div><span class="field-label">Priorite</span><span class="tkt-priority tkt-pri-{{ ticket.priority }}">{{ ticket.priority_label }}</span></div>
+                <div><span class="field-label">Navire</span><span class="field-value">{{ ticket.vessel.name if ticket.vessel else '—' }}</span></div>
+                <div><span class="field-label">Leg</span><span class="field-value">{{ ticket.leg.leg_code if ticket.leg else '—' }}</span></div>
+                <div><span class="field-label">Cree par</span><span class="field-value">{{ ticket.created_by.full_name if ticket.created_by else '—' }}</span></div>
+                <div><span class="field-label">Assigne a</span><span class="field-value">{{ ticket.assigned_to.full_name if ticket.assigned_to else 'Non assigne' }}</span></div>
+                <div><span class="field-label">Cree le</span><span class="field-value">{{ ticket.created_at.strftime('%d/%m/%Y %H:%M') if ticket.created_at else '—' }}</span></div>
+                <div><span class="field-label">Resolu le</span><span class="field-value">{{ ticket.resolved_at.strftime('%d/%m/%Y %H:%M') if ticket.resolved_at else '—' }}</span></div>
+            </div>
+        </div>
+
+        <div class="tkt-detail-card" style="margin-top:16px;">
+            <h3 style="margin:0 0 12px;font-size:15px;">Description</h3>
+            <div class="tkt-description">{{ ticket.description }}</div>
+        </div>
+
+        {% if ticket.resolution_notes %}
+        <div class="tkt-detail-card" style="margin-top:16px;">
+            <h3 style="margin:0 0 12px;font-size:15px;">Notes de resolution</h3>
+            <div class="tkt-description">{{ ticket.resolution_notes }}</div>
+        </div>
+        {% endif %}
+
+        <!-- Comments -->
+        <div class="tkt-detail-card" style="margin-top:16px;">
+            <h3 style="margin:0 0 12px;font-size:15px;">Commentaires ({{ ticket.comments|length }})</h3>
+
+            {% for c in ticket.comments %}
+            <div class="tkt-comment {% if c.is_internal %}tkt-comment-internal{% endif %}">
+                <div class="tkt-comment-header">
+                    <strong>{{ c.author.full_name if c.author else 'Inconnu' }}</strong>
+                    {% if c.is_internal %}<span class="tkt-internal-badge">Interne</span>{% endif %}
+                    <span class="tkt-comment-date">{{ c.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+                </div>
+                <div class="tkt-comment-body">{{ c.content }}</div>
+            </div>
+            {% endfor %}
+
+            {% if ticket.comments|length == 0 %}
+            <p style="color:#888;font-size:12px;">Aucun commentaire.</p>
+            {% endif %}
+
+            <form method="POST" action="/ticketing/{{ ticket.id }}/comment" style="margin-top:16px;">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <textarea name="content" class="form-input" rows="3" placeholder="Ajouter un commentaire..." required></textarea>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+                    <label style="font-size:11px;display:flex;align-items:center;gap:4px;">
+                        <input type="checkbox" name="is_internal" value="true"> Note interne
+                    </label>
+                    <button type="submit" class="btn btn-primary btn-sm" style="margin-left:auto;"><i data-lucide="message-circle"></i> Commenter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Right: actions -->
+    <div class="tkt-detail-side">
+        {% if can_edit(user, 'ticketing') %}
+        <div class="tkt-detail-card">
+            <h3 style="margin:0 0 12px;font-size:14px;">Actions</h3>
+
+            <form method="POST" action="/ticketing/{{ ticket.id }}/status" style="margin-bottom:12px;">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <label class="form-label">Changer le statut</label>
+                <select name="status" class="form-select" style="margin-bottom:8px;">
+                    {% for code, label in ticket_statuses %}
+                    <option value="{{ code }}" {% if ticket.status == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <textarea name="resolution_notes" class="form-input" rows="2" placeholder="Notes de resolution (optionnel)" style="margin-bottom:8px;">{{ ticket.resolution_notes or '' }}</textarea>
+                <button type="submit" class="btn btn-primary btn-sm" style="width:100%;">Mettre a jour</button>
+            </form>
+
+            <form method="POST" action="/ticketing/{{ ticket.id }}/assign">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <label class="form-label">Assigner a</label>
+                <select name="assigned_to_id" class="form-select" style="margin-bottom:8px;">
+                    <option value="">— Non assigne —</option>
+                    {% for u in all_users %}
+                    <option value="{{ u.id }}" {% if ticket.assigned_to_id == u.id %}selected{% endif %}>{{ u.full_name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-secondary btn-sm" style="width:100%;">Assigner</button>
+            </form>
+        </div>
+
+        {% if can_delete(user, 'ticketing') %}
+        <div class="tkt-detail-card" style="margin-top:16px;">
+            <form method="POST" action="/ticketing/{{ ticket.id }}/delete" onsubmit="return confirm('Supprimer ce ticket ?')">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <button type="submit" class="btn btn-danger btn-sm" style="width:100%;"><i data-lucide="trash-2"></i> Supprimer</button>
+            </form>
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.tkt-detail-grid{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+@media(max-width:900px){.tkt-detail-grid{grid-template-columns:1fr}}
+.tkt-detail-card{background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:20px}
+.tkt-detail-main{min-width:0}
+.tkt-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tkt-info-grid .field-label{display:block;font-size:10px;color:#888;text-transform:uppercase;margin-bottom:2px}
+.tkt-info-grid .field-value{font-size:13px;font-weight:500}
+.tkt-description{font-size:13px;line-height:1.6;white-space:pre-wrap;color:#333}
+
+.tkt-comment{border:1px solid #f0f0f0;border-radius:var(--radius);padding:12px;margin-bottom:10px}
+.tkt-comment-internal{border-left:3px solid #8B5CF6;background:#FAFAFE}
+.tkt-comment-header{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:6px}
+.tkt-comment-date{color:#888;margin-left:auto;font-size:11px}
+.tkt-comment-body{font-size:13px;line-height:1.5;white-space:pre-wrap}
+.tkt-internal-badge{font-size:9px;padding:1px 6px;border-radius:8px;background:#EDE9FE;color:#5B21B6;font-weight:600}
+
+.tkt-cat{font-size:10px;padding:2px 8px;border-radius:12px;font-weight:500;white-space:nowrap}
+.tkt-cat-approvisionnement{background:#DBEAFE;color:#1E40AF}
+.tkt-cat-maintenance{background:#FEF3C7;color:#92400E}
+.tkt-cat-administratif{background:#E0E7FF;color:#3730A3}
+.tkt-cat-logistique{background:#D1FAE5;color:#065F46}
+.tkt-cat-medical{background:#FCE7F3;color:#9D174D}
+.tkt-cat-autre{background:#F3F4F6;color:#374151}
+.tkt-priority{font-size:10px;padding:2px 8px;border-radius:12px;font-weight:600}
+.tkt-pri-low{background:#F3F4F6;color:#6B7280}
+.tkt-pri-normal{background:#DBEAFE;color:#1E40AF}
+.tkt-pri-high{background:#FEF3C7;color:#92400E}
+.tkt-pri-urgent{background:#FEE2E2;color:#991B1B}
+.tkt-status{font-size:10px;padding:2px 8px;border-radius:12px;font-weight:600}
+.tkt-st-open{background:#FEF3C7;color:#92400E}
+.tkt-st-in_progress{background:#DBEAFE;color:#1E40AF}
+.tkt-st-waiting{background:#EDE9FE;color:#5B21B6}
+.tkt-st-resolved{background:#D1FAE5;color:#065F46}
+.tkt-st-closed{background:#F3F4F6;color:#6B7280}
+</style>
+{% endblock %}

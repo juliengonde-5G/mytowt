@@ -110,6 +110,16 @@
                         <i data-lucide="fuel"></i><span>MRV Fuel</span>
                     </a>
                     {% endif %}
+                    {% if has_any_access(user, 'ticketing') %}
+                    <a href="/ticketing" class="nav-item {% if active_module == 'ticketing' %}active{% endif %}">
+                        <i data-lucide="ticket"></i><span>Ticketing</span>
+                    </a>
+                    {% endif %}
+                    {% if has_any_access(user, 'chatbot') %}
+                    <a href="/chatbot" class="nav-item {% if active_module == 'chatbot' %}active{% endif %}">
+                        <i data-lucide="message-circle"></i><span>Chatbot</span>
+                    </a>
+                    {% endif %}
                 </div>
                 <div class="nav-section">
                     <span class="nav-section-label">Administration</span>
