@@ -47,9 +47,9 @@ docker-compose up -d
 
 ```
 app/
-├── models/      # 12 SQLAlchemy models
-├── routers/     # 14 FastAPI routers (1 per module)
-├── templates/   # 40+ Jinja2 templates
+├── models/      # 25 SQLAlchemy models
+├── routers/     # 20 FastAPI routers (1 per module)
+├── templates/   # 91 Jinja2 templates
 ├── static/      # CSS design system + logos
 └── utils/       # Shared utilities
 ```
@@ -58,4 +58,4 @@ See [CLAUDE.md](CLAUDE.md) for detailed project documentation.
 
 ## License
 
-Private — TOWT © 2025
+Private — TOWT © 2025-2026
