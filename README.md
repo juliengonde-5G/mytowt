@@ -47,9 +47,9 @@ docker-compose up -d
 
 ```
 app/
-├── models/      # 25 SQLAlchemy models
-├── routers/     # 20 FastAPI routers (1 per module)
-├── templates/   # 91 Jinja2 templates
+├── models/      # 26 SQLAlchemy models
+├── routers/     # 21 FastAPI routers (1 per module)
+├── templates/   # 87 Jinja2 templates
 ├── static/      # CSS design system + logos
 └── utils/       # Shared utilities
 ```
