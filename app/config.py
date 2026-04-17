@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # Shortcut ports
     SHORTCUT_PORTS: list = ["FRFEC", "BRSSO"]
 
+    # Feature flags
+    # Passengers module disabled post-TOWT liquidation. Code preserved for future reactivation.
+    PASSENGERS_ENABLED: bool = False
+
     class Config:
         env_file = ".env"
         extra = "allow"

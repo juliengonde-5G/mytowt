@@ -1145,6 +1145,13 @@ async def update_language(
 
 
 # ─── CABIN PRICING GRID ──────────────────────────────────────
+def _require_passengers_enabled():
+    """Gate cabin pricing endpoints on the PASSENGERS_ENABLED feature flag."""
+    from app.config import get_settings as _get_settings
+    if not _get_settings().PASSENGERS_ENABLED:
+        raise HTTPException(status_code=404)
+
+
 @account_router.post("/settings/pricing/add", response_class=HTMLResponse)
 async def pricing_add(
     request: Request,
@@ -1156,6 +1163,7 @@ async def pricing_add(
     notes: str = Form(""),
     user: User = Depends(require_admin_or_commercial),
     db: AsyncSession = Depends(get_db),
+    _gate=Depends(_require_passengers_enabled),
 ):
     from app.models.passenger import CabinPriceGrid
     entry = CabinPriceGrid(
@@ -1180,6 +1188,7 @@ async def pricing_edit(
     is_active: Optional[str] = Form(None),
     user: User = Depends(require_admin_or_commercial),
     db: AsyncSession = Depends(get_db),
+    _gate=Depends(_require_passengers_enabled),
 ):
     from app.models.passenger import CabinPriceGrid
     entry = await db.get(CabinPriceGrid, price_id)
@@ -1197,6 +1206,7 @@ async def pricing_delete(
     price_id: int, request: Request,
     user: User = Depends(require_admin_or_commercial),
     db: AsyncSession = Depends(get_db),
+    _gate=Depends(_require_passengers_enabled),
 ):
     from app.models.passenger import CabinPriceGrid
     entry = await db.get(CabinPriceGrid, price_id)

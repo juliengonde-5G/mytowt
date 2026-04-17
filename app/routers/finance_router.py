@@ -66,7 +66,13 @@ async def compute_revenue_from_orders(db: AsyncSession, leg_id: int) -> float:
 
 
 async def compute_pax_revenue_for_leg(db: AsyncSession, leg_id: int) -> float:
-    """Compute passenger revenue for a leg from confirmed/paid bookings."""
+    """Compute passenger revenue for a leg from confirmed/paid bookings.
+
+    Returns 0.0 when PASSENGERS_ENABLED is False (post-TOWT liquidation).
+    """
+    from app.config import get_settings
+    if not get_settings().PASSENGERS_ENABLED:
+        return 0.0
     from app.models.passenger import PassengerBooking
     result = await db.execute(
         select(PassengerBooking).where(
