@@ -81,7 +81,11 @@ async def claim_create_form(request: Request, user: User=Depends(get_current_use
     legs = (await db.execute(select(Leg).options(selectinload(Leg.departure_port),selectinload(Leg.arrival_port),selectinload(Leg.vessel)).where(Leg.status!="cancelled").order_by(Leg.year.desc(),Leg.vessel_id,Leg.sequence))).scalars().all()
     oas = (await db.execute(select(OrderAssignment).options(selectinload(OrderAssignment.order),selectinload(OrderAssignment.leg)).order_by(OrderAssignment.id.desc()))).scalars().all()
     crew = (await db.execute(select(CrewMember).where(CrewMember.is_active==True).order_by(CrewMember.last_name))).scalars().all()
-    pax = (await db.execute(select(Passenger).options(selectinload(Passenger.booking)).order_by(Passenger.last_name))).scalars().all()
+    from app.config import get_settings as _get_settings
+    if _get_settings().PASSENGERS_ENABLED:
+        pax = (await db.execute(select(Passenger).options(selectinload(Passenger.booking)).order_by(Passenger.last_name))).scalars().all()
+    else:
+        pax = []
     return templates.TemplateResponse("claims/form.html", {"request":request,"user":user,"claim":None,"vessels":vessels,"legs":legs,"order_assignments":oas,"crew_members":crew,"passengers":pax,"claim_types":CLAIM_TYPES,"claim_contexts":CLAIM_CONTEXTS,"claim_guarantees":CLAIM_GUARANTEES,"claim_responsibility":CLAIM_RESPONSIBILITY,"tz_choices":TIMEZONE_CHOICES,"active_module":"claims"})
 
 @router.post("/create", response_class=HTMLResponse)

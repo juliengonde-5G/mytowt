@@ -6,7 +6,7 @@
 {% if current_leg %}
 <a href="/cargo/voyage/{{ current_leg.id }}/excel" class="btn btn-secondary btn-sm"><i data-lucide="package"></i> Packing List</a>
 <a href="/crew/border-police/{{ current_leg.vessel_id }}" class="btn btn-secondary btn-sm" target="_blank"><i data-lucide="users"></i> Crew List</a>
-<a href="/passengers?vessel={{ selected_vessel }}" class="btn btn-secondary btn-sm"><i data-lucide="user-check"></i> Passenger List</a>
+{% if passengers_enabled %}<a href="/passengers?vessel={{ selected_vessel }}" class="btn btn-secondary btn-sm"><i data-lucide="user-check"></i> Passenger List</a>{% endif %}
 <a href="/escale?vessel={{ selected_vessel }}&leg_id={{ current_leg.id }}" class="btn btn-secondary btn-sm"><i data-lucide="anchor"></i> Escale</a>
 {% endif %}
 {% endblock %}
@@ -330,6 +330,7 @@
     </div>
     {% endif %}
 
+    {% if passengers_enabled %}
     <div class="ob-card ob-card-pax">
         {% set all_pax = [] %}
         {% for b in pax_bookings %}{% for p in b.passengers %}{% if all_pax.append(p) %}{% endif %}{% endfor %}{% endfor %}
@@ -412,6 +413,7 @@
         <p class="ob-empty">Aucun passager pour cette traversée.</p>
         {% endif %}
     </div>
+    {% endif %}
 </div>
 
 <!-- SOF -->

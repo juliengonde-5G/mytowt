@@ -85,7 +85,7 @@
                         <i data-lucide="compass"></i><span>On Board</span>
                     </a>
                     {% endif %}
-                    {% if has_any_access(user, 'passengers') or has_any_access(user, 'captain') %}
+                    {% if passengers_enabled and (has_any_access(user, 'passengers') or has_any_access(user, 'captain')) %}
                     <a href="/passengers" class="nav-item {% if active_module == 'passengers' %}active{% endif %}">
                         <i data-lucide="luggage"></i><span>Passagers</span>
                     </a>
