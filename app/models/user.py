@@ -13,6 +13,7 @@ class User(Base):
     role = Column(String(20), nullable=False, default="operator")  # admin, manager, operator, viewer
     language = Column(String(10), nullable=True, default="fr")  # fr, en, es, pt-br, vi
     is_active = Column(Boolean, default=True)
+    must_change_password = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
