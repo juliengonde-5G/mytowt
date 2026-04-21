@@ -19,7 +19,13 @@ import asyncio
 import secrets
 import string
 import sys
+from pathlib import Path
 from typing import Optional
+
+# Make `app` importable when the script is invoked directly (python3 scripts/bootstrap_minimal.py)
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from sqlalchemy import select
 
