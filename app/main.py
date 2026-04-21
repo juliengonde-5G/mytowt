@@ -62,21 +62,48 @@ def _fix_static_permissions():
                     pass
 
 
-def _validate_secret_key():
-    """Warn if SECRET_KEY is still the default insecure value."""
-    default_key = "towt_secret_key_change_in_production_2025"
-    if settings.SECRET_KEY == default_key:
-        logger.warning(
-            "SECURITY WARNING: SECRET_KEY is set to the default value. "
-            "Set a strong, unique SECRET_KEY in your .env file for production. "
+_DEFAULT_SECRET_KEY = "towt_secret_key_change_in_production_2025"
+_DEFAULT_DB_PASSWORD = "towt_secure_2025"
+
+
+def _validate_secrets():
+    """Refuse to start in production when credentials are still default values.
+
+    In non-production environments (APP_ENV != 'production'), emit a warning
+    instead so local dev is not blocked.
+    """
+    findings = []
+    if settings.SECRET_KEY == _DEFAULT_SECRET_KEY:
+        findings.append(
+            "SECRET_KEY is the default. "
             "Generate one with: python3 -c \"import secrets; print(secrets.token_hex(32))\""
         )
+    if _DEFAULT_DB_PASSWORD in settings.DATABASE_URL:
+        findings.append(
+            "DATABASE_URL still contains the default Postgres password. "
+            "Set POSTGRES_PASSWORD in .env and redeploy."
+        )
+
+    if not findings:
+        return
+
+    is_production = settings.APP_ENV == "production"
+    message = (
+        "Insecure default credentials detected:\n  - "
+        + "\n  - ".join(findings)
+    )
+    if is_production:
+        raise RuntimeError(
+            "Refusing to start in production with default credentials.\n"
+            + message
+        )
+    logger.warning("SECURITY WARNING: %s", message)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _fix_static_permissions()
-    _validate_secret_key()
+    _validate_secrets()
     await init_db()
     yield
 
@@ -131,6 +158,10 @@ app.add_middleware(MaintenanceMiddleware)
 # ── CSRF middleware ──────────────────────────────────────────
 from app.csrf import CSRFMiddleware
 app.add_middleware(CSRFMiddleware)
+
+# ── Force-change-password middleware ─────────────────────────
+from app.security_middleware import ForcePasswordChangeMiddleware
+app.add_middleware(ForcePasswordChangeMiddleware)
 
 
 # ── Exception handlers ───────────────────────────────────────

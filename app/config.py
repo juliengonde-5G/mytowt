@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 heures
 
+    # API tokens (inbound)
+    # Tracking CSV upload requires this token via the X-API-Token header.
+    TRACKING_API_TOKEN: str = ""
+
     # External URL (for portal links shared with clients/passengers)
     SITE_URL: str = "https://my.towt.eu"
 

@@ -4,44 +4,41 @@ Référence : [`audit-v1.md`](audit-v1.md).
 
 Priorisation par sprints + backlog continu. Chaque action référence le constat audit (`S-XX`).
 
-## Sprint 1 — Critiques (J+7)
+## Sprint 1 — Critiques (J+7) ✅ LIVRÉ
 
-### A1.1 Rotation `SECRET_KEY` + refus démarrage si default (S-01)
+Livré sur la branche `claude/security-sprint1`. Les actions ci-dessous sont terminées côté code ; la partie ops (rotation effective des secrets, mise à jour des flows Power Automate) reste à appliquer par l'équipe exploitation.
 
-- Générer : `python3 -c "import secrets; print(secrets.token_hex(32))"` → injecter dans `.env` prod uniquement.
-- Modifier `app/main.py:65-73` : `raise RuntimeError(...)` au lieu de `logger.warning(...)` quand `APP_ENV=production` et `SECRET_KEY` par défaut.
+### A1.1 Rotation `SECRET_KEY` + refus démarrage si default (S-01) ✅
+
+- `app/main.py` : `_validate_secrets()` appelé dans `lifespan` **lève `RuntimeError`** quand `APP_ENV=production` et `SECRET_KEY` = default. En non-prod, log `warning`.
+- À faire côté ops : générer la clé avec `python3 -c "import secrets; print(secrets.token_hex(32))"`, la pousser dans `.env` prod, redéployer.
 - Documenter rotation tous les 12 mois minimum.
 
-### A1.2 Rotation mot de passe Postgres (S-02)
+### A1.2 Rotation mot de passe Postgres (S-02) ✅ (guard code)
 
-- Choix gestionnaire de secrets : Doppler (SaaS) ou HashiCorp Vault (self-hosted VPS OVH).
-- Migration `.env` → secrets manager pour `POSTGRES_PASSWORD`, `SECRET_KEY`, `PIPEDRIVE_API_TOKEN`.
-- Renommer compte DB : `towt_admin` → `app_user` (cohérent post-liquidation).
+- `_validate_secrets()` bloque aussi le démarrage si `DATABASE_URL` contient encore `towt_secure_2025`.
+- `.env.example` mis à jour : placeholders `CHANGE-ME` + commentaires explicites.
+- `docker-compose.yml` : les variables `POSTGRES_PASSWORD` et `DATABASE_URL` restent pilotées par `.env` (valeurs par défaut conservées comme fallback dev uniquement).
+- **À faire côté ops** : poser un vrai mot de passe Postgres, idéalement géré par Doppler/Vault. Ne pas laisser le `.env` sur disque avec droits lax.
 
-### A1.3 `must_change_password` enforcement (S-05)
+### A1.3 `must_change_password` enforcement (S-05) ✅
 
-Le champ `User.must_change_password` est ajouté en Phase 1 (cette branche). Ajouter :
-- Endpoint `POST /admin/my-account/change-password` dans `auth_router.py`.
-- Middleware (ou dépendance globale `get_current_user`) qui redirige vers cette route si `must_change_password=True` ET path != `/admin/my-account/change-password` ET path != `/logout`.
-- Validation côté serveur : nouveau mot de passe ≥ 12 chars, classes mixées, ≠ password actuel.
+- `app/security_middleware.py` — `ForcePasswordChangeMiddleware` : redirige tout utilisateur authentifié avec `must_change_password=True` vers `/admin/my-account/change-password` (sauf static, login/logout, portails publics, API tracking).
+- `app/routers/admin_router.py` : nouveau couple `GET`/`POST /admin/my-account/change-password` + template `templates/admin/change_password.html`.
+- Politique : nouveau mot de passe ≥ 12 caractères, ≠ actuel. Le flag `must_change_password` est remis à `False` au succès.
+- Le POST existant `/admin/my-account/password` applique désormais les mêmes règles et clear le flag.
 
-### A1.4 Fermeture port DB (S-03)
+### A1.4 Fermeture port DB (S-03) ✅
 
-- Retirer `ports: - "5433:5432"` de `docker-compose.yml`.
-- Si accès externe nécessaire (debug ponctuel) : tunnel SSH `ssh -L 5433:db:5432 user@vps`.
+- `docker-compose.yml` : directive `ports: - "5433:5432"` supprimée du service `db`. Accès externe désormais uniquement via `docker exec` ou tunnel SSH.
 
-### A1.5 Auth API tracking (S-04)
+### A1.5 Auth API tracking (S-04) ✅ (partiel)
 
-- Ajouter `TRACKING_API_TOKEN` dans `Settings` (`app/config.py`), valeur via `.env`.
-- Ajouter dépendance `verify_tracking_token` dans `tracking_router.py` :
-  ```python
-  def verify_tracking_token(x_api_token: str = Header(...)):
-      if not secrets.compare_digest(x_api_token, settings.TRACKING_API_TOKEN):
-          raise HTTPException(401, "Invalid token")
-  ```
-- L'appliquer aux 5 endpoints `/api/tracking/*`.
-- Mettre à jour les flows Power Automate pour envoyer le header.
-- Rotation trimestrielle du token.
+- `Settings.TRACKING_API_TOKEN` ajouté (`app/config.py`), propagé dans `.env.example`.
+- `tracking_router.py` : dépendance `require_tracking_token` (compare_digest) appliquée sur `POST /api/tracking/upload`.
+- Sécurisation fail-closed : si `TRACKING_API_TOKEN` vide, `upload` retourne `503`.
+- **Reste au Sprint 2** : appliquer une auth (session OU token) aux 4 endpoints GET du router, actuellement consommés par l'UI interne. Impact utilisateur nul pour le moment (GETs servent la carte interne).
+- **À faire côté ops** : générer le token (`openssl rand -hex 24`), le pousser dans `.env` prod, mettre à jour le flow Power Automate pour envoyer le header `X-API-Token`.
 
 ## Sprint 2 — Élevés (J+21)
 

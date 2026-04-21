@@ -1,5 +1,6 @@
 """Tracking API — receives satcom CSV files and stores vessel positions."""
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query, Request
+import secrets
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query, Request, Header
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
@@ -11,12 +12,32 @@ import csv
 import io
 import re
 
+from app.config import get_settings
 from app.database import get_db
 from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.vessel_position import VesselPosition
 
 router = APIRouter(prefix="/api/tracking", tags=["tracking"])
+
+
+def require_tracking_token(x_api_token: Optional[str] = Header(None)) -> None:
+    """Shared secret authentication for ingest endpoints.
+
+    The token is compared with ``Settings.TRACKING_API_TOKEN`` via
+    ``secrets.compare_digest`` to avoid timing leaks. The server refuses
+    authentication when the configured token is empty — that way a
+    misconfigured deployment fails closed instead of silently accepting
+    every request.
+    """
+    expected = get_settings().TRACKING_API_TOKEN
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Tracking API not configured (TRACKING_API_TOKEN missing).",
+        )
+    if not x_api_token or not secrets.compare_digest(x_api_token, expected):
+        raise HTTPException(status_code=401, detail="Invalid or missing X-API-Token")
 
 
 # ─── HAVERSINE DISTANCE ────────────────────────────────────
@@ -125,7 +146,7 @@ async def _match_leg(db: AsyncSession, vessel_id: int, dt: datetime) -> Optional
     return result.scalar_one_or_none()
 
 
-@router.post("/upload")
+@router.post("/upload", dependencies=[Depends(require_tracking_token)])
 async def upload_tracking_csv(
     file: UploadFile = File(...),
     vessel_name: Optional[str] = Query(None, description="Override vessel name (otherwise extracted from filename)"),

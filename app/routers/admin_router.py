@@ -1389,11 +1389,69 @@ async def my_account_password(
         return RedirectResponse(url="/admin/my-account?error=Mot+de+passe+actuel+incorrect", status_code=303)
     if new_password != confirm_password:
         return RedirectResponse(url="/admin/my-account?error=Les+mots+de+passe+ne+correspondent+pas", status_code=303)
-    if len(new_password) < 4:
-        return RedirectResponse(url="/admin/my-account?error=Le+mot+de+passe+doit+faire+au+moins+4+caractères", status_code=303)
+    if len(new_password) < 12:
+        return RedirectResponse(url="/admin/my-account?error=Le+mot+de+passe+doit+faire+au+moins+12+caractères", status_code=303)
+    if new_password == current_password:
+        return RedirectResponse(url="/admin/my-account?error=Le+nouveau+mot+de+passe+doit+être+différent+de+l'actuel", status_code=303)
     user.hashed_password = hash_password(new_password)
+    user.must_change_password = False
     await db.flush()
     return RedirectResponse(url="/admin/my-account?success=Mot+de+passe+modifié+avec+succès", status_code=303)
+
+
+# ─── FORCED CHANGE-PASSWORD FLOW (post-reset, post-provisioning) ─
+@account_router.get("/my-account/change-password", response_class=HTMLResponse)
+async def change_password_form(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """Dedicated screen shown when users.must_change_password is True.
+
+    The ForcePasswordChangeMiddleware redirects here for every request as
+    long as the flag is set, including the user's very first login.
+    """
+    return templates.TemplateResponse("admin/change_password.html", {
+        "request": request,
+        "user": user,
+        "active_module": "my-account",
+        "error": request.query_params.get("error"),
+    })
+
+
+@account_router.post("/my-account/change-password", response_class=HTMLResponse)
+async def change_password_submit(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.auth import verify_password, hash_password
+    if not verify_password(current_password, user.hashed_password):
+        return RedirectResponse(
+            url="/admin/my-account/change-password?error=Mot+de+passe+actuel+incorrect",
+            status_code=303,
+        )
+    if new_password != confirm_password:
+        return RedirectResponse(
+            url="/admin/my-account/change-password?error=Les+mots+de+passe+ne+correspondent+pas",
+            status_code=303,
+        )
+    if len(new_password) < 12:
+        return RedirectResponse(
+            url="/admin/my-account/change-password?error=Le+mot+de+passe+doit+faire+au+moins+12+caractères",
+            status_code=303,
+        )
+    if new_password == current_password:
+        return RedirectResponse(
+            url="/admin/my-account/change-password?error=Le+nouveau+mot+de+passe+doit+être+différent+de+l'actuel",
+            status_code=303,
+        )
+    user.hashed_password = hash_password(new_password)
+    user.must_change_password = False
+    await db.flush()
+    return RedirectResponse(url="/", status_code=303)
 
 
 @account_router.post("/my-account/language", response_class=HTMLResponse)
