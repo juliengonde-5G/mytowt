@@ -27,6 +27,7 @@ from app.models.portal_message import PortalMessage
 from app.models.vessel_position import VesselPosition
 from app.models.planning_share import PlanningShare
 from app.models.stowage import StowagePlan
+from app.models.rate_limit import RateLimitAttempt
 
 __all__ = [
     "User", "Port", "Vessel", "Leg",
@@ -50,4 +51,5 @@ __all__ = [
     "VesselPosition",
     "PlanningShare",
     "StowagePlan",
+    "RateLimitAttempt",
 ]
