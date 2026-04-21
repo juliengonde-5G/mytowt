@@ -1,8 +1,12 @@
 """
 Portal access audit log — tracks every access to external portals.
 RGPD compliance: who accessed what data and when.
+
+Sprint 2 security hardening (A2.3): the raw token is no longer stored.
+``token_hash`` holds sha256(token) so a DB leak does not expose the
+portal access credentials.
 """
-from sqlalchemy import Column, Integer, String, DateTime, Text, func
+from sqlalchemy import Column, Integer, String, DateTime, func
 from app.database import Base
 
 
@@ -11,7 +15,7 @@ class PortalAccessLog(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     portal_type = Column(String(20), nullable=False)  # "cargo", "passenger", "planning"
-    token = Column(String(50), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, index=True)  # sha256 hex
     ip_address = Column(String(50), nullable=True)
     user_agent = Column(String(500), nullable=True)
     path = Column(String(300), nullable=False)

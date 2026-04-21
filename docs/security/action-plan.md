@@ -40,52 +40,59 @@ Livré sur la branche `claude/security-sprint1`. Les actions ci-dessous sont ter
 - **Reste au Sprint 2** : appliquer une auth (session OU token) aux 4 endpoints GET du router, actuellement consommés par l'UI interne. Impact utilisateur nul pour le moment (GETs servent la carte interne).
 - **À faire côté ops** : générer le token (`openssl rand -hex 24`), le pousser dans `.env` prod, mettre à jour le flow Power Automate pour envoyer le header `X-API-Token`.
 
-## Sprint 2 — Élevés (J+21)
+## Sprint 2 — Élevés (J+21) ✅ LIVRÉ (A2.2 reporté en Sprint 2.5)
 
-### A2.1 CSRF form strict (S-06)
+Livré sur la branche `claude/security-sprint2`. Un item (A2.2 — CSP nonce) a été reporté parce que 63 templates contiennent des `<script>`/`<style>` inline ; une migration atomique risquait la régression UI. Voir **Sprint 2.5** ci-dessous pour le plan d'atterrissage.
 
-- Créer dépendance `verify_csrf_form` dans `app/csrf.py` :
-  ```python
-  async def verify_csrf_form(request: Request, csrf_token: str = Form(...)):
-      cookie = request.cookies.get(CSRF_COOKIE_NAME)
-      if not cookie or not secrets.compare_digest(csrf_token, cookie):
-          raise HTTPException(403, "CSRF validation failed")
+### A2.1 CSRF form strict (S-06) ✅
+
+- `app/csrf.py` réécrit : le middleware consomme le body des requêtes POST/PUT/PATCH/DELETE (en dehors des préfixes exemptés), extrait le champ `csrf_token` (urlencoded + multipart via `Request.form()`), valide avec `secrets.compare_digest` contre le cookie, puis replaye le body pour les handlers aval — les appels `await file.read()` / `await request.form()` continuent de fonctionner normalement.
+- Buffer de body plafonné à 10 MiB (`MAX_CSRF_BODY_BYTES`) ; au-delà, la requête est refusée avec consigne d'utiliser le header `x-csrf-token`.
+- Body JSON sans header → refusé (`CSRF_HEADER_NAME` requis pour les appels AJAX/fetch).
+
+### A2.2 CSP renforcée (S-07) ⏸ Reporté en Sprint 2.5
+
+- Audit effectué : **63 templates** sur 120+ contiennent des `<script>` ou `<style>` inline (compteur `grep -c "<script>|<style>" app/templates -r`). Une migration de masse en une seule PR mettrait le front à risque.
+- Plan d'atterrissage (branche `claude/security-sprint2_5-csp`) :
+  1. Externaliser l'inline de `base.html` (HTMX CSRF injection, CSS sidebar-clock) vers `/static/js/csrf-htmx.js` et `/static/css/base-inline.css`.
+  2. Ajouter un middleware léger générant un `request.state.csp_nonce` par requête.
+  3. Étape progressive : modifier le template le plus sensible (dashboard, planning) en premier, vérifier visuellement + Lighthouse, propager module par module.
+  4. Retirer `'unsafe-inline'` de `script-src` puis `style-src` une fois toutes les tuiles migrées.
+
+### A2.3 Hash des tokens portail (S-08) ✅
+
+- `app/models/portal_access_log.py` : colonne `token` remplacée par `token_hash CHAR(64)` (sha256 hex) avec `index=True`.
+- `app/utils/portal_security.py` : fonction `hash_portal_token()` ajoutée, `log_portal_access` stocke désormais uniquement le hash.
+- `app/routers/admin_router.py` (RGPD erase) : la recherche des logs associés à un booking utilise `token_hash == hash_portal_token(booking.token)`.
+- **À faire côté ops (bases existantes)** : le reset + bootstrap recrée le schéma. Pour une base conservée :
+  ```sql
+  ALTER TABLE portal_access_logs ADD COLUMN token_hash CHAR(64);
+  UPDATE portal_access_logs SET token_hash = encode(digest(token, 'sha256'), 'hex');
+  ALTER TABLE portal_access_logs DROP COLUMN token;
+  CREATE INDEX ix_portal_access_logs_token_hash ON portal_access_logs(token_hash);
   ```
-- L'ajouter à toutes les routes POST/PUT/DELETE non-exemptées (planning, commercial, escale, finance, etc.).
-- Test : POST sans champ `csrf_token` → 403.
 
-### A2.2 CSP renforcée (S-07)
+### A2.4 Alembic baseline (S-09) ✅
 
-- Externaliser les inline scripts critiques (`base.html:12-18` HTMX CSRF injection) en `/static/js/csrf-htmx.js`.
-- Pour les inline restants, introduire un nonce CSP par requête :
-  ```python
-  nonce = secrets.token_urlsafe(16)
-  csp = f"... script-src 'self' 'nonce-{nonce}' https://unpkg.com; ..."
-  request.state.csp_nonce = nonce
-  ```
-- Templates : `<script nonce="{{ request.state.csp_nonce }}">...</script>`.
-- Supprimer `'unsafe-inline'` de `script-src` puis de `style-src`.
+- `alembic==1.14.0` ajouté à `requirements.txt`.
+- Scaffolding : `alembic.ini` à la racine, `migrations/env.py` (async), `migrations/script.py.mako`, `migrations/README.md`.
+- Révision `0001_baseline_post_sprint2.py` — no-op qui ancre l'historique Alembic à l'état de schéma produit par `Base.metadata.create_all` à la fin du Sprint 2.
+- `env.py` lit `DATABASE_URL` depuis `app.config.get_settings()`, expose `Base.metadata` comme cible, supporte mode offline (génération SQL) + online async.
+- **À faire côté ops** : après un reset, `docker exec towt-app-v2 alembic stamp 0001_baseline_post_sprint2`. Les nouvelles migrations partent du module existant (`alembic revision --autogenerate -m "xxx"`).
+- **Sprint 3+** : retirer `Base.metadata.create_all` de `init_db` et le remplacer par `alembic upgrade head` au démarrage (une fois confiance acquise sur le process).
 
-### A2.3 Hash des tokens portail (S-08)
+### A2.5 Rate-limit persistant (S-10) ✅ (option B — table DB)
 
-- Migration : `ALTER TABLE portal_access_logs ADD COLUMN token_hash CHAR(64);`
-- Backfill : `UPDATE portal_access_logs SET token_hash = encode(sha256(token::bytea), 'hex');`
-- `DROP COLUMN token;` après backfill validé.
-- Modifier `app/utils/portal_security.py:46` pour stocker `hashlib.sha256(token.encode()).hexdigest()`.
+- Nouvelle table `rate_limit_attempts(id, scope, identifier, attempted_at)` + index composite `(scope, identifier, attempted_at)`.
+- Service `app/services/rate_limit.py` : `is_rate_limited()`, `record_attempt()`, `clear_attempts()`. Purge opportuniste des rows > 24 h à chaque écriture.
+- `app/routers/auth_router.py` : les dicts `_login_attempts` en mémoire sont remplacés par le service. Sur login réussi, `clear_attempts()` efface les tentatives pour cette IP.
+- `app/utils/portal_security.py` : `check_token_rate_limit()` et `record_token_attempt()` deviennent async, prennent une `AsyncSession`. Les 2 callers (`cargo_router.py`, `passenger_ext_router.py`) mis à jour pour `await`.
+- Option Redis (plus performante pour scale-out) gardée en backlog Sprint 3+ si le volume le justifie.
 
-### A2.4 Introduction Alembic (S-09)
+### Sprint 1 leftover — Auth session sur `/api/tracking/*` GETs ✅
 
-- `pip install alembic` + `alembic init migrations`.
-- Configurer `alembic.ini` avec `DATABASE_URL` depuis `Settings`.
-- `alembic revision --autogenerate -m "0001_initial"` post-reset.
-- Convertir `migration.sql` en migrations versionnées.
-- Lifecycle : `alembic upgrade head` au démarrage (remplacer `Base.metadata.create_all`).
-
-### A2.5 Rate-limit persistant (S-10)
-
-- Option A (recommandée) : ajouter Redis au `docker-compose.yml`, rate-limit via `redis-py` + sliding window.
-- Option B (sans dépendance) : table `rate_limit_attempts(ip, attempted_at)` + cleanup périodique.
-- Migrer `_login_attempts` (`auth_router.py:20`) et `_token_attempts` (`portal_security.py:13`).
+- Les 4 endpoints `GET /api/tracking/positions/{vessel_id}`, `/latest`, `/leg/{leg_id}/track`, `/navigation-kpis` exigent désormais `Depends(get_current_user)`. Les appels internes (UI) continuent de fonctionner via le cookie de session ; les appels anonymes reçoivent `303 /login`.
+- `POST /api/tracking/upload` reste sur `X-API-Token` (Power Automate).
 
 ## Sprint 3 — Moyens (J+60)
 

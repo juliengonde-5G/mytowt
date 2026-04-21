@@ -1,6 +1,4 @@
-import time
 import logging
-from collections import defaultdict
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from app.templating import templates
@@ -9,34 +7,17 @@ from sqlalchemy import select
 from app.database import get_db
 from app.models.user import User
 from app.auth import verify_password, create_session_token, COOKIE_NAME
+from app.services import rate_limit as rl
 from app.utils.activity import log_activity, get_client_ip
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["auth"])
 
-# ── Rate limiting for login ──────────────────────────────────
-# In-memory store: {ip: [(timestamp, ...], ...}
-_login_attempts: dict[str, list[float]] = defaultdict(list)
-LOGIN_RATE_LIMIT = 5          # max attempts
-LOGIN_RATE_WINDOW = 60        # per 60 seconds
-LOGIN_LOCKOUT_DURATION = 300  # lockout 5 minutes after exceeding
-
-
-def _is_rate_limited(ip: str) -> bool:
-    """Check if an IP is rate-limited for login attempts."""
-    now = time.time()
-    # Clean old entries
-    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < LOGIN_LOCKOUT_DURATION]
-
-    # Count recent attempts within the rate window
-    recent = [t for t in _login_attempts[ip] if now - t < LOGIN_RATE_WINDOW]
-    return len(recent) >= LOGIN_RATE_LIMIT
-
-
-def _record_attempt(ip: str):
-    """Record a login attempt for rate limiting."""
-    _login_attempts[ip].append(time.time())
+# ── Rate limiting for login (persisted in DB — A2.5) ─────────
+_RL_SCOPE = "login"
+LOGIN_RATE_LIMIT = 5          # max failed attempts
+LOGIN_RATE_WINDOW = 300       # per 5 minutes (matches former lockout window)
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -56,8 +37,8 @@ async def login_submit(
 ):
     ip = get_client_ip(request)
 
-    # Rate limiting check
-    if _is_rate_limited(ip):
+    # Rate limiting check (DB-backed since Sprint 2 — A2.5)
+    if await rl.is_rate_limited(db, _RL_SCOPE, ip, LOGIN_RATE_LIMIT, LOGIN_RATE_WINDOW):
         logger.warning(f"Login rate limited for IP {ip}")
         return templates.TemplateResponse("auth/login.html", {
             "request": request,
@@ -73,10 +54,9 @@ async def login_submit(
         select(User).where(User.username == username, User.is_active == True)
     )
     user = result.scalar_one_or_none()
-    ip = get_client_ip(request)
 
     if not user or not verify_password(password, user.hashed_password):
-        _record_attempt(ip)
+        await rl.record_attempt(db, _RL_SCOPE, ip)
         # Log failed login
         await log_activity(db, action="login_fail", module="auth",
                            detail=f"username: {username}", ip_address=ip)
@@ -85,6 +65,9 @@ async def login_submit(
             "request": request,
             "error": "Identifiant ou mot de passe incorrect",
         })
+
+    # Success — clear any past failed attempts for this IP
+    await rl.clear_attempts(db, _RL_SCOPE, ip)
 
     # Log successful login
     await log_activity(db, user=user, action="login", module="auth",

@@ -1169,7 +1169,7 @@ async def _get_pl(token, db, request=None):
     from datetime import datetime, timezone as tz
     from app.utils.portal_security import check_token_rate_limit, record_token_attempt, log_portal_access
     if request:
-        check_token_rate_limit(request)
+        await check_token_rate_limit(request, db)
     result = await db.execute(
         select(PackingList).options(
             selectinload(PackingList.order).selectinload(Order.leg).selectinload(Leg.vessel),
@@ -1181,7 +1181,8 @@ async def _get_pl(token, db, request=None):
     pl = result.scalar_one_or_none()
     if not pl:
         if request:
-            record_token_attempt(request)
+            await record_token_attempt(request, db)
+            await db.commit()
         raise HTTPException(404, detail="Lien invalide ou expiré")
     # Check token expiration
     if pl.token_expires_at and pl.token_expires_at < datetime.now(tz.utc):

@@ -2040,12 +2040,13 @@ async def rgpd_erase_booking(
         audit.user_email = "ERASED"
         audit.detail = "ERASED (RGPD)"
 
-    # Delete portal access logs
+    # Delete portal access logs (match by sha256 of the booking token — A2.3)
     try:
         from app.models.portal_access_log import PortalAccessLog
+        from app.utils.portal_security import hash_portal_token
         access_result = await db.execute(
             select(PortalAccessLog).where(
-                PortalAccessLog.token == booking.token,
+                PortalAccessLog.token_hash == hash_portal_token(booking.token),
             )
         )
         for log in access_result.scalars().all():

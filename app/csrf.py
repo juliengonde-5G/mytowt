@@ -1,16 +1,32 @@
 """CSRF protection for forms.
 
 Strategy: Double-submit cookie pattern.
+
 - A random token is stored in a cookie (towt_csrf).
-- Templates inject the token as a hidden field via {{ csrf_input() }}.
-- On POST/DELETE, the middleware compares cookie vs form field.
-- HTMX requests with HX-Request header also need the token.
-- External routes (/p/, /passenger/, /boarding/, /planning/ext/) are excluded.
+- Templates inject the token as a hidden field via ``{{ csrf_input() }}``.
+- On POST/PUT/PATCH/DELETE the middleware validates the token by one of:
+    * the ``x-csrf-token`` header (HTMX / AJAX), compared with the cookie
+      via ``secrets.compare_digest``;
+    * otherwise the ``csrf_token`` form field, parsed out of the body
+      (``application/x-www-form-urlencoded`` or ``multipart/form-data``).
+  The body is buffered and replayed to the downstream app so route
+  handlers keep full access to ``request.form()`` / ``await file.read()``.
+- JSON bodies without the header are rejected — there is no JSON-native
+  form field to validate and those should always be HTMX/AJAX.
+- External portal routes (``/p/``, ``/passenger/``, ``/boarding/``,
+  ``/planning/ext/``), the login page and the tracking API are exempt.
+
+Sprint 2 hardening (A2.1): added strict body-parsing for form POSTs so
+we no longer rely solely on ``SameSite=Lax``.
 """
-import secrets
+from __future__ import annotations
+
 import logging
+import secrets
+from typing import Optional
+from urllib.parse import parse_qs
+
 from starlette.requests import Request
-from starlette.responses import Response
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -21,9 +37,23 @@ CSRF_FIELD_NAME = "csrf_token"
 CSRF_HEADER_NAME = "x-csrf-token"
 TOKEN_LENGTH = 32
 
-# Routes excluded from CSRF validation (public/external portals)
-CSRF_EXEMPT_PREFIXES = ("/p/", "/passenger/", "/boarding/", "/planning/ext/", "/api/", "/login", "/.well-known/")
+# Routes excluded from CSRF validation (public/external portals + login)
+CSRF_EXEMPT_PREFIXES = (
+    "/p/",
+    "/passenger/",
+    "/boarding/",
+    "/planning/ext/",
+    "/api/",
+    "/login",
+    "/.well-known/",
+)
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
+
+# Max body size we are willing to buffer when validating a form CSRF token.
+# File uploads above this threshold won't be CSRF-validated via the body
+# (they still need the x-csrf-token header). Default is 10 MiB which is
+# generous for the forms used here. Override via app.config if needed.
+MAX_CSRF_BODY_BYTES = 10 * 1024 * 1024
 
 
 def generate_csrf_token() -> str:
@@ -36,18 +66,76 @@ def csrf_input(request: Request) -> str:
     return f'<input type="hidden" name="{CSRF_FIELD_NAME}" value="{token}">'
 
 
-class CSRFMiddleware:
-    """Pure ASGI middleware for CSRF protection.
+async def _read_body(receive: Receive, limit: int) -> tuple[bytes, bool]:
+    """Drain the receive stream up to ``limit`` bytes.
 
-    Uses ASGI directly instead of BaseHTTPMiddleware to avoid the body
-    consumption issue where form data read by the middleware becomes
-    unavailable to route handlers.
-
-    For POST/DELETE requests, validates the CSRF token from the
-    X-CSRF-Token header (set by HTMX/JS) against the cookie value.
-    For standard HTML form submissions without the header, the token
-    is validated from the form field by the route handler (deferred check).
+    Returns ``(body, truncated)``. When truncated is True we stopped
+    reading, and the remainder is discarded — but we already know the
+    request is too large for our CSRF buffer so the caller will reject it.
     """
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        message = await receive()
+        if message["type"] == "http.disconnect":
+            raise RuntimeError("client disconnected before CSRF validation")
+        body = message.get("body", b"")
+        total += len(body)
+        if total > limit:
+            return b"".join(chunks), True
+        chunks.append(body)
+        if not message.get("more_body", False):
+            break
+    return b"".join(chunks), False
+
+
+def _make_replay_receive(body: bytes) -> Receive:
+    """Return an ASGI ``receive`` coroutine that replays the buffered body once."""
+    sent = False
+
+    async def receive() -> dict:
+        nonlocal sent
+        if not sent:
+            sent = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        return {"type": "http.disconnect"}
+
+    return receive
+
+
+async def _extract_form_token(
+    scope: Scope, body: bytes, content_type: str
+) -> Optional[str]:
+    """Pull the ``csrf_token`` field out of a POST body (urlencoded or multipart)."""
+    if "application/x-www-form-urlencoded" in content_type:
+        parsed = parse_qs(body.decode("utf-8", errors="replace"), keep_blank_values=True)
+        values = parsed.get(CSRF_FIELD_NAME) or []
+        return values[0] if values else None
+
+    if "multipart/form-data" in content_type:
+        # Delegate multipart parsing to Starlette, replaying the buffered body.
+        temp_request = Request(scope, receive=_make_replay_receive(body))
+        try:
+            form = await temp_request.form()
+        except Exception:
+            return None
+        val = form.get(CSRF_FIELD_NAME)
+        if hasattr(val, "file"):
+            # UploadFile — never valid for the token.
+            return None
+        return val
+
+    # JSON / other content types: require the header.
+    return None
+
+
+def _forbid(scope: Scope, receive: Receive, send: Send, detail: str):
+    response = JSONResponse({"detail": detail}, status_code=403)
+    return response(scope, receive, send)
+
+
+class CSRFMiddleware:
+    """Pure ASGI middleware enforcing double-submit CSRF validation."""
 
     def __init__(self, app: ASGIApp):
         self.app = app
@@ -61,71 +149,78 @@ class CSRFMiddleware:
         method = request.method
         csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME)
 
-        # For safe methods, just ensure the cookie exists
+        # Safe methods: ensure the cookie exists for future requests
         if method in SAFE_METHODS:
             if csrf_cookie:
                 await self.app(scope, receive, send)
-            else:
-                # Intercept the response to add the CSRF cookie
-                token = generate_csrf_token()
-                cookie_set = False
+                return
 
-                async def send_with_cookie(message):
-                    nonlocal cookie_set
-                    if message["type"] == "http.response.start" and not cookie_set:
-                        cookie_set = True
-                        headers = list(message.get("headers", []))
-                        secure = "https" in str(scope.get("scheme", "http"))
-                        cookie_val = (
-                            f"{CSRF_COOKIE_NAME}={token}; Path=/; "
-                            f"SameSite=Lax; Max-Age=28800"
-                        )
-                        if secure:
-                            cookie_val += "; Secure"
-                        headers.append((b"set-cookie", cookie_val.encode()))
-                        message = {**message, "headers": headers}
-                    await send(message)
+            token = generate_csrf_token()
+            cookie_set = False
 
-                await self.app(scope, receive, send_with_cookie)
+            async def send_with_cookie(message):
+                nonlocal cookie_set
+                if message["type"] == "http.response.start" and not cookie_set:
+                    cookie_set = True
+                    headers = list(message.get("headers", []))
+                    secure = "https" in str(scope.get("scheme", "http"))
+                    cookie_val = (
+                        f"{CSRF_COOKIE_NAME}={token}; Path=/; "
+                        f"SameSite=Lax; Max-Age=28800"
+                    )
+                    if secure:
+                        cookie_val += "; Secure"
+                    headers.append((b"set-cookie", cookie_val.encode()))
+                    message = {**message, "headers": headers}
+                await send(message)
+
+            await self.app(scope, receive, send_with_cookie)
             return
 
-        # For unsafe methods, check exemptions
+        # Unsafe methods: check exemptions first
         path = request.url.path
         if any(path.startswith(prefix) for prefix in CSRF_EXEMPT_PREFIXES):
             await self.app(scope, receive, send)
             return
 
-        # Validate CSRF token from cookie
         if not csrf_cookie:
-            logger.warning(f"CSRF: missing cookie for {method} {path}")
-            response = JSONResponse({"detail": "CSRF token missing"}, status_code=403)
-            await response(scope, receive, send)
+            logger.warning("CSRF: missing cookie for %s %s", method, path)
+            await _forbid(scope, receive, send, "CSRF token missing")
             return
 
-        # Check header (HTMX/AJAX) — does NOT consume the body
-        submitted_token = request.headers.get(CSRF_HEADER_NAME)
-        if submitted_token:
-            if submitted_token != csrf_cookie:
-                logger.warning(f"CSRF: header token mismatch for {method} {path}")
-                response = JSONResponse({"detail": "CSRF validation failed"}, status_code=403)
-                await response(scope, receive, send)
+        # 1. Header path — HTMX/AJAX. Body is untouched.
+        header_token = request.headers.get(CSRF_HEADER_NAME)
+        if header_token:
+            if not secrets.compare_digest(header_token, csrf_cookie):
+                logger.warning("CSRF: header token mismatch for %s %s", method, path)
+                await _forbid(scope, receive, send, "CSRF validation failed")
                 return
-            # Header token valid, proceed
             await self.app(scope, receive, send)
             return
 
-        # For form submissions without the header: we CANNOT read the body here
-        # because it would consume it before the route handler.
-        # Instead, we inject a validation flag and let a lightweight dependency
-        # or the form field be checked.
-        # Since we use the double-submit cookie pattern and the csrf_input()
-        # helper injects the cookie value into the form, the token in the form
-        # field will always match the cookie (same value). The CSRF protection
-        # comes from the cookie's SameSite=Lax policy which prevents cross-site
-        # form submissions from including the cookie.
-        #
-        # For extra safety, we store the cookie value in request.state so routes
-        # can optionally verify the form field matches.
-        scope.setdefault("state", {})
-        scope["state"]["csrf_cookie"] = csrf_cookie
-        await self.app(scope, receive, send)
+        # 2. Form path — buffer the body, pull csrf_token, replay body downstream.
+        content_type = request.headers.get("content-type", "")
+        try:
+            body, truncated = await _read_body(receive, MAX_CSRF_BODY_BYTES)
+        except RuntimeError:
+            # Client disconnected mid-upload; nothing left to do.
+            return
+
+        if truncated:
+            logger.warning(
+                "CSRF: body over %d bytes for %s %s; must use x-csrf-token header",
+                MAX_CSRF_BODY_BYTES,
+                method,
+                path,
+            )
+            await _forbid(scope, receive, send, "CSRF validation failed (body too large)")
+            return
+
+        form_token = await _extract_form_token(scope, body, content_type)
+        if not form_token or not secrets.compare_digest(form_token, csrf_cookie):
+            logger.warning("CSRF: form token missing/invalid for %s %s", method, path)
+            await _forbid(scope, receive, send, "CSRF validation failed")
+            return
+
+        # Replay body for the downstream application.
+        await self.app(scope, _make_replay_receive(body), send)

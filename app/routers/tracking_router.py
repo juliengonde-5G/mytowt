@@ -12,8 +12,10 @@ import csv
 import io
 import re
 
+from app.auth import get_current_user
 from app.config import get_settings
 from app.database import get_db
+from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.vessel_position import VesselPosition
@@ -244,6 +246,7 @@ async def get_positions(
     leg_id: Optional[int] = Query(None),
     limit: int = Query(500, le=5000),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Get recent positions for a vessel, optionally filtered by leg."""
     q = select(VesselPosition).where(VesselPosition.vessel_id == vessel_id)
@@ -269,6 +272,7 @@ async def get_positions(
 @router.get("/latest")
 async def get_latest_positions(
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Get the most recent position for each active vessel."""
     # Subquery: max recorded_at per vessel
@@ -308,6 +312,7 @@ async def get_latest_positions(
 async def get_leg_track(
     leg_id: int,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Get full GPS track for a leg with computed navigation KPIs:
@@ -406,6 +411,7 @@ async def get_navigation_kpis(
     year: Optional[int] = Query(None),
     vessel_id: Optional[int] = Query(None),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Get navigation KPIs for all legs that have GPS data.

@@ -43,7 +43,7 @@ UPLOAD_DIR = "/app/uploads/passenger_docs"
 
 async def _get_booking_by_token(token: str, db: AsyncSession, request: Request = None) -> PassengerBooking:
     if request:
-        check_token_rate_limit(request)
+        await check_token_rate_limit(request, db)
     result = await db.execute(
         select(PassengerBooking).options(
             selectinload(PassengerBooking.passengers).selectinload(Passenger.documents),
@@ -57,7 +57,8 @@ async def _get_booking_by_token(token: str, db: AsyncSession, request: Request =
     booking = result.scalar_one_or_none()
     if not booking:
         if request:
-            record_token_attempt(request)
+            await record_token_attempt(request, db)
+            await db.commit()
         raise HTTPException(404, "Réservation introuvable.")
     # Check token expiration
     if booking.token_expires_at and booking.token_expires_at < datetime.now(tz.utc):

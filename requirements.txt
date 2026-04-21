@@ -16,3 +16,4 @@ httpx==0.28.1
 reportlab==4.2.5
 weasyprint==63.1
 python-dotenv==1.0.1
+alembic==1.14.0
