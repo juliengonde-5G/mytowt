@@ -160,9 +160,9 @@
 
 <script>
 // ─── State ───
-let currentBrackets = {{ default_brackets_shipper|safe }};
-const defaultBracketsShipper = {{ default_brackets_shipper|safe }};
-const defaultBracketsFF = {{ default_brackets_ff|safe }};
+let currentBrackets = {{ default_brackets_shipper|tojson }};
+const defaultBracketsShipper = {{ default_brackets_shipper|tojson }};
+const defaultBracketsFF = {{ default_brackets_ff|tojson }};
 let currentClientType = 'shipper';
 let routeIndex = 0;
 let loadedRoutes = [];
