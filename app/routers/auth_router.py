@@ -60,7 +60,7 @@ async def login_submit(
         # Log failed login
         await log_activity(db, action="login_fail", module="auth",
                            detail=f"username: {username}", ip_address=ip)
-        await db.commit()
+        await db.flush()
         return templates.TemplateResponse("auth/login.html", {
             "request": request,
             "error": "Identifiant ou mot de passe incorrect",
@@ -73,7 +73,7 @@ async def login_submit(
     await log_activity(db, user=user, action="login", module="auth",
                        entity_type="user", entity_id=user.id,
                        entity_label=user.full_name, ip_address=ip)
-    await db.commit()
+    await db.flush()
 
     # Create session
     token = create_session_token(user.id)
@@ -100,7 +100,7 @@ async def logout(request: Request, db: AsyncSession = Depends(get_db)):
                                entity_type="user", entity_id=user.id,
                                entity_label=user.full_name,
                                ip_address=get_client_ip(request))
-            await db.commit()
+            await db.flush()
     except Exception:
         pass
     response = RedirectResponse(url="/login", status_code=303)

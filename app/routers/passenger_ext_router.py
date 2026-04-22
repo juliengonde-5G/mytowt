@@ -326,7 +326,7 @@ async def payment_return(token: str, request: Request, payment_id: int = Query(0
                     if new_status == "received" and not payment.paid_date:
                         from datetime import date as date_cls
                         payment.paid_date = date_cls.today()
-                    await db.commit()
+                    await db.flush()
                     payment_success = (new_status == "received")
                 except Exception:
                     payment_success = (payment.status == "received")

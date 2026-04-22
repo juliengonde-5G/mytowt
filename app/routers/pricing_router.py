@@ -890,7 +890,7 @@ async def grid_delete(
     await log_activity(db, user=user, action="delete", module="commercial",
                        entity_type="rate_grid", entity_id=gid,
                        entity_label=ref, ip_address=get_client_ip(request))
-    await db.commit()
+    await db.flush()
 
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": "/commercial/pricing/grids"})

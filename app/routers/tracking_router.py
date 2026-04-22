@@ -223,7 +223,7 @@ async def upload_tracking_csv(
         else:
             skipped += 1
 
-    await db.commit()
+    await db.flush()
 
     return JSONResponse({
         "status": "ok",
