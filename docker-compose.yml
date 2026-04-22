@@ -5,8 +5,8 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-towt_admin}:${POSTGRES_PASSWORD:-towt_secure_2025}@db:5432/${POSTGRES_DB:-towt_planning}
-      - SECRET_KEY=${SECRET_KEY:-towt_secret_key_change_in_production_2025}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:?set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-towt_planning}
+      - SECRET_KEY=${SECRET_KEY:?set SECRET_KEY in .env (>=32 chars)}
       - APP_ENV=${APP_ENV:-production}
       - DEBUG=${DEBUG:-false}
     volumes:
@@ -23,8 +23,8 @@ services:
     image: postgres:16-alpine
     container_name: towt-db
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-towt_admin}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-towt_secure_2025}
+      - POSTGRES_USER=${POSTGRES_USER:?set POSTGRES_USER in .env}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=${POSTGRES_DB:-towt_planning}
     volumes:
       - postgres_data:/var/lib/postgresql/data

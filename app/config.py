@@ -10,11 +10,11 @@ class Settings(BaseSettings):
     APP_ENV: str = "production"
     DEBUG: bool = False
 
-    # Database
-    DATABASE_URL: str = "postgresql+asyncpg://towt_admin:towt_secure_2025@db:5432/towt_planning"
+    # Database — no default, must come from env (.env or docker-compose)
+    DATABASE_URL: str
 
-    # Security
-    SECRET_KEY: str = "towt_secret_key_change_in_production_2025"
+    # Security — no default, must come from env
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 heures
 
@@ -50,4 +50,21 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    weak_secrets = {
+        "towt_secret_key_change_in_production_2025",
+        "change_me",
+        "changeme",
+        "secret",
+    }
+    if settings.SECRET_KEY in weak_secrets or len(settings.SECRET_KEY) < 32:
+        raise RuntimeError(
+            "SECRET_KEY must be set to a strong value (>=32 chars) via environment. "
+            "Refusing to start with default/weak key."
+        )
+    if "towt_secure_2025" in settings.DATABASE_URL:
+        raise RuntimeError(
+            "DATABASE_URL uses the default weak password. "
+            "Set POSTGRES_PASSWORD/DATABASE_URL via environment before starting."
+        )
+    return settings
