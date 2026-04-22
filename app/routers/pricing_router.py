@@ -10,7 +10,7 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, date
-import os, json, subprocess
+import os, json, subprocess, re
 
 from app.database import get_db
 from app.auth import get_current_user
@@ -1053,8 +1053,15 @@ async def offer_create_submit(
 
     os.makedirs(OFFER_DIR, exist_ok=True)
     json_path = f"/tmp/rate_offer_{offer.id}.json"
-    docx_filename = f"rate_offer_{ref.replace('-', '_')}.docx"
+    # Sanitise filename: only alphanumerics / underscore / hyphen / dot, then
+    # collapse via os.path.basename() to defeat any path-traversal attempt
+    # (ref is user-influenced via grid.reference).
+    safe_ref = re.sub(r"[^A-Za-z0-9_\-]", "_", ref)[:64] or f"id{offer.id}"
+    docx_filename = os.path.basename(f"rate_offer_{safe_ref}.docx")
     docx_path = os.path.join(OFFER_DIR, docx_filename)
+    # Confirm the computed path is still inside OFFER_DIR
+    if os.path.commonpath([os.path.abspath(docx_path), os.path.abspath(OFFER_DIR)]) != os.path.abspath(OFFER_DIR):
+        raise HTTPException(400, "Invalid filename")
 
     with open(json_path, "w") as f:
         json.dump(doc_data, f)

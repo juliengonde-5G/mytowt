@@ -1013,9 +1013,9 @@ async def create_commercial_share(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a shareable public link for the current commercial planning view."""
-    import uuid
+    import secrets
     share = PlanningShare(
-        token=uuid.uuid4().hex[:24],
+        token=secrets.token_urlsafe(24),
         year=year,
         vessel_code=int(vessel) if vessel and vessel.strip() else None,
         origin_locode=origin.upper() if origin and origin.strip() else None,
