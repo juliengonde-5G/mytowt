@@ -1856,11 +1856,8 @@ async def closure_download_pdf(
     leg = await db.get(Leg, leg_id)
     if not leg or not leg.closure_pdf_path:
         raise HTTPException(404, detail="PDF de clôture non disponible.")
-    import os
-    if not os.path.exists(leg.closure_pdf_path):
-        raise HTTPException(404, detail="Fichier PDF introuvable.")
-    from fastapi.responses import FileResponse
-    return FileResponse(
+    from app.utils.safe_files import safe_file_response
+    return safe_file_response(
         leg.closure_pdf_path,
         filename=f"closure_{leg.leg_code}.pdf",
         media_type="application/pdf",

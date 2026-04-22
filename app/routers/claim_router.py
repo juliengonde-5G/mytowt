@@ -207,14 +207,16 @@ async def claim_add_document(claim_id:int, request:Request, doc_type:str=Form(..
 @router.get("/{claim_id}/document/{doc_id}/download")
 async def claim_download_doc(claim_id:int, doc_id:int, db:AsyncSession=Depends(get_db)):
     doc = await db.get(ClaimDocument, doc_id)
-    if not doc or doc.claim_id!=claim_id or not doc.file_path or not os.path.exists(doc.file_path): raise HTTPException(404)
-    return FileResponse(doc.file_path, filename=doc.filename or "document")
+    if not doc or doc.claim_id!=claim_id: raise HTTPException(404)
+    from app.utils.safe_files import safe_file_response
+    return safe_file_response(doc.file_path, filename=doc.filename or "document")
 
 @router.get("/{claim_id}/timeline/{tl_id}/download")
 async def claim_download_tl(claim_id:int, tl_id:int, db:AsyncSession=Depends(get_db)):
     tl = await db.get(ClaimTimeline, tl_id)
-    if not tl or tl.claim_id!=claim_id or not tl.file_path or not os.path.exists(tl.file_path): raise HTTPException(404)
-    return FileResponse(tl.file_path, filename=tl.filename or "document")
+    if not tl or tl.claim_id!=claim_id: raise HTTPException(404)
+    from app.utils.safe_files import safe_file_response
+    return safe_file_response(tl.file_path, filename=tl.filename or "document")
 
 @router.delete("/{claim_id}/document/{doc_id}", response_class=HTMLResponse)
 async def claim_delete_doc(claim_id:int, doc_id:int, user:User=Depends(get_current_user), db:AsyncSession=Depends(get_db)):
@@ -301,4 +303,5 @@ async def claim_declaration_pdf(claim_id:int, user:User=Depends(get_current_user
 
     db.add(ClaimTimeline(claim_id=claim_id, action_type="declaration", title="Déclaration PDF générée", filename=f"declaration_{claim.reference}.pdf", file_path=pdf_path, actor=user.full_name, action_date=datetime.now()))
     await db.flush()
-    return FileResponse(pdf_path, filename=f"declaration_{claim.reference}.pdf", media_type="application/pdf")
+    from app.utils.safe_files import safe_file_response
+    return safe_file_response(pdf_path, filename=f"declaration_{claim.reference}.pdf", media_type="application/pdf")

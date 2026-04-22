@@ -623,11 +623,11 @@ async def download_doc(
     user: User = Depends(require_permission("passengers", "C")),
     db: AsyncSession = Depends(get_db),
 ):
-    from fastapi.responses import FileResponse
     doc = await db.get(PassengerDocument, doc_id)
-    if not doc or not doc.file_path:
+    if not doc:
         raise HTTPException(404, "Document non trouvé")
-    return FileResponse(doc.file_path, filename=doc.filename or f"document_{doc_id}")
+    from app.utils.safe_files import safe_file_response
+    return safe_file_response(doc.file_path, filename=doc.filename or f"document_{doc_id}")
 
 
 # ═══════════════════════════════════════════════════════════════

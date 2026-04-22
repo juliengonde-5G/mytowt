@@ -525,9 +525,8 @@ async def order_download_attachment(
     order = order_result.scalar_one_or_none()
     if not order or not order.attachment_path:
         raise HTTPException(404)
-    if not os.path.exists(order.attachment_path):
-        raise HTTPException(404)
-    return FileResponse(
+    from app.utils.safe_files import safe_file_response
+    return safe_file_response(
         order.attachment_path,
         filename=order.attachment_filename,
         media_type="application/octet-stream",

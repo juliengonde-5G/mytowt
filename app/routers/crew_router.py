@@ -753,9 +753,10 @@ async def ticket_create(
 async def ticket_download(tid: int, user: User = Depends(require_permission("crew", "C")), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(CrewTicket).where(CrewTicket.id == tid))
     ticket = result.scalar_one_or_none()
-    if not ticket or not ticket.file_path or not os.path.isfile(ticket.file_path):
+    if not ticket:
         raise HTTPException(404, detail="Fichier non trouvé")
-    return FileResponse(ticket.file_path, filename=ticket.filename or "ticket")
+    from app.utils.safe_files import safe_file_response
+    return safe_file_response(ticket.file_path, filename=ticket.filename or "ticket")
 
 
 @router.delete("/tickets/{tid}", response_class=HTMLResponse)

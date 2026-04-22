@@ -1125,9 +1125,10 @@ async def offer_download(
 ):
     result = await db.execute(select(RateOffer).where(RateOffer.id == oid))
     offer = result.scalar_one_or_none()
-    if not offer or not offer.document_path or not os.path.exists(offer.document_path):
+    if not offer or not offer.document_path:
         raise HTTPException(404)
-    return FileResponse(
+    from app.utils.safe_files import safe_file_response
+    return safe_file_response(
         offer.document_path,
         filename=offer.document_filename,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",

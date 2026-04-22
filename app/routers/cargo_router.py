@@ -1409,10 +1409,8 @@ async def client_download_doc(token: str, doc_id: int, db: AsyncSession = Depend
     doc = await db.get(PackingListDocument, doc_id)
     if not doc or doc.packing_list_id != pl.id:
         raise HTTPException(404)
-    import os
-    if not os.path.exists(doc.file_path):
-        raise HTTPException(404, "Fichier introuvable")
-    return FileResponse(doc.file_path, filename=doc.filename)
+    from app.utils.safe_files import safe_file_response
+    return safe_file_response(doc.file_path, filename=doc.filename)
 
 
 @ext_router.post("/{token}/documents/{doc_id}/delete", response_class=HTMLResponse)
