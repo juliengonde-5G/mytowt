@@ -119,6 +119,17 @@ async def get_previous_leg(db: AsyncSession, vessel_id: int, year: int, current_
 async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int, edited_leg_id: int = None):
     """Recalculate dates chain for all legs of a vessel/year.
 
+    Wrapped in a savepoint (F23) — if any per-leg compute raises, all
+    cascade writes are reverted and the caller's transaction remains
+    clean instead of leaving partially-updated ETA/ETD values.
+    """
+    async with db.begin_nested():
+        return await _resequence_and_recalc_impl(db, vessel_id, year, edited_leg_id)
+
+
+async def _resequence_and_recalc_impl(db: AsyncSession, vessel_id: int, year: int, edited_leg_id: int = None):
+    """Recalculate dates chain for all legs of a vessel/year.
+
     Rules:
     - Order is FIXED by sequence (never reordered by ETD — preserves POL/POD chain)
     - Leg codes are NOT regenerated (stable references)
@@ -171,7 +182,9 @@ async def resequence_and_recalc(db: AsyncSession, vessel_id: int, year: int, edi
             prev_leg = legs[i - 1]
             prev_arrival = prev_leg.ata or prev_leg.eta  # Actual takes priority
             if prev_arrival:
-                leg.etd = prev_arrival + timedelta(days=leg.port_stay_days or DEFAULT_PORT_STAY_DAYS)
+                # F44: port_stay_days=0 is a valid value — only fall back when NULL
+                stay = leg.port_stay_days if leg.port_stay_days is not None else DEFAULT_PORT_STAY_DAYS
+                leg.etd = prev_arrival + timedelta(days=stay)
 
         # Recalculate ETA from ETD (only if no ATA — actual arrival is final)
         if leg.etd and leg.distance_nm and not leg.ata:
@@ -420,6 +433,10 @@ async def leg_create_submit(
             "error": f"Port invalide: {departure_port if not dep_port else arrival_port}",
         })
 
+    # F22: reject same-port legs
+    if dep_port.locode == arr_port.locode:
+        raise HTTPException(400, "Le port de départ et le port d'arrivée doivent être différents.")
+
     # Get vessel
     v_result = await db.execute(select(Vessel).where(Vessel.id == _vessel_id))
     vessel_obj = v_result.scalar_one_or_none()
@@ -458,6 +475,11 @@ async def leg_create_submit(
     _eta = compute_eta(_etd, distance, _speed, _elongation) if _etd and distance else None
     _computed_dist = round(distance * _elongation, 1) if distance else None
     _duration = compute_navigation_duration(distance, _speed, _elongation) if distance else None
+
+    # F21: server-side ETA>=ETD safety net (compute_eta should respect this
+    # already, but reject any inconsistency rather than silently persisting)
+    if _etd and _eta and _eta <= _etd:
+        raise HTTPException(400, "ETA doit être postérieur à ETD.")
 
     leg = Leg(
         vessel_id=_vessel_id,
@@ -586,6 +608,10 @@ async def leg_edit_submit(
             "error": "Port invalide.",
         })
 
+    # F22: reject same-port legs
+    if dep_port.locode == arr_port.locode:
+        raise HTTPException(400, "Le port de départ et le port d'arrivée doivent être différents.")
+
     v_result = await db.execute(select(Vessel).where(Vessel.id == _vessel_id))
     vessel_obj = v_result.scalar_one_or_none()
 
@@ -615,6 +641,10 @@ async def leg_edit_submit(
             _eta = compute_eta(_etd, _dist, _speed, _elongation)
         else:
             _eta = None  # Can't compute, clear it
+
+    # F21: ETA must be strictly after ETD
+    if _etd and _eta and _eta <= _etd:
+        raise HTTPException(400, "ETA doit être postérieur à ETD.")
 
     # Validate actual dates coherence (these are hard constraints)
     if _ata and _etd and _ata < _etd:

@@ -482,8 +482,15 @@ async def update_port_status(
         await notify_arrival(db, leg, vessel_name, port_name)
 
     elif new_status == "pilote_depart":
+        # F37: do NOT auto-fabricate an ATA — require operator to have set it
+        # via the 'a_quai' transition. Forcing departure without arrival leaves
+        # ATA null so the legitimate operator sees the missing field.
         if not leg.ata:
-            leg.ata = now - timedelta(hours=1)
+            raise HTTPException(
+                400,
+                "Impossible de passer en 'pilote départ' sans ATA renseignée. "
+                "Passer d'abord au statut 'à quai'."
+            )
         leg.atd = now
         leg.status = "completed"
         await propagate_from_leg(db, leg)
@@ -613,7 +620,15 @@ async def operation_create_submit(
     await db.flush()
     await log_activity(db, user, "escale", "create", "Operation", op.id, f"Opération {action}")
     form = await request.form()
-    crew_ids = [int(x) for x in form.getlist("crew_ids") if x]
+    # F42: tolerate malformed crew_ids — drop bad tokens instead of 500
+    crew_ids = []
+    for _cx in form.getlist("crew_ids"):
+        if not _cx:
+            continue
+        try:
+            crew_ids.append(int(_cx))
+        except (TypeError, ValueError):
+            continue
     if crew_ids:
         await handle_crew_assignment(db, op, crew_ids)
     leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == _leg_id))
@@ -681,7 +696,15 @@ async def operation_edit_submit(
     await db.flush()
     await log_activity(db, user, "escale", "update", "Operation", op_id, f"Modification opération {action}")
     form = await request.form()
-    crew_ids = [int(x) for x in form.getlist("crew_ids") if x]
+    # F42: tolerate malformed crew_ids — drop bad tokens instead of 500
+    crew_ids = []
+    for _cx in form.getlist("crew_ids"):
+        if not _cx:
+            continue
+        try:
+            crew_ids.append(int(_cx))
+        except (TypeError, ValueError):
+            continue
     if crew_ids:
         await handle_crew_assignment(db, op, crew_ids)
     leg_result = await db.execute(select(Leg).options(selectinload(Leg.vessel)).where(Leg.id == op.leg_id))
@@ -742,10 +765,15 @@ async def docker_create_submit(
     user: User = Depends(require_permission("escale", "M")), db: AsyncSession = Depends(get_db),
 ):
     _leg_id = int(leg_id)
+    _ps = parse_datetime(planned_start)
+    _pe = parse_datetime(planned_end)
+    # F38: reject docker shifts where planned end is at or before planned start
+    if _ps and _pe and _pe <= _ps:
+        raise HTTPException(400, "La fin prévue du shift doit être après son début.")
     ds = DockerShift(
         leg_id=_leg_id, hold=hold,
-        planned_start=parse_datetime(planned_start),
-        planned_end=parse_datetime(planned_end),
+        planned_start=_ps,
+        planned_end=_pe,
         planned_palettes=parse_int(planned_palettes),
         notes=notes.strip() if notes else None,
     )
@@ -797,10 +825,19 @@ async def docker_edit_submit(
     if not ds:
         raise HTTPException(404)
     ds.hold = hold
-    ds.planned_start = parse_datetime(planned_start)
-    ds.planned_end = parse_datetime(planned_end)
-    ds.actual_start = parse_datetime(actual_start)
-    ds.actual_end = parse_datetime(actual_end)
+    _ps = parse_datetime(planned_start)
+    _pe = parse_datetime(planned_end)
+    _as = parse_datetime(actual_start)
+    _ae = parse_datetime(actual_end)
+    # F38: reject shifts with end before/equal start (planned & actual)
+    if _ps and _pe and _pe <= _ps:
+        raise HTTPException(400, "La fin prévue du shift doit être après son début.")
+    if _as and _ae and _ae <= _as:
+        raise HTTPException(400, "La fin réelle du shift doit être après son début.")
+    ds.planned_start = _ps
+    ds.planned_end = _pe
+    ds.actual_start = _as
+    ds.actual_end = _ae
     ds.planned_palettes = parse_int(planned_palettes)
     ds.actual_palettes = parse_int(actual_palettes)
     ds.notes = notes.strip() if notes else None
