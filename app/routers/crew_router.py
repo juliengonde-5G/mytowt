@@ -386,6 +386,7 @@ async def crew_for_vessel_api(
     vessel_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
+    user=Depends(require_permission("crew", "C")),
 ):
     """Return crew members currently on board a vessel (for embark/disembark selection)."""
     from fastapi.responses import JSONResponse
