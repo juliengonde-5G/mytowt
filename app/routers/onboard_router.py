@@ -734,38 +734,42 @@ async def eta_shift_declare(
     old_eta = leg.eta
     shift_hours = round((new_eta_dt - old_eta).total_seconds() / 3600, 1) if old_eta else 0
 
-    # Record the shift in history
-    shift_record = ETAShift(
-        leg_id=leg.id,
-        vessel_id=leg.vessel_id,
-        field_changed="eta",
-        old_value=old_eta,
-        new_value=new_eta_dt,
-        shift_hours=shift_hours,
-        reason=reason,
-        justification=justification.strip(),
-        created_by=user.full_name,
-    )
-    db.add(shift_record)
-
-    # Apply the new ETA
-    leg.eta = new_eta_dt
-    await db.flush()
-
-    # Cascade recalculation to all subsequent legs
-    await resequence_and_recalc(db, leg.vessel_id, leg.year, edited_leg_id=leg.id)
-
-    # Count affected downstream legs
-    downstream_result = await db.execute(
-        select(func.count(Leg.id)).where(
-            Leg.vessel_id == leg.vessel_id,
-            Leg.year == leg.year,
-            Leg.sequence > leg.sequence,
+    # F19: wrap the whole shift operation (record + leg.eta update + cascade
+    # + legs_affected recount) in a single savepoint. A failure mid-cascade
+    # now rolls back the ETAShift row too, avoiding an orphaned history
+    # entry with stale legs_affected pointing at the un-updated state.
+    async with db.begin_nested():
+        shift_record = ETAShift(
+            leg_id=leg.id,
+            vessel_id=leg.vessel_id,
+            field_changed="eta",
+            old_value=old_eta,
+            new_value=new_eta_dt,
+            shift_hours=shift_hours,
+            reason=reason,
+            justification=justification.strip(),
+            created_by=user.full_name,
         )
-    )
-    legs_affected = downstream_result.scalar() or 0
-    shift_record.legs_affected = legs_affected
-    await db.flush()
+        db.add(shift_record)
+
+        # Apply the new ETA
+        leg.eta = new_eta_dt
+        await db.flush()
+
+        # Cascade recalculation to all subsequent legs
+        await resequence_and_recalc(db, leg.vessel_id, leg.year, edited_leg_id=leg.id)
+
+        # Count affected downstream legs
+        downstream_result = await db.execute(
+            select(func.count(Leg.id)).where(
+                Leg.vessel_id == leg.vessel_id,
+                Leg.year == leg.year,
+                Leg.sequence > leg.sequence,
+            )
+        )
+        legs_affected = downstream_result.scalar() or 0
+        shift_record.legs_affected = legs_affected
+        await db.flush()
 
     # Create SOF event
     direction = "retard" if shift_hours > 0 else "avance"
@@ -1643,6 +1647,14 @@ async def cargo_doc_save(
 #  ESCALE CLOSURE WORKFLOW
 # ═══════════════════════════════════════════════════════════════
 
+async def _closure_redirect_url(db: AsyncSession, leg: Leg, leg_id: int) -> str:
+    """F35: build /onboard redirect using vessel.code (string), not
+    vessel_id (int) — the onboard index filter keys on code."""
+    vessel = await db.get(Vessel, leg.vessel_id) if leg else None
+    vc = vessel.code if vessel else ""
+    return f"/onboard?vessel={vc}&leg_id={leg_id}"
+
+
 @router.post("/closure/{leg_id}/submit-review", response_class=HTMLResponse)
 async def closure_submit_review(
     leg_id: int, request: Request,
@@ -1686,7 +1698,7 @@ async def closure_submit_review(
             leg_id=leg_id,
         )
 
-    url = f"/onboard?vessel={leg.vessel_id}&leg_id={leg_id}"
+    url = await _closure_redirect_url(db, leg, leg_id)
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
     return RedirectResponse(url=url, status_code=303)
@@ -1732,7 +1744,7 @@ async def closure_approve(
             leg_id=leg_id,
         )
 
-    url = f"/onboard?vessel={leg.vessel_id}&leg_id={leg_id}"
+    url = await _closure_redirect_url(db, leg, leg_id)
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
     return RedirectResponse(url=url, status_code=303)
@@ -1781,7 +1793,7 @@ async def closure_reopen(
             leg_id=leg_id,
         )
 
-    url = f"/onboard?vessel={leg.vessel_id}&leg_id={leg_id}"
+    url = await _closure_redirect_url(db, leg, leg_id)
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
     return RedirectResponse(url=url, status_code=303)
@@ -1837,7 +1849,7 @@ async def closure_lock(
             leg_id=leg_id,
         )
 
-    url = f"/onboard?vessel={leg.vessel_id}&leg_id={leg_id}"
+    url = await _closure_redirect_url(db, leg, leg_id)
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
     return RedirectResponse(url=url, status_code=303)
