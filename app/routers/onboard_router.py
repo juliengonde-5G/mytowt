@@ -773,8 +773,8 @@ async def eta_shift_declare(
         leg_id=leg.id,
         event_type="CUSTOM",
         event_label=f"ETA modifiée : {direction} de {abs(shift_hours):.1f}h",
-        event_date=datetime.now().date(),
-        event_time=datetime.now().strftime("%H:%M"),
+        event_date=datetime.now(timezone.utc).date(),
+        event_time=datetime.now(timezone.utc).strftime("%H:%M"),
         remarks=f"Raison: {reason} — {justification.strip()}",
         created_by=user.full_name,
     )
@@ -1374,7 +1374,7 @@ async def cargo_doc_export_word(
         event_type="CUSTOM",
         event_label=f"Document generated: {doc_label} (Word)",
         event_date=date.today(),
-        event_time=datetime.now().strftime("%H:%M"),
+        event_time=datetime.now(timezone.utc).strftime("%H:%M"),
         remarks=f"Exported by {user.full_name}",
         created_by=user.full_name,
     )
@@ -1467,7 +1467,7 @@ async def cargo_doc_export_pdf(
         event_type="CUSTOM",
         event_label=f"Document generated: {doc_label} (PDF)",
         event_date=date.today(),
-        event_time=datetime.now().strftime("%H:%M"),
+        event_time=datetime.now(timezone.utc).strftime("%H:%M"),
         remarks=f"Exported by {user.full_name}",
         created_by=user.full_name,
     )
@@ -1616,7 +1616,7 @@ async def cargo_doc_save(
             event_type="CUSTOM",
             event_label=f"📄 Document créé : {doc_label}",
             event_date=date.today(),
-            event_time=datetime.now().strftime("%H:%M"),
+            event_time=datetime.now(timezone.utc).strftime("%H:%M"),
             remarks=f"Créé par {user.full_name} — /onboard/doc/{doc.id}/export/pdf",
             created_by=user.full_name,
         )
@@ -1671,7 +1671,7 @@ async def closure_submit_review(
         leg_id=leg_id, event_type="CUSTOM",
         event_label="📋 Escale soumise pour revue — Closure review submitted",
         event_date=date.today(),
-        event_time=datetime.now().strftime("%H:%M"),
+        event_time=datetime.now(timezone.utc).strftime("%H:%M"),
         remarks=f"Par {user.full_name}",
         created_by=user.full_name,
     )
@@ -1717,7 +1717,7 @@ async def closure_approve(
         leg_id=leg_id, event_type="CUSTOM",
         event_label="✅ Escale approuvée par le commandant — Captain approved",
         event_date=date.today(),
-        event_time=datetime.now().strftime("%H:%M"),
+        event_time=datetime.now(timezone.utc).strftime("%H:%M"),
         remarks=f"Approuvé par {user.full_name}",
         created_by=user.full_name,
     )
@@ -1766,7 +1766,7 @@ async def closure_reopen(
         leg_id=leg_id, event_type="CUSTOM",
         event_label=f"🔓 Escale rouverte (depuis {old_status}) — Closure reopened",
         event_date=date.today(),
-        event_time=datetime.now().strftime("%H:%M"),
+        event_time=datetime.now(timezone.utc).strftime("%H:%M"),
         remarks=f"Par {user.full_name}",
         created_by=user.full_name,
     )
@@ -1822,7 +1822,7 @@ async def closure_lock(
         leg_id=leg_id, event_type="CUSTOM",
         event_label="🔒 Escale clôturée et verrouillée — Port call closed & locked",
         event_date=date.today(),
-        event_time=datetime.now().strftime("%H:%M"),
+        event_time=datetime.now(timezone.utc).strftime("%H:%M"),
         remarks=f"PDF généré — Verrouillé par {user.full_name}",
         created_by=user.full_name,
     )
@@ -1905,7 +1905,7 @@ async def _generate_closure_pdf(db: AsyncSession, leg, user) -> str:
 
     # PDF generation
     os.makedirs("app/uploads/closure", exist_ok=True)
-    pdf_path = f"app/uploads/closure/closure_{leg.leg_code}_{int(datetime.now().timestamp())}.pdf"
+    pdf_path = f"app/uploads/closure/closure_{leg.leg_code}_{int(datetime.now(timezone.utc).timestamp())}.pdf"
 
     doc = SimpleDocTemplate(pdf_path, pagesize=A4, leftMargin=20*mm, rightMargin=20*mm, topMargin=15*mm, bottomMargin=15*mm)
     styles = getSampleStyleSheet()
@@ -2021,7 +2021,7 @@ async def _generate_closure_pdf(db: AsyncSession, leg, user) -> str:
     # Closure info
     elements.append(Spacer(1, 16))
     elements.append(Paragraph("VALIDATION", styles["SectionH"]))
-    now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
+    now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
     closure_info = [
         f"Revue par : {leg.closure_reviewed_by or '—'} — {leg.closure_reviewed_at.strftime('%d/%m/%Y %H:%M') if leg.closure_reviewed_at else '—'}",
         f"Approuvé par : {leg.closure_approved_by or '—'} — {leg.closure_approved_at.strftime('%d/%m/%Y %H:%M') if leg.closure_approved_at else '—'}",
