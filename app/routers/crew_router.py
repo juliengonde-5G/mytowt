@@ -29,9 +29,11 @@ router = APIRouter(prefix="/crew", tags=["crew"])
 def parse_date(val):
     if val is None or (isinstance(val, str) and val.strip() == ""):
         return None
+    # F5: narrow bare `except:` — only swallow date-parsing errors,
+    # not SystemExit / KeyboardInterrupt / bugs
     try:
         return date.fromisoformat(val)
-    except:
+    except (ValueError, TypeError):
         return None
 
 
@@ -297,11 +299,48 @@ async def assign_submit(
     user: User = Depends(require_permission("crew", "M")),
     db: AsyncSession = Depends(get_db),
 ):
+    _vessel_id = int(vessel_id)
+    _embark = parse_date(embark_date)
+    _disembark = parse_date(disembark_date)
+
+    # F28: embark <= disembark
+    if _embark and _disembark and _embark > _disembark:
+        raise HTTPException(400, "La date d'embarquement doit être antérieure à la date de débarquement.")
+
+    # F6: reject overlapping assignments for the same crew member
+    # (already on another vessel over the same period).
+    overlap_q = (
+        select(CrewAssignment)
+        .where(CrewAssignment.member_id == mid)
+        .where(CrewAssignment.embark_date <= (_disembark or date.max))
+        .where(
+            (CrewAssignment.disembark_date == None) |
+            (CrewAssignment.disembark_date >= (_embark or date.min))
+        )
+    )
+    overlap_r = await db.execute(overlap_q)
+    if overlap_r.scalars().first() is not None:
+        raise HTTPException(
+            400,
+            "Ce marin est déjà affecté sur la période demandée. "
+            "Clôturez l'affectation existante avant d'en créer une nouvelle."
+        )
+
+    # F29: compute status by comparison with today, not by presence
+    # of disembark_date.
+    today = date.today()
+    if _embark and _embark > today:
+        _status = "planned"
+    elif _disembark and _disembark < today:
+        _status = "completed"
+    else:
+        _status = "active"
+
     assignment = CrewAssignment(
-        member_id=mid, vessel_id=int(vessel_id),
-        embark_date=parse_date(embark_date),
-        disembark_date=parse_date(disembark_date),
-        status="active" if not parse_date(disembark_date) else "planned",
+        member_id=mid, vessel_id=_vessel_id,
+        embark_date=_embark,
+        disembark_date=_disembark,
+        status=_status,
         notes=notes.strip() if notes else None,
     )
     db.add(assignment)
