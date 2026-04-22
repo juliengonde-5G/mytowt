@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Depends, Form, HTTPException, Query, Upl
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from app.templating import templates
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, text
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime, date
@@ -51,8 +51,17 @@ def pd(val):
 
 
 async def generate_reference(db: AsyncSession) -> str:
+    """F32: serialise concurrent order creations via a PG advisory lock,
+    so two parallel requests cannot both see count=N and write OT-YYYY-N+1.
+
+    pg_advisory_xact_lock is released at COMMIT (we run in a single
+    transaction per request via get_db). Lock key is hashed from the
+    year-prefix so different years never block each other.
+    """
     year = datetime.now().year
     prefix = f"OT-{year}-"
+    lock_key = hash(("commercial_ref", year)) & 0x7FFFFFFF
+    await db.execute(text("SELECT pg_advisory_xact_lock(:k)").bindparams(k=lock_key))
     result = await db.execute(
         select(func.count(Order.id)).where(Order.reference.like(f"{prefix}%"))
     )
@@ -277,11 +286,12 @@ async def order_create_submit(
     await db.flush()
     await log_activity(db, user, "commercial", "create", "Order", order.id, f"Commande {order.reference}")
 
-    # Auto-match leg
+    # F45: auto-match no longer silently transitions status to "reserve".
+    # We populate leg_id as a *suggestion* only — operator must confirm
+    # via an explicit status change on the order form.
     matching = await find_matching_leg(db, order)
     if matching:
         order.leg_id = matching.id
-        order.status = "reserve"
 
     # ─── Push to Pipedrive as Deal ───
     try:
@@ -374,7 +384,23 @@ async def order_edit_submit(
     order.arrival_locode = arrival_locode.strip().upper() if arrival_locode and arrival_locode.strip() else None
     order.description = description.strip() if description else None
     was_confirmed = order.status == "confirme"
-    if status: order.status = status
+    if status and status != order.status:
+        # F46: validate order status transitions
+        _ALLOWED_TRANSITIONS = {
+            "brouillon":  {"brouillon", "reserve", "annule"},
+            "reserve":    {"reserve", "confirme", "annule"},
+            "confirme":   {"confirme", "expedie", "annule"},
+            "expedie":    {"expedie", "livre"},
+            "livre":      {"livre"},
+            "annule":     {"annule"},
+        }
+        allowed = _ALLOWED_TRANSITIONS.get(order.status, set())
+        if status not in allowed:
+            raise HTTPException(
+                400,
+                f"Transition '{order.status}' → '{status}' non autorisée."
+            )
+        order.status = status
     order.compute_total()
     await db.flush()
     await log_activity(db, user, "commercial", "update", "Order", oid, f"Modification commande {order.reference}")

@@ -114,6 +114,15 @@ async def create_packing_list(
     if not order:
         raise HTTPException(404)
 
+    # F25: order must be attached to a leg before a packing list can be
+    # generated — leg_code drives BL numbering, voyage reference, etc.
+    if order.leg_id is None:
+        raise HTTPException(
+            400,
+            "Cette commande n'est pas encore rattachée à un voyage. "
+            "Affectez-la à un leg avant de créer la packing list."
+        )
+
     # Check if packing list already exists
     existing = await db.execute(select(PackingList).where(PackingList.order_id == oid))
     if existing.scalar_one_or_none():
@@ -426,10 +435,10 @@ async def bill_of_lading_batch(
         )
         existing_bls = {r[0] for r in existing_bls_result.fetchall()}
 
-        # Find next available sequence number
+        # F39: uniform BL format {seq:03d} across create/preview/PDF
         seq = 1
         while True:
-            candidate = f"TUAW_{voyage_id}_{seq:02d}"
+            candidate = f"TUAW_{voyage_id}_{seq:03d}"
             if candidate not in existing_bls:
                 bl_number = candidate
                 break
@@ -439,7 +448,7 @@ async def bill_of_lading_batch(
         batch.bill_of_lading_id = bl_number
         await db.flush()
     elif not bl_number:
-        bl_number = f"TUAW_{voyage_id}_01"
+        bl_number = f"TUAW_{voyage_id}_001"
 
     def _build_addr(b, prefix):
         if not b:

@@ -72,7 +72,11 @@ class Order(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Single assignment
+    # F13: `leg_id` (direct FK) is the SINGLE SOURCE OF TRUTH for voyage
+    # assignment. `assignments` (OrderAssignment rows below) is retained
+    # only for historical multi-leg splits; on any new flow read/write
+    # through `leg_id`. Cargo / commercial / BL generation already rely
+    # exclusively on Order.leg_id — assignments are advisory audit rows.
     leg_id = Column(Integer, ForeignKey("legs.id"), nullable=True)
     leg = relationship("Leg", foreign_keys=[leg_id])
 
