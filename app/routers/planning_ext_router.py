@@ -1,4 +1,6 @@
 """Public (no-auth) route for shared commercial planning links."""
+import time
+from collections import defaultdict
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,8 +14,25 @@ from app.models.leg import Leg
 from app.models.vessel import Vessel
 from app.models.port import Port
 from app.models.planning_share import PlanningShare
+from app.utils.activity import get_client_ip
 
 ext_router = APIRouter(prefix="/planning/share", tags=["planning-external"])
+
+
+# S18: rate limit per IP against token brute-forcing.
+# 20 hits / 60s window, 5-minute lockout on exceed.
+_share_attempts: dict[str, list[float]] = defaultdict(list)
+_SHARE_RATE_LIMIT = 20
+_SHARE_RATE_WINDOW = 60
+_SHARE_LOCKOUT = 300
+
+
+def _check_share_rate_limit(ip: str) -> bool:
+    now = time.time()
+    _share_attempts[ip] = [t for t in _share_attempts[ip] if now - t < _SHARE_LOCKOUT]
+    recent = [t for t in _share_attempts[ip] if now - t < _SHARE_RATE_WINDOW]
+    _share_attempts[ip].append(now)
+    return len(recent) < _SHARE_RATE_LIMIT
 
 
 @ext_router.get("/{token}", response_class=HTMLResponse)
@@ -23,6 +42,8 @@ async def view_shared_planning(
     db: AsyncSession = Depends(get_db),
 ):
     """Public view — always shows the latest planning data matching the saved filters."""
+    if not _check_share_rate_limit(get_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Trop de requêtes, réessayer plus tard")
     result = await db.execute(
         select(PlanningShare).where(PlanningShare.token == token)
     )

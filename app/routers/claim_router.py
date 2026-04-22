@@ -47,11 +47,22 @@ def _to_int(v):
 
 async def _save_upload(upload, claim_ref, prefix=""):
     if not upload or not upload.filename: return None, None
-    d = os.path.join(UPLOAD_DIR, claim_ref); os.makedirs(d, exist_ok=True)
-    name = f"{prefix}{secrets.token_hex(4)}_{upload.filename}"
+    # S7b: strip any directory components from the client-supplied filename
+    safe_ref = os.path.basename(claim_ref) or "unknown"
+    safe_name = os.path.basename(upload.filename)
+    # S22: validate magic bytes + MIME
+    from app.utils.file_validation import validate_upload, MAX_UPLOAD_SIZE_MB
+    data = await upload.read()
+    if len(data) > MAX_UPLOAD_SIZE_MB * 1024 * 1024:
+        raise HTTPException(413, f"Fichier trop volumineux (>{MAX_UPLOAD_SIZE_MB}MB)")
+    ok, err = validate_upload(safe_name, data)
+    if not ok:
+        raise HTTPException(400, err)
+    d = os.path.join(UPLOAD_DIR, safe_ref); os.makedirs(d, exist_ok=True)
+    name = f"{prefix}{secrets.token_hex(4)}_{safe_name}"
     path = os.path.join(d, name)
-    with open(path, "wb") as f: f.write(await upload.read())
-    return upload.filename, path
+    with open(path, "wb") as f: f.write(data)
+    return safe_name, path
 
 # === LIST ===
 @router.get("", response_class=HTMLResponse)

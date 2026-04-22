@@ -857,14 +857,21 @@ async def ticket_create(
     saved_path = None
     saved_size = None
     if file and file.filename:
+        from app.utils.file_validation import validate_upload, MAX_UPLOAD_SIZE_MB
+        content = await file.read()
+        if len(content) > MAX_UPLOAD_SIZE_MB * 1024 * 1024:
+            raise HTTPException(413, f"Fichier trop volumineux (>{MAX_UPLOAD_SIZE_MB}MB)")
+        orig_name = os.path.basename(file.filename)
+        ok, err = validate_upload(orig_name, content)
+        if not ok:
+            raise HTTPException(400, err)
         os.makedirs(TICKET_UPLOAD_DIR, exist_ok=True)
-        ext = os.path.splitext(file.filename)[1].lower()
+        ext = os.path.splitext(orig_name)[1].lower()
         safe_name = f"{uuid.uuid4().hex}{ext}"
         full_path = os.path.join(TICKET_UPLOAD_DIR, safe_name)
-        content = await file.read()
         with open(full_path, "wb") as f:
             f.write(content)
-        saved_filename = file.filename
+        saved_filename = orig_name
         saved_path = full_path
         saved_size = len(content)
 

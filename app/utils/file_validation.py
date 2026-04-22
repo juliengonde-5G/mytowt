@@ -76,3 +76,25 @@ def validate_file_content(content: bytes, extension: str) -> bool:
 
     expected_mimes = EXT_TO_MIME_FAMILY[ext]
     return detected in expected_mimes
+
+
+# Global upload size limit (MB). Individual routers may reduce it further.
+MAX_UPLOAD_SIZE_MB = 25
+
+ALLOWED_EXTENSIONS = set(EXT_TO_MIME_FAMILY.keys())
+
+
+def validate_upload(filename: str, content: bytes) -> tuple[bool, str | None]:
+    """Full upload validation: extension allow-list + magic-bytes check.
+
+    Returns (ok, error_message). error_message is None on success.
+    """
+    import os as _os
+    if not filename:
+        return False, "Nom de fichier vide"
+    ext = _os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return False, f"Extension non autorisée ({ext or 'aucune'})"
+    if not validate_file_content(content, ext):
+        return False, "Contenu du fichier incohérent avec son extension"
+    return True, None

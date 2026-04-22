@@ -361,13 +361,20 @@ async def upload_document(token: str, doc_id: int, request: Request, file: Uploa
     doc = await db.get(PassengerDocument, doc_id)
     if not doc: raise HTTPException(404)
     if doc.passenger_id not in [p.id for p in booking.passengers]: raise HTTPException(403)
+    from app.utils.file_validation import validate_upload, MAX_UPLOAD_SIZE_MB
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE_MB * 1024 * 1024:
+        raise HTTPException(413, f"Fichier trop volumineux (>{MAX_UPLOAD_SIZE_MB}MB)")
+    orig_name = os.path.basename(file.filename or "")
+    ok, err = validate_upload(orig_name, content)
+    if not ok:
+        raise HTTPException(400, err)
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    ext = os.path.splitext(file.filename)[1] if file.filename else ".pdf"
+    ext = os.path.splitext(orig_name)[1]
     safe_name = f"{doc.doc_type}_{doc.passenger_id}_{uuid.uuid4().hex[:8]}{ext}"
     file_path = os.path.join(UPLOAD_DIR, safe_name)
-    content = await file.read()
     with open(file_path, "wb") as f: f.write(content)
-    doc.filename = file.filename; doc.file_path = file_path; doc.status = "uploaded"
+    doc.filename = orig_name; doc.file_path = file_path; doc.status = "uploaded"
     await db.flush()
     return RedirectResponse(url=f"/passenger/{token}#docs", status_code=303)
 
