@@ -869,6 +869,55 @@ a {
 }
 
 /* === RESPONSIVE === */
+
+/* Tablet range (iPad portrait & landscape, 769-1024px): sidebar
+   collapses to icons unless the user explicitly pins it expanded
+   with .expanded. Grid layouts drop to 2 columns. */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .sidebar:not(.expanded) {
+        width: var(--sidebar-collapsed);
+    }
+    .sidebar:not(.expanded) .nav-item span,
+    .sidebar:not(.expanded) .nav-section-label,
+    .sidebar:not(.expanded) .user-details,
+    .sidebar:not(.expanded) .logout-btn span,
+    .sidebar:not(.expanded) .sidebar-clock {
+        display: none;
+    }
+    .sidebar:not(.expanded) ~ .main-content,
+    .main-content {
+        margin-left: var(--sidebar-collapsed);
+    }
+    .sidebar.expanded ~ .main-content {
+        margin-left: var(--sidebar-width);
+    }
+    .fleet-grid,
+    .stats-grid,
+    .modules-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .form-row {
+        grid-template-columns: 1fr 1fr;
+    }
+    .account-grid {
+        grid-template-columns: 1fr;
+    }
+    .data-table,
+    table {
+        font-size: 12px;
+    }
+    .topbar-title h1 {
+        font-size: 16px;
+    }
+    /* Larger touch targets on tablet */
+    .btn,
+    .nav-item,
+    .sidebar-toggle {
+        min-height: 40px;
+    }
+}
+
+/* Phone (≤768px): sidebar permanently collapsed, grids to 1 column */
 @media (max-width: 768px) {
     .sidebar {
         width: var(--sidebar-collapsed);

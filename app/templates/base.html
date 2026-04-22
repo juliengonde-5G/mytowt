@@ -142,7 +142,7 @@
         </aside>
         <main class="main-content">
             <header class="topbar">
-                <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">
+                <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Basculer la barre latérale">
                     <i data-lucide="menu"></i>
                 </button>
                 <div class="topbar-title"><h1>{% block page_title %}Tableau de bord{% endblock %}</h1></div>
@@ -157,6 +157,43 @@
     <script>
         lucide.createIcons();
         document.addEventListener('htmx:afterSwap', function(){lucide.createIcons();});
+
+        /* Sidebar toggle — responsive-aware.
+           On desktop (>1024px): toggles `.collapsed` (sidebar is wide by default).
+           On tablet (769-1024px): toggles `.expanded` (sidebar is collapsed by default).
+           On phone (≤768px): sidebar is always collapsed (class is ignored by CSS).
+           User preference is persisted in localStorage and re-applied on resize. */
+        function _isTablet(){
+            return window.matchMedia('(min-width: 769px) and (max-width: 1024px)').matches;
+        }
+        function toggleSidebar(){
+            var sb = document.getElementById('sidebar');
+            if (!sb) return;
+            if (_isTablet()){
+                sb.classList.toggle('expanded');
+                localStorage.setItem('towt_sidebar_tablet', sb.classList.contains('expanded') ? 'expanded' : 'collapsed');
+            } else {
+                sb.classList.toggle('collapsed');
+                localStorage.setItem('towt_sidebar_desktop', sb.classList.contains('collapsed') ? 'collapsed' : 'expanded');
+            }
+        }
+        function _applySidebarPref(){
+            var sb = document.getElementById('sidebar');
+            if (!sb) return;
+            sb.classList.remove('expanded', 'collapsed');
+            if (_isTablet()){
+                if (localStorage.getItem('towt_sidebar_tablet') === 'expanded') {
+                    sb.classList.add('expanded');
+                }
+            } else {
+                if (localStorage.getItem('towt_sidebar_desktop') === 'collapsed') {
+                    sb.classList.add('collapsed');
+                }
+            }
+        }
+        _applySidebarPref();
+        window.addEventListener('resize', _applySidebarPref);
+
         function showToast(message, type){
             type = type || 'success';
             var c = document.getElementById('toast-container');
