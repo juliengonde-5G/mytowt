@@ -371,17 +371,24 @@ async def sof_add_event(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Single leg fetch (fixes F3 N+1) — eager-load vessel + ports
+    leg_res = await db.execute(
+        select(Leg)
+        .options(
+            selectinload(Leg.vessel),
+            selectinload(Leg.departure_port),
+            selectinload(Leg.arrival_port),
+        )
+        .where(Leg.id == leg_id)
+    )
+    leg = leg_res.scalar_one_or_none()
+
     # Resolve 'port_local' timezone to actual IANA name
     resolved_tz = event_time_tz
-    if event_time_tz == "port_local":
-        leg = await db.get(Leg, leg_id)
-        if leg:
-            from app.models.port import Port
-            dep = await db.get(Port, leg.departure_port_id) if leg.departure_port_id else None
-            arr = await db.get(Port, leg.arrival_port_id) if leg.arrival_port_id else None
-            ref_port = arr if leg.ata else dep
-            if ref_port:
-                resolved_tz = get_port_timezone(ref_port.country_code, ref_port.zone_code)
+    if event_time_tz == "port_local" and leg:
+        ref_port = leg.arrival_port if leg.ata else leg.departure_port
+        if ref_port:
+            resolved_tz = get_port_timezone(ref_port.country_code, ref_port.zone_code)
 
     # Find label from type if not custom
     label = event_label.strip()
@@ -401,24 +408,20 @@ async def sof_add_event(
     db.add(evt)
     await db.flush()
 
+    vessel_obj = leg.vessel if leg else None
+
     # Notification EOSP / SOSP
-    if event_type in ("EOSP", "SOSP"):
+    if event_type in ("EOSP", "SOSP") and leg:
         from app.models.notification import Notification
-        leg = await db.get(Leg, leg_id)
-        vessel_obj = await db.get(Vessel, leg.vessel_id) if leg else None
         vessel_name = vessel_obj.name if vessel_obj else ""
         db.add(Notification(
             type=event_type.lower(),
-            title=f"{event_type} — {leg.leg_code if leg else ''}",
+            title=f"{event_type} — {leg.leg_code}",
             detail=f"{vessel_name} · {label}",
             link=f"/onboard?vessel={vessel_obj.code if vessel_obj else ''}&leg_id={leg_id}#sof",
             leg_id=leg_id,
         ))
         await db.flush()
-
-    # Find vessel for redirect
-    leg = await db.get(Leg, leg_id)
-    vessel_obj = await db.get(Vessel, leg.vessel_id) if leg else None
 
     # Bot event in conversation
     if vessel_obj:
@@ -456,23 +459,30 @@ async def sof_edit_event(
     if event_date:
         evt.event_date = datetime.strptime(event_date, "%Y-%m-%d").date()
     evt.event_time = event_time or evt.event_time
+
+    # Single leg fetch (fixes F3 N+1 + F41 null-check) — eager-load vessel + ports
+    leg_res = await db.execute(
+        select(Leg)
+        .options(
+            selectinload(Leg.vessel),
+            selectinload(Leg.departure_port),
+            selectinload(Leg.arrival_port),
+        )
+        .where(Leg.id == evt.leg_id)
+    )
+    leg = leg_res.scalar_one_or_none()
+
     # Resolve port_local timezone
     resolved_tz = event_time_tz
-    if event_time_tz == "port_local":
-        leg = await db.get(Leg, evt.leg_id)
-        if leg:
-            from app.models.port import Port
-            dep = await db.get(Port, leg.departure_port_id) if leg.departure_port_id else None
-            arr = await db.get(Port, leg.arrival_port_id) if leg.arrival_port_id else None
-            ref_port = arr if leg.ata else dep
-            if ref_port:
-                resolved_tz = get_port_timezone(ref_port.country_code, ref_port.zone_code)
+    if event_time_tz == "port_local" and leg:
+        ref_port = leg.arrival_port if leg.ata else leg.departure_port
+        if ref_port:
+            resolved_tz = get_port_timezone(ref_port.country_code, ref_port.zone_code)
     evt.event_time_tz = resolved_tz
     evt.remarks = remarks if remarks is not None else evt.remarks
     await db.flush()
 
-    leg = await db.get(Leg, evt.leg_id)
-    vessel_obj = await db.get(Vessel, leg.vessel_id) if leg else None
+    vessel_obj = leg.vessel if leg else None
     vc = vessel_obj.code if vessel_obj else ""
     return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={evt.leg_id}#sof", status_code=303)
 
