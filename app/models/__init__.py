@@ -9,7 +9,10 @@ from app.models.emission_parameter import EmissionParameter
 from app.models.kpi import LegKPI
 from app.models.crew import CrewMember, CrewAssignment
 from app.models.packing_list import PackingList, PackingListBatch, PackingListAudit, PackingListDocument
-from app.models.onboard import SofEvent, OnboardNotification, CargoDocument
+from app.models.onboard import (
+    SofEvent, OnboardNotification, CargoDocument,
+    OnboardMessage, OnboardMessageMention,
+)
 from app.models.passenger import (
     Passenger, PassengerBooking, PassengerPayment, PassengerDocument,
     CabinPriceGrid, PreBoardingForm, PassengerAuditLog, SatisfactionResponse,
@@ -34,6 +37,7 @@ __all__ = [
     "CrewMember", "CrewAssignment",
     "PackingList", "PackingListBatch", "PackingListAudit",
     "SofEvent", "OnboardNotification", "CargoDocument",
+    "OnboardMessage", "OnboardMessageMention",
     "Passenger", "PassengerBooking", "PassengerPayment", "PassengerDocument",
     "CabinPriceGrid", "PreBoardingForm", "PassengerAuditLog", "SatisfactionResponse",
     "ActivityLog",

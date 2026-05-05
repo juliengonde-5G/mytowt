@@ -200,3 +200,49 @@ class OnboardAttachment(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     leg = relationship("Leg", backref="attachments")
+
+
+# ─── ONBOARD CONVERSATION ──────────────────────────────────────
+# Bot username used for system / automated messages (mentionable as @mytowt_bot)
+MYTOWT_BOT_USERNAME = "mytowt_bot"
+MYTOWT_BOT_NAME = "my_TOWT bot"
+
+
+class OnboardMessage(Base):
+    """Chat message in the onboard conversation between shore team and crew."""
+    __tablename__ = "onboard_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vessel_id = Column(Integer, ForeignKey("vessels.id", ondelete="CASCADE"), nullable=False)
+    leg_id = Column(Integer, ForeignKey("legs.id", ondelete="CASCADE"), nullable=True)
+
+    # Author — either a real user or the bot
+    author_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    author_name = Column(String(200), nullable=False)  # display name (snapshot)
+    author_username = Column(String(100), nullable=True)  # for @mention resolution
+    is_bot = Column(Boolean, default=False, nullable=False)
+    is_system = Column(Boolean, default=False, nullable=False)  # action notification
+
+    # Content
+    body = Column(Text, nullable=False)
+    mentions = Column(String(500), nullable=True)  # comma-separated usernames mentioned
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    vessel = relationship("Vessel")
+    leg = relationship("Leg")
+    author = relationship("User")
+
+
+class OnboardMessageMention(Base):
+    """A user that was mentioned in a message — used for read/unread tracking."""
+    __tablename__ = "onboard_message_mentions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    message_id = Column(Integer, ForeignKey("onboard_messages.id", ondelete="CASCADE"), nullable=False)
+    username = Column(String(100), nullable=False)  # mentioned username (or 'mytowt_bot')
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    is_read = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    message = relationship("OnboardMessage", backref="mention_records")

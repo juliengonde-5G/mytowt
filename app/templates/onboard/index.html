@@ -37,6 +37,73 @@
 </div>
 {% endif %}
 
+{# Conversation is vessel-scoped — shown even if no leg is selected #}
+{% if vessel_obj %}
+<div class="ob-section conv-section" id="conversation">
+    <div class="ob-section-header">
+        <h3>💬 Conversation — {{ vessel_obj.name }} <span class="ob-badge">{{ conversation_messages|length }}</span></h3>
+        <span style="font-size:11px;color:#888;">Échanges entre l'équipe à terre et l'équipage. Mentionnez avec <code>@nomdutilisateur</code>.</span>
+    </div>
+
+    <div class="conv-thread" id="conv-thread">
+        {% if conversation_messages %}
+        {% for m in conversation_messages %}
+        <div class="conv-msg {% if m.is_bot %}conv-msg-bot{% endif %} {% if m.is_system %}conv-msg-system{% endif %}" id="conv-msg-{{ m.id }}">
+            <div class="conv-avatar">
+                {% if m.is_bot %}
+                <span title="my_TOWT bot" class="conv-avatar-bot">🤖</span>
+                {% else %}
+                <span class="conv-avatar-user">{{ (m.author_name or '?')[:1]|upper }}</span>
+                {% endif %}
+            </div>
+            <div class="conv-bubble">
+                <div class="conv-meta">
+                    <strong>{{ m.author_name }}</strong>
+                    {% if m.author_username %}<span class="conv-handle">@{{ m.author_username }}</span>{% endif %}
+                    {% if m.is_bot %}<span class="conv-tag conv-tag-bot">bot</span>{% endif %}
+                    {% if m.is_system %}<span class="conv-tag conv-tag-sys">action</span>{% endif %}
+                    <span class="conv-time">{{ m.created_at.strftime('%d/%m %H:%M') }}</span>
+                    {% if m.leg_id %}
+                        {% for l in legs %}{% if l.id == m.leg_id %}
+                        <span class="conv-tag conv-tag-leg">{{ l.leg_code }}</span>
+                        {% endif %}{% endfor %}
+                    {% endif %}
+                    {% if (m.author_user_id == user.id) or (user.role == 'administrateur') %}
+                    <form method="POST" action="/onboard/messages/{{ m.id }}/delete" style="display:inline;margin-left:auto;">
+                        {{ csrf_input(request) }}
+                        <button type="submit" class="conv-del" title="Supprimer" onclick="return confirm('Supprimer ce message ?')">✕</button>
+                    </form>
+                    {% endif %}
+                </div>
+                <div class="conv-body">{{ m.body|e|replace('\n', '<br>')|safe }}</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="conv-empty">
+            Pas encore de message. Ouvrez la discussion entre l'équipe à terre et l'équipage.
+            Mentionnez <code>@{{ mytowt_bot_username }}</code> pour interagir avec le bot.
+        </div>
+        {% endif %}
+    </div>
+
+    <form method="POST" action="/onboard/messages/post" class="conv-form" id="conv-form">
+        {{ csrf_input(request) }}
+        <input type="hidden" name="vessel_id" value="{{ vessel_obj.id }}">
+        {% if current_leg %}<input type="hidden" name="leg_id" value="{{ current_leg.id }}">{% endif %}
+        <div class="conv-input-wrap">
+            <textarea name="body" id="conv-input" rows="2" maxlength="4000" required
+                      placeholder="Écrire un message… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne, @ pour mentionner)"></textarea>
+            <div id="conv-mention-popup" class="conv-mention-popup" hidden></div>
+        </div>
+        <div class="conv-form-actions">
+            <span style="font-size:10px;color:#888;">{{ conversation_messages|length }} message(s) — limite 4000 caractères</span>
+            <button type="submit" class="btn btn-primary btn-sm">Envoyer</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
 {% if not current_leg %}
 <div style="text-align:center;padding:60px;color:#888;font-size:14px;">Aucun leg sélectionné. Choisissez un navire et un leg ci-dessus.</div>
 {% else %}
@@ -976,6 +1043,43 @@
     .closure-check-item{font-size:11px;padding:4px 8px;border-radius:4px}
     .check-ok{color:#16a34a;background:rgba(34,197,94,0.06)}
     .check-missing{color:#aaa;background:#fafafa}
+    /* ─── Conversation ─── */
+    .conv-section .ob-section-header{flex-wrap:wrap;gap:6px}
+    .conv-thread{max-height:480px;overflow-y:auto;padding:10px 4px;display:flex;flex-direction:column;gap:10px;border-top:1px solid #f0f0f0;border-bottom:1px solid #f0f0f0;background:#fafbfc;border-radius:6px;margin-bottom:10px}
+    .conv-msg{display:flex;gap:10px;align-items:flex-start;padding:0 8px}
+    .conv-avatar{flex-shrink:0;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:white;background:var(--towt-blue)}
+    .conv-avatar-bot{font-size:18px;background:linear-gradient(135deg,#6366F1,#8B5CF6);width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+    .conv-bubble{flex:1;min-width:0;background:white;border:1px solid #eee;border-radius:8px;padding:8px 12px;box-shadow:0 1px 2px rgba(0,0,0,0.03)}
+    .conv-msg-bot .conv-bubble{background:linear-gradient(180deg,#f8f7ff,#ffffff);border-color:rgba(99,102,241,0.25)}
+    .conv-msg-system .conv-bubble{background:linear-gradient(180deg,#fdfaf3,#ffffff);border-color:rgba(245,158,11,0.25)}
+    .conv-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:#666;margin-bottom:4px}
+    .conv-meta strong{color:#222;font-size:12px}
+    .conv-handle{color:#888}
+    .conv-tag{font-size:9px;padding:1px 6px;border-radius:100px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px}
+    .conv-tag-bot{background:rgba(99,102,241,0.12);color:#6366F1}
+    .conv-tag-sys{background:rgba(245,158,11,0.12);color:#D97706}
+    .conv-tag-leg{background:rgba(9,85,97,0.08);color:var(--towt-blue)}
+    .conv-time{margin-left:auto;color:#aaa;font-size:10px}
+    .conv-msg-system .conv-time, .conv-msg-bot .conv-time{margin-left:0}
+    .conv-del{background:none;border:none;color:#ccc;cursor:pointer;font-size:13px;padding:0 4px;margin-left:auto}
+    .conv-del:hover{color:#dc2626}
+    .conv-body{font-size:13px;color:#222;line-height:1.5;word-wrap:break-word;white-space:pre-wrap}
+    .conv-body .conv-mention{background:rgba(9,85,97,0.08);color:var(--towt-blue);padding:1px 6px;border-radius:100px;font-weight:600;font-size:12px}
+    .conv-body .conv-mention-bot{background:rgba(99,102,241,0.12);color:#6366F1}
+    .conv-body .conv-mention-self{background:rgba(245,158,11,0.18);color:#B45309}
+    .conv-empty{text-align:center;color:#888;padding:30px 12px;font-size:12px}
+    .conv-empty code{background:#f1f3f5;padding:1px 6px;border-radius:4px;font-size:11px}
+    .conv-form{position:relative;display:flex;flex-direction:column;gap:6px}
+    .conv-input-wrap{position:relative}
+    .conv-form textarea{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-family:Poppins,system-ui,sans-serif;font-size:13px;resize:vertical;min-height:50px;box-sizing:border-box}
+    .conv-form textarea:focus{outline:none;border-color:var(--towt-blue);box-shadow:0 0 0 3px rgba(9,85,97,0.08)}
+    .conv-form-actions{display:flex;justify-content:space-between;align-items:center}
+    .conv-mention-popup{position:absolute;background:white;border:1px solid #ddd;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,0.10);padding:4px;max-height:220px;overflow-y:auto;z-index:30;min-width:240px}
+    .conv-mention-item{padding:6px 10px;font-size:12px;cursor:pointer;border-radius:6px;display:flex;justify-content:space-between;gap:10px}
+    .conv-mention-item:hover, .conv-mention-item.active{background:#f0f7f8}
+    .conv-mention-item .mp-name{font-weight:600;color:#222}
+    .conv-mention-item .mp-handle{color:#888;font-size:11px}
+    .conv-mention-item.is-bot{background:rgba(99,102,241,0.04)}
 </style>
 <script>
 // Pre-fill SOF date and time with current values
@@ -985,6 +1089,115 @@
     var t = document.getElementById('sof-time');
     if(d) d.value = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
     if(t) t.value = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+})();
+
+// ─── Conversation: mention autocomplete + send-on-Enter + highlight ───
+(function(){
+    var users = {{ mentionable_users|default([])|tojson }};
+    var currentUsername = {{ user.username|tojson }};
+    var botUsername = {{ mytowt_bot_username|default('mytowt_bot')|tojson }};
+    var input = document.getElementById('conv-input');
+    var popup = document.getElementById('conv-mention-popup');
+    var form = document.getElementById('conv-form');
+    var thread = document.getElementById('conv-thread');
+    if (thread) thread.scrollTop = thread.scrollHeight;
+
+    if (!input || !popup) return;
+
+    var activeIdx = 0;
+    var matches = [];
+    var mentionStart = -1;
+
+    function findMentionContext(){
+        var pos = input.selectionStart;
+        var before = input.value.substring(0, pos);
+        var m = before.match(/@([A-Za-z0-9_.\-]*)$/);
+        if (!m) return null;
+        return {start: pos - m[0].length, query: m[1].toLowerCase()};
+    }
+
+    function renderPopup(){
+        if (!matches.length) { popup.hidden = true; popup.innerHTML = ''; return; }
+        popup.innerHTML = matches.map(function(u, i){
+            var cls = 'conv-mention-item' + (i === activeIdx ? ' active' : '') + (u.is_bot ? ' is-bot' : '');
+            return '<div class="' + cls + '" data-idx="' + i + '">' +
+                   '<span class="mp-name">' + escapeHtml(u.full_name) + (u.is_bot ? ' 🤖' : '') + '</span>' +
+                   '<span class="mp-handle">@' + escapeHtml(u.username) + '</span>' +
+                   '</div>';
+        }).join('');
+        popup.hidden = false;
+        // Position below textarea (simple: top:100% relative to wrap)
+        popup.style.top = (input.offsetHeight + 4) + 'px';
+        popup.style.left = '8px';
+    }
+
+    function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); }
+
+    function applyMention(u){
+        if (!u || mentionStart < 0) return;
+        var pos = input.selectionStart;
+        var before = input.value.substring(0, mentionStart);
+        var after = input.value.substring(pos);
+        var insertion = '@' + u.username + ' ';
+        input.value = before + insertion + after;
+        var newPos = (before + insertion).length;
+        input.setSelectionRange(newPos, newPos);
+        popup.hidden = true; matches = []; mentionStart = -1;
+        input.focus();
+    }
+
+    input.addEventListener('input', function(){
+        var ctx = findMentionContext();
+        if (!ctx) { popup.hidden = true; matches = []; mentionStart = -1; return; }
+        mentionStart = ctx.start;
+        matches = users.filter(function(u){
+            return u.username.toLowerCase().indexOf(ctx.query) === 0
+                || (u.full_name||'').toLowerCase().indexOf(ctx.query) >= 0;
+        }).slice(0, 8);
+        activeIdx = 0;
+        renderPopup();
+    });
+
+    input.addEventListener('keydown', function(e){
+        if (!popup.hidden && matches.length){
+            if (e.key === 'ArrowDown'){ activeIdx = (activeIdx + 1) % matches.length; renderPopup(); e.preventDefault(); return; }
+            if (e.key === 'ArrowUp'){ activeIdx = (activeIdx - 1 + matches.length) % matches.length; renderPopup(); e.preventDefault(); return; }
+            if (e.key === 'Enter' || e.key === 'Tab'){ applyMention(matches[activeIdx]); e.preventDefault(); return; }
+            if (e.key === 'Escape'){ popup.hidden = true; matches = []; e.preventDefault(); return; }
+        }
+        // Enter without Shift submits
+        if (e.key === 'Enter' && !e.shiftKey){
+            e.preventDefault();
+            if (input.value.trim() && form){ form.submit(); }
+        }
+    });
+
+    popup.addEventListener('mousedown', function(e){
+        var item = e.target.closest('.conv-mention-item');
+        if (!item) return;
+        e.preventDefault();
+        var i = parseInt(item.getAttribute('data-idx'), 10);
+        applyMention(matches[i]);
+    });
+
+    document.addEventListener('click', function(e){
+        if (e.target !== input) { popup.hidden = true; }
+    });
+
+    // ─── Highlight @mentions inside rendered messages ───
+    var mentionRe = /@([A-Za-z0-9_.\-]+)/g;
+    document.querySelectorAll('.conv-body').forEach(function(node){
+        // Walk text nodes only (avoid double-escape and preserve <br>)
+        var html = node.innerHTML;
+        html = html.replace(mentionRe, function(_, uname){
+            var lower = uname.toLowerCase();
+            var cls = 'conv-mention';
+            if (lower === botUsername.toLowerCase()) cls += ' conv-mention-bot';
+            else if (lower === (currentUsername||'').toLowerCase()) cls += ' conv-mention-self';
+            return '<span class="' + cls + '">@' + uname + '</span>';
+        });
+        node.innerHTML = html;
+    });
 })();
 
 // SOF inline edit toggle

@@ -1,10 +1,11 @@
 """On Board module router — ex-Captain, renamed to On Board."""
 import io
 import json
+import re
 from datetime import datetime, timezone, date
 from typing import Optional
 from fastapi import APIRouter, Request, Depends, Query, Form, HTTPException, File, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, Response, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.utils.activity import log_activity, get_client_ip
 from sqlalchemy import select, func, and_
@@ -22,11 +23,93 @@ from app.models.packing_list import PackingList, PackingListBatch
 from app.models.onboard import (
     SofEvent, OnboardNotification, CargoDocument, ETAShift, OnboardAttachment,
     CargoDocumentAttachment,
+    OnboardMessage, OnboardMessageMention,
+    MYTOWT_BOT_USERNAME, MYTOWT_BOT_NAME,
     SOF_EVENT_TYPES, CARGO_DOC_TYPES, ETA_SHIFT_REASONS, ATTACHMENT_CATEGORIES,
 )
 from app.utils.timezones import get_port_timezone, utc_offset_label, TIMEZONE_CHOICES
 
 router = APIRouter(prefix="/onboard", tags=["onboard"])
+
+
+# ═══════════════════════════════════════════════════════════════
+#  CONVERSATION HELPERS
+# ═══════════════════════════════════════════════════════════════
+MENTION_RE = re.compile(r"@([A-Za-z0-9_.\-]+)")
+
+
+def extract_mentions(body: str) -> list[str]:
+    """Extract @username mentions from a message body. Returns lowercase unique list."""
+    if not body:
+        return []
+    seen = []
+    for m in MENTION_RE.findall(body):
+        u = m.lower()
+        if u not in seen:
+            seen.append(u)
+    return seen
+
+
+async def post_conversation_message(
+    db: AsyncSession,
+    vessel_id: int,
+    body: str,
+    *,
+    leg_id: Optional[int] = None,
+    author_user_id: Optional[int] = None,
+    author_name: Optional[str] = None,
+    author_username: Optional[str] = None,
+    is_bot: bool = False,
+    is_system: bool = False,
+) -> OnboardMessage:
+    """Insert a conversation message and resolve @mentions."""
+    if is_bot:
+        author_name = author_name or MYTOWT_BOT_NAME
+        author_username = author_username or MYTOWT_BOT_USERNAME
+
+    mentioned = extract_mentions(body)
+    msg = OnboardMessage(
+        vessel_id=vessel_id,
+        leg_id=leg_id,
+        author_user_id=author_user_id,
+        author_name=author_name or "—",
+        author_username=author_username,
+        is_bot=is_bot,
+        is_system=is_system,
+        body=body,
+        mentions=",".join(mentioned) if mentioned else None,
+    )
+    db.add(msg)
+    await db.flush()
+
+    if mentioned:
+        # Resolve usernames → user_ids (bot has no user_id)
+        users_result = await db.execute(
+            select(User).where(func.lower(User.username).in_(mentioned))
+        )
+        user_map = {u.username.lower(): u.id for u in users_result.scalars().all()}
+        for username in mentioned:
+            db.add(OnboardMessageMention(
+                message_id=msg.id,
+                username=username,
+                user_id=user_map.get(username),
+            ))
+        await db.flush()
+    return msg
+
+
+async def post_bot_event(
+    db: AsyncSession,
+    vessel_id: int,
+    body: str,
+    *,
+    leg_id: Optional[int] = None,
+):
+    """Shortcut: post a system-flagged bot message in the conversation."""
+    return await post_conversation_message(
+        db, vessel_id, body,
+        leg_id=leg_id, is_bot=True, is_system=True,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -205,6 +288,30 @@ async def onboard_home(
             )
             cargo_documents = cargo_docs_result.scalars().all()
 
+    # ─── CONVERSATION MESSAGES (vessel-scoped) ───
+    conversation_messages = []
+    mentionable_users = []
+    if vessel_obj:
+        msgs_result = await db.execute(
+            select(OnboardMessage)
+            .where(OnboardMessage.vessel_id == vessel_obj.id)
+            .order_by(OnboardMessage.created_at.asc(), OnboardMessage.id.asc())
+            .limit(500)
+        )
+        conversation_messages = msgs_result.scalars().all()
+
+        # Active users + bot for mention picker
+        users_result = await db.execute(
+            select(User).where(User.is_active == True).order_by(User.username)
+        )
+        active_users = users_result.scalars().all()
+        mentionable_users = [
+            {"username": MYTOWT_BOT_USERNAME, "full_name": MYTOWT_BOT_NAME, "is_bot": True},
+        ] + [
+            {"username": u.username, "full_name": u.full_name, "is_bot": False}
+            for u in active_users
+        ]
+
     # ─── Port timezone for sidebar clock + time inputs ───
     _port_tz = "UTC"
     _port_tz_label = "Port"
@@ -239,6 +346,10 @@ async def onboard_home(
         "current_year": current_year,
         "active_module": "captain",
         "lang": user.language or "fr",
+        "conversation_messages": conversation_messages,
+        "mentionable_users": mentionable_users,
+        "mytowt_bot_username": MYTOWT_BOT_USERNAME,
+        "mytowt_bot_name": MYTOWT_BOT_NAME,
     })
 
 
@@ -306,6 +417,20 @@ async def sof_add_event(
     # Find vessel for redirect
     leg = await db.get(Leg, leg_id)
     vessel_obj = await db.get(Vessel, leg.vessel_id) if leg else None
+
+    # Bot event in conversation
+    if vessel_obj:
+        when = ""
+        if evt.event_date:
+            when = f" — {evt.event_date.strftime('%d/%m')}"
+            if evt.event_time:
+                when += f" {evt.event_time}"
+        await post_bot_event(
+            db, vessel_obj.id,
+            f"📋 Nouvel évènement SOF : **{label}**{when} (par {user.full_name})",
+            leg_id=leg_id,
+        )
+
     vc = vessel_obj.code if vessel_obj else ""
     return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}#sof", status_code=303)
 
@@ -465,6 +590,14 @@ async def set_actual_arrival(
     ))
     await db.flush()
 
+    if leg.vessel_id:
+        ata_str = ata_dt.strftime('%d/%m/%Y %H:%M') if ata_dt else 'annulée'
+        await post_bot_event(
+            db, leg.vessel_id,
+            f"⚓ ATA confirmée — {vessel_name} arrivé à {port_name} le {ata_str} (par {user.full_name})",
+            leg_id=leg_id,
+        )
+
     vc = leg.vessel.code if leg.vessel else ""
     return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}&ata_ok=1#ata-atd", status_code=303)
 
@@ -530,6 +663,14 @@ async def set_actual_departure(
         leg_id=leg_id,
     ))
     await db.flush()
+
+    if leg.vessel_id:
+        atd_str = atd_dt.strftime('%d/%m/%Y %H:%M') if atd_dt else 'annulée'
+        await post_bot_event(
+            db, leg.vessel_id,
+            f"🚢 ATD confirmé — {vessel_name} parti de {port_name} le {atd_str} (par {user.full_name})",
+            leg_id=leg_id,
+        )
 
     vc = leg.vessel.code if leg.vessel else ""
     return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}&atd_ok=1#ata-atd", status_code=303)
@@ -657,6 +798,15 @@ async def eta_shift_declare(
 
     await db.flush()
 
+    if leg.vessel_id:
+        cascade = f" — {legs_affected} leg(s) recalculé(s)" if legs_affected > 0 else ""
+        await post_bot_event(
+            db, leg.vessel_id,
+            (f"🕒 Décalage ETA — {leg.leg_code} : {sign}{shift_hours:.1f}h ({reason_label})"
+             f"{cascade}\n_Justification_ : {justification.strip()} (par {user.full_name})"),
+            leg_id=leg.id,
+        )
+
     vc = leg.vessel.code if leg.vessel else ""
     return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}#eta-shifts", status_code=303)
 
@@ -732,6 +882,13 @@ async def attachment_upload(
     await db.flush()
 
     vessel_obj = await db.get(Vessel, leg.vessel_id)
+    if vessel_obj:
+        size_kb = (len(content) / 1024)
+        await post_bot_event(
+            db, vessel_obj.id,
+            f"📎 Fichier ajouté : **{att.title}** ({att.filename}, {size_kb:.1f} Ko, _{att.category}_) par {user.full_name}",
+            leg_id=leg_id,
+        )
     vc = vessel_obj.code if vessel_obj else ""
     return RedirectResponse(url=f"/onboard?vessel={vc}&leg_id={leg_id}#attachments", status_code=303)
 
@@ -1510,6 +1667,13 @@ async def closure_submit_review(
     await log_activity(db, user, "captain", "closure_review", "Leg", leg_id, f"Soumission revue escale {leg.leg_code}")
     await db.flush()
 
+    if leg.vessel_id:
+        await post_bot_event(
+            db, leg.vessel_id,
+            f"📋 Escale **{leg.leg_code}** soumise pour revue par {user.full_name}",
+            leg_id=leg_id,
+        )
+
     url = f"/onboard?vessel={leg.vessel_id}&leg_id={leg_id}"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
@@ -1548,6 +1712,13 @@ async def closure_approve(
     db.add(sof)
     await log_activity(db, user, "captain", "closure_approve", "Leg", leg_id, f"Approbation escale {leg.leg_code}")
     await db.flush()
+
+    if leg.vessel_id:
+        await post_bot_event(
+            db, leg.vessel_id,
+            f"✅ Escale **{leg.leg_code}** approuvée par {user.full_name}",
+            leg_id=leg_id,
+        )
 
     url = f"/onboard?vessel={leg.vessel_id}&leg_id={leg_id}"
     if request.headers.get("HX-Request"):
@@ -1590,6 +1761,13 @@ async def closure_reopen(
     db.add(sof)
     await log_activity(db, user, "captain", "closure_reopen", "Leg", leg_id, f"Réouverture escale {leg.leg_code}")
     await db.flush()
+
+    if leg.vessel_id:
+        await post_bot_event(
+            db, leg.vessel_id,
+            f"🔓 Escale **{leg.leg_code}** rouverte par {user.full_name} (depuis {old_status})",
+            leg_id=leg_id,
+        )
 
     url = f"/onboard?vessel={leg.vessel_id}&leg_id={leg_id}"
     if request.headers.get("HX-Request"):
@@ -1639,6 +1817,13 @@ async def closure_lock(
     db.add(sof)
     await log_activity(db, user, "captain", "closure_lock", "Leg", leg_id, f"Clôture définitive escale {leg.leg_code}")
     await db.flush()
+
+    if leg.vessel_id:
+        await post_bot_event(
+            db, leg.vessel_id,
+            f"🔒 Escale **{leg.leg_code}** définitivement verrouillée par {user.full_name} — PDF récapitulatif disponible",
+            leg_id=leg_id,
+        )
 
     url = f"/onboard?vessel={leg.vessel_id}&leg_id={leg_id}"
     if request.headers.get("HX-Request"):
@@ -1838,3 +2023,169 @@ async def _generate_closure_pdf(db: AsyncSession, leg, user) -> str:
 
     doc.build(elements)
     return pdf_path
+
+
+# ═══════════════════════════════════════════════════════════════
+#  CONVERSATION (Onboard chat between shore team and crew)
+# ═══════════════════════════════════════════════════════════════
+@router.post("/messages/post", response_class=HTMLResponse)
+async def conversation_post(
+    request: Request,
+    vessel_id: int = Form(...),
+    body: str = Form(...),
+    leg_id: Optional[int] = Form(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Post a new message in the onboard conversation."""
+    body = (body or "").strip()
+    if not body:
+        raise HTTPException(400, "Message vide")
+    if len(body) > 4000:
+        raise HTTPException(400, "Message trop long (max 4000 caractères)")
+
+    vessel_obj = await db.get(Vessel, vessel_id)
+    if not vessel_obj:
+        raise HTTPException(404, "Navire introuvable")
+
+    # leg_id is optional context; verify it belongs to the vessel if provided
+    if leg_id:
+        leg = await db.get(Leg, leg_id)
+        if not leg or leg.vessel_id != vessel_id:
+            leg_id = None
+
+    msg = await post_conversation_message(
+        db, vessel_id, body,
+        leg_id=leg_id,
+        author_user_id=user.id,
+        author_name=user.full_name,
+        author_username=user.username,
+    )
+
+    # If the bot was mentioned, generate a small reply
+    mentioned = extract_mentions(body)
+    if MYTOWT_BOT_USERNAME in mentioned:
+        await _bot_auto_reply(db, vessel_obj, leg_id, user, body)
+
+    target = f"/onboard?vessel={vessel_obj.code}"
+    if leg_id:
+        target += f"&leg_id={leg_id}"
+    target += "#conversation"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": target})
+    return RedirectResponse(url=target, status_code=303)
+
+
+async def _bot_auto_reply(db: AsyncSession, vessel: Vessel, leg_id: Optional[int], asker: User, body: str):
+    """Simple keyword-based bot reply when @mytowt_bot is mentioned."""
+    text = body.lower()
+    reply = None
+
+    if any(k in text for k in ("aide", "help", "?", "commande")):
+        reply = (
+            f"@{asker.username} bonjour ! Je suis le bot my_TOWT. Je publie ici les évènements clés "
+            "(ATA/ATD, SOF, décalages ETA, fichiers, clôture). Mentionnez `@nomdutilisateur` pour "
+            "interpeller un membre de l'équipe. Mots-clés : `eta`, `equipage`, `cargo`, `escale`."
+        )
+    elif "eta" in text or "arrivee" in text or "arrivée" in text:
+        if leg_id:
+            leg = await db.get(Leg, leg_id)
+            if leg and leg.eta:
+                reply = (
+                    f"@{asker.username} ETA actuelle pour **{leg.leg_code}** : "
+                    f"{leg.eta.strftime('%d/%m/%Y %H:%M')} UTC."
+                )
+            else:
+                reply = f"@{asker.username} ETA non définie pour ce leg."
+        else:
+            reply = f"@{asker.username} sélectionnez un leg pour voir son ETA."
+    elif "equipage" in text or "équipage" in text or "crew" in text:
+        crew_count = await db.execute(
+            select(func.count(CrewAssignment.id)).where(
+                CrewAssignment.vessel_id == vessel.id,
+                CrewAssignment.status == "active",
+            )
+        )
+        n = crew_count.scalar() or 0
+        reply = f"@{asker.username} il y a actuellement **{n} marin(s) embarqué(s)** sur {vessel.name}."
+    elif "cargo" in text:
+        if leg_id:
+            orders_result = await db.execute(
+                select(func.count(Order.id)).where(Order.leg_id == leg_id)
+            )
+            n_orders = orders_result.scalar() or 0
+            reply = f"@{asker.username} **{n_orders} commande(s)** assignée(s) à ce leg."
+        else:
+            reply = f"@{asker.username} sélectionnez un leg pour voir le résumé cargo."
+    elif "escale" in text or "port" in text:
+        if leg_id:
+            leg_result = await db.execute(
+                select(Leg).options(selectinload(Leg.arrival_port), selectinload(Leg.departure_port))
+                .where(Leg.id == leg_id)
+            )
+            leg = leg_result.scalar_one_or_none()
+            if leg:
+                ata = leg.ata.strftime('%d/%m %H:%M') if leg.ata else "—"
+                atd = leg.atd.strftime('%d/%m %H:%M') if leg.atd else "—"
+                reply = (
+                    f"@{asker.username} {leg.leg_code} : "
+                    f"{leg.departure_port.name if leg.departure_port else '—'} → "
+                    f"{leg.arrival_port.name if leg.arrival_port else '—'} | ATA {ata} | ATD {atd}"
+                )
+    if not reply:
+        reply = (
+            f"@{asker.username} message bien reçu. Je ne sais pas répondre à cette demande, "
+            "mais l'équipe verra votre mention dans le fil. Tapez `@mytowt_bot aide` pour la liste des commandes."
+        )
+
+    await post_bot_event(db, vessel.id, reply, leg_id=leg_id)
+
+
+@router.post("/messages/{message_id}/delete", response_class=HTMLResponse)
+async def conversation_delete(
+    message_id: int, request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a message — only the author or an admin can delete."""
+    msg = await db.get(OnboardMessage, message_id)
+    if not msg:
+        raise HTTPException(404)
+    if msg.is_bot or msg.is_system:
+        # Bot/system messages can only be removed by an administrator
+        if user.role not in ("administrateur",):
+            raise HTTPException(403, "Seul un administrateur peut supprimer un message système")
+    elif msg.author_user_id != user.id and user.role not in ("administrateur",):
+        raise HTTPException(403, "Vous ne pouvez supprimer que vos propres messages")
+
+    vessel_id = msg.vessel_id
+    leg_id = msg.leg_id
+    await db.delete(msg)
+    await db.flush()
+
+    vessel_obj = await db.get(Vessel, vessel_id)
+    target = f"/onboard?vessel={vessel_obj.code if vessel_obj else ''}"
+    if leg_id:
+        target += f"&leg_id={leg_id}"
+    target += "#conversation"
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="", headers={"HX-Redirect": target})
+    return RedirectResponse(url=target, status_code=303)
+
+
+@router.get("/messages/users", response_class=JSONResponse)
+async def conversation_users(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return list of mentionable users (active users + bot) — used by autocomplete."""
+    users_result = await db.execute(
+        select(User).where(User.is_active == True).order_by(User.username)
+    )
+    users = users_result.scalars().all()
+    payload = [{"username": MYTOWT_BOT_USERNAME, "full_name": MYTOWT_BOT_NAME, "is_bot": True}]
+    payload += [
+        {"username": u.username, "full_name": u.full_name, "is_bot": False}
+        for u in users
+    ]
+    return JSONResponse(payload)
