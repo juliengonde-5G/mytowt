@@ -119,7 +119,7 @@ async def post_bot_event(
 @router.get("/", response_class=HTMLResponse)
 async def onboard_home(
     request: Request,
-    vessel: Optional[int] = Query(None),
+    vessel: Optional[str] = Query(None),
     leg_id: Optional[int] = Query(None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
