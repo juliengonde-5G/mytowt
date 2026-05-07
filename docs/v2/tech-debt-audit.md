@@ -168,7 +168,7 @@ Le projet a une dette technique **modérée mais concentrée** : trois points cr
 
 ## Hors périmètre de cet audit
 
-- **Sécurité applicative** : couverte par `docs/security/audit-v1.md` et `docs/security/action-plan.md`.
-- **UX / accessibilité** : couverte par `docs/ux/audit.md`.
-- **Performance / Lighthouse** : pas mesurée ici. Cible V2 = ≥90 selon `docs/v2/roadmap.md`.
+- **Sécurité applicative** : couvert par les rapports antérieurs (`docs/security/audit-v1.md`, `docs/security/action-plan.md`) — **purgés du repo lors de `Purge V2->V3`**, à recréer si nécessaire à partir des sauvegardes git (cf. `git show <sha>:docs/security/audit-v1.md`).
+- **UX / accessibilité** : ancien audit purgé également (`docs/ux/audit.md`).
+- **Performance / Lighthouse** : pas mesurée ici. La cible historique V2 (Lighthouse ≥ 90) reste pertinente.
 - **Sauvegardes & DR** : `backup.sh` + `restore.sh` existent ; pas audités fonctionnellement (test de restauration recommandé en parallèle).
