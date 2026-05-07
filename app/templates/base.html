@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}my_TOWT{% endblock %}</title>
-    <link rel="icon" type="image/svg+xml" href="/static/img/favicon_mytowt.svg">
+    <title>{% block title %}my_newtowt{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/img/favicon_newtowt.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=DM+Serif+Display&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script>
     // Auto-inject CSRF token into HTMX requests
@@ -22,12 +22,12 @@
         .sidebar-clock{padding:6px 16px 10px;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;gap:2px}
         .clock-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:rgba(255,255,255,0.7)}
         .clock-label{font-weight:500;text-transform:uppercase;font-size:9px;letter-spacing:0.5px;color:rgba(255,255,255,0.5);min-width:40px}
-        .clock-time{font-family:'Poppins',system-ui,sans-serif;font-size:12px;font-weight:600;color:rgba(255,255,255,0.9);letter-spacing:0.5px}
+        .clock-time{font-family:'Manrope',system-ui,sans-serif;font-size:12px;font-weight:600;color:rgba(255,255,255,0.9);letter-spacing:0.5px}
         .sidebar.collapsed .sidebar-clock{display:none}
         .clock-port-separator{border:none;border-top:1px solid rgba(255,255,255,0.08);margin:2px 0}
         .tz-input-wrap{display:flex;gap:6px;align-items:center}
         .tz-input-wrap input[type="time"],.tz-input-wrap input[type="datetime-local"]{flex:1}
-        .tz-select{padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:11px;font-family:'Poppins',system-ui,sans-serif;background:white;min-width:90px}
+        .tz-select{padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:11px;font-family:'Manrope',system-ui,sans-serif;background:white;min-width:90px}
         .tz-select:focus{border-color:var(--towt-blue);outline:none}
         .tz-utc-hint{font-size:10px;color:#888;margin-top:2px}
     </style>
@@ -39,7 +39,7 @@
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <a href="/" class="sidebar-logo">
-                    <img src="/static/img/logo_mytowt_white.svg" alt="my_TOWT" class="logo-img">
+                    <img src="/static/img/logo_newtowt_white.png" alt="my_newtowt" class="logo-img">
                 </a>
                 <div class="sidebar-clock" id="sidebar-clock"
                      data-port-tz="{{ port_timezone|default('UTC') }}"
@@ -85,11 +85,6 @@
                         <i data-lucide="compass"></i><span>On Board</span>
                     </a>
                     {% endif %}
-                    {% if passengers_enabled and (has_any_access(user, 'passengers') or has_any_access(user, 'captain')) %}
-                    <a href="/passengers" class="nav-item {% if active_module == 'passengers' %}active{% endif %}">
-                        <i data-lucide="luggage"></i><span>Passagers</span>
-                    </a>
-                    {% endif %}
                     {% if has_any_access(user, 'crew') %}
                     <a href="/crew" class="nav-item {% if active_module == 'crew' %}active{% endif %}">
                         <i data-lucide="users"></i><span>{{ t('nav_crew', lang|default('fr')) }}</span>
@@ -119,10 +114,6 @@
                     {% if user and user.role in ('administrateur', 'admin', 'data_analyst') %}
                     <a href="/admin/settings" class="nav-item {% if active_module == 'settings' %}active{% endif %}">
                         <i data-lucide="settings"></i><span>{{ t('nav_settings', lang|default('fr')) }}</span>
-                    </a>
-                    {% elif user and user.role == 'commercial' %}
-                    <a href="/admin/settings#pricing" class="nav-item {% if active_module == 'settings' %}active{% endif %}">
-                        <i data-lucide="tag"></i><span>Tarifs passagers</span>
                     </a>
                     {% endif %}
                 </div>

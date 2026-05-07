@@ -1,29 +1,50 @@
 /* ============================================
-   TOWT Planning - Design System
-   Based on TOWT Brand Guidelines 2025
-   Font: Poppins | Colors: Maritime Blue & Green
+   NEWTOWT Application - Design System
+   Charte "Nouvelle Étoile" v1.0 (2026-04-07)
+   Font: Manrope | Palette: Teal · Vert · Cuivre · Sable
+   Source: Design/newtowt-design-tokens.json
    ============================================ */
 
 /* === VARIABLES === */
 :root {
-    --towt-blue: #095561;
-    --towt-blue-dark: #073d46;
-    --towt-blue-darker: #042a30;
-    --towt-green: #87BD2B;
-    --towt-green-light: #BEDB92;
-    --towt-sky: #9EC6D2;
-    --towt-sky-dark: #80A7AE;
-    --towt-gray: #393939;
-    --towt-gray-light: #84AAB0;
-    --towt-light: #F2F6F7;
-    --towt-warm: #FAF7F2;
-    --towt-white: #FFFFFF;
+    /* ── NEWTOWT canonical palette ─────────────── */
+    --newtowt-teal:        #0D5966;   /* dominant 60% */
+    --newtowt-teal-dark:   #093F48;
+    --newtowt-teal-light:  #1A7C8C;
+    --newtowt-vert:        #87BD29;   /* accent 20% */
+    --newtowt-vert-light:  #BEDB92;
+    --newtowt-bleu-marine: #0051A0;
+    --newtowt-bleu-horizon:#9EC6D2;
+    --newtowt-cuivre:      #B47148;   /* signal transition 10% */
+    --newtowt-cuivre-light:#D49975;
+    --newtowt-sable:       #EFE6D6;
+    --newtowt-sable-light: #F8F2E6;
+    --newtowt-anthracite:  #2A2A2A;
+    --newtowt-gris:        #6E6E6E;
+    --newtowt-gris-clair:  #D9D9D9;
+    --newtowt-blanc:       #FFFFFF;
+    --newtowt-blanc-casse: #FAF7F2;
+    --newtowt-nuit:        #0B2A33;
+
+    /* ── Backward-compat aliases (legacy --towt-* used in inline styles) ── */
+    --towt-blue:        var(--newtowt-teal);
+    --towt-blue-dark:   var(--newtowt-teal-dark);
+    --towt-blue-darker: var(--newtowt-nuit);
+    --towt-green:       var(--newtowt-vert);
+    --towt-green-light: var(--newtowt-vert-light);
+    --towt-sky:         var(--newtowt-bleu-horizon);
+    --towt-sky-dark:    #80A7AE;
+    --towt-gray:        var(--newtowt-anthracite);
+    --towt-gray-light:  var(--newtowt-gris);
+    --towt-light:       var(--newtowt-sable-light);
+    --towt-warm:        var(--newtowt-sable);
+    --towt-white:       var(--newtowt-blanc);
 
     /* Functional */
-    --success: #22c55e;
-    --warning: #f59e0b;
-    --danger: #ef4444;
-    --info: var(--towt-sky);
+    --success: var(--newtowt-vert);
+    --warning: var(--newtowt-cuivre);
+    --danger:  #C44536;
+    --info:    var(--newtowt-bleu-horizon);
 
     /* Layout */
     --sidebar-width: 260px;
@@ -45,10 +66,10 @@
 }
 
 body {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     font-size: 14px;
-    color: var(--towt-gray);
-    background: var(--towt-light);
+    color: var(--newtowt-anthracite);
+    background: var(--newtowt-sable-light);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
 }
@@ -593,7 +614,7 @@ a {
     padding: 10px 20px;
     border: none;
     border-radius: var(--radius);
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Manrope', system-ui, -apple-system, sans-serif;
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
@@ -761,7 +782,7 @@ a {
     padding: 10px 14px;
     border: 2px solid #e5e7eb;
     border-radius: var(--radius);
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Manrope', system-ui, -apple-system, sans-serif;
     font-size: 13px;
     color: var(--towt-gray);
     transition: border-color var(--transition), box-shadow var(--transition);

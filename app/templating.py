@@ -86,8 +86,6 @@ templates.env.globals["has_any_access"] = has_any_access
 from app.config import get_settings
 _settings = get_settings()
 templates.env.globals["site_url"] = _settings.SITE_URL
-# Expose feature flags to templates (used to hide passengers sidebar / sections)
-templates.env.globals["passengers_enabled"] = _settings.PASSENGERS_ENABLED
 
 # Register CSRF helper (available in all templates as {{ csrf_input(request) }})
 from app.csrf import csrf_input as _csrf_input
