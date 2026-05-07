@@ -134,10 +134,17 @@ async def onboard_home(
     vessels_result = await db.execute(select(Vessel).where(Vessel.is_active == True).order_by(Vessel.code))
     vessels = vessels_result.scalars().all()
 
-    selected_vessel = vessel or (vessels[0].code if vessels else None)
+    # Accept either the numeric code (1/2/3/4) or the vessel name ("ANEMOS")
+    selected_vessel = vessel if vessel is not None else (vessels[0].code if vessels else None)
     vessel_obj = None
-    if selected_vessel:
-        v_result = await db.execute(select(Vessel).where(Vessel.code == selected_vessel))
+    if selected_vessel is not None:
+        try:
+            code_int = int(selected_vessel)
+            v_result = await db.execute(select(Vessel).where(Vessel.code == code_int))
+        except (TypeError, ValueError):
+            v_result = await db.execute(
+                select(Vessel).where(func.lower(Vessel.name) == str(selected_vessel).lower())
+            )
         vessel_obj = v_result.scalar_one_or_none()
 
     legs = []
