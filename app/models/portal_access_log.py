@@ -14,11 +14,10 @@ class PortalAccessLog(Base):
     __tablename__ = "portal_access_logs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    portal_type = Column(String(20), nullable=False)  # "cargo", "passenger", "planning"
+    portal_type = Column(String(20), nullable=False)  # "cargo", "planning"
     token_hash = Column(String(64), nullable=False, index=True)  # sha256 hex
     ip_address = Column(String(50), nullable=True)
     user_agent = Column(String(500), nullable=True)
     path = Column(String(300), nullable=False)
-    booking_id = Column(Integer, nullable=True)
     packing_list_id = Column(Integer, nullable=True)
     accessed_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -87,9 +87,8 @@ class Claim(Base):
     # Cargo-specific: linked to order assignment
     order_assignment_id = Column(Integer, ForeignKey("order_assignments.id"), nullable=True)
 
-    # Crew-specific: linked to crew member OR passenger
+    # Crew-specific: linked to crew member
     crew_member_id = Column(Integer, ForeignKey("crew_members.id"), nullable=True)
-    passenger_id = Column(Integer, ForeignKey("passengers.id"), nullable=True)
 
     # Context
     context = Column(String(30), nullable=True)  # loading, navigation, unloading, quay
@@ -127,7 +126,6 @@ class Claim(Base):
     leg = relationship("Leg")
     order_assignment = relationship("OrderAssignment")
     crew_member = relationship("CrewMember")
-    passenger = relationship("Passenger")
     sof_event = relationship("SofEvent")
     documents = relationship("ClaimDocument", back_populates="claim", cascade="all, delete-orphan")
     timeline = relationship("ClaimTimeline", back_populates="claim", cascade="all, delete-orphan",

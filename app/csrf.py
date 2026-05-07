@@ -13,8 +13,8 @@ Strategy: Double-submit cookie pattern.
   handlers keep full access to ``request.form()`` / ``await file.read()``.
 - JSON bodies without the header are rejected — there is no JSON-native
   form field to validate and those should always be HTMX/AJAX.
-- External portal routes (``/p/``, ``/passenger/``, ``/boarding/``,
-  ``/planning/ext/``), the login page and the tracking API are exempt.
+- External portal routes (``/p/``, ``/planning/ext/``), the login page
+  and the tracking API are exempt.
 
 Sprint 2 hardening (A2.1): added strict body-parsing for form POSTs so
 we no longer rely solely on ``SameSite=Lax``.
@@ -40,8 +40,6 @@ TOKEN_LENGTH = 32
 # Routes excluded from CSRF validation (public/external portals + login)
 CSRF_EXEMPT_PREFIXES = (
     "/p/",
-    "/passenger/",
-    "/boarding/",
     "/planning/ext/",
     "/api/",
     "/login",

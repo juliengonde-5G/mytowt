@@ -5,8 +5,8 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # Application
-    APP_NAME: str = "TOWT Planning"
-    APP_VERSION: str = "2.0.0"
+    APP_NAME: str = "my_newtowt"
+    APP_VERSION: str = "3.0.0"
     APP_ENV: str = "production"
     DEBUG: bool = False
 
@@ -22,13 +22,13 @@ class Settings(BaseSettings):
     # Tracking CSV upload requires this token via the X-API-Token header.
     TRACKING_API_TOKEN: str = ""
 
-    # External URL (for portal links shared with clients/passengers)
-    SITE_URL: str = "https://my.towt.eu"
+    # External URL (for portal links shared with clients)
+    SITE_URL: str = "https://my.newtowt.eu"
 
     # Pipedrive CRM integration
     PIPEDRIVE_API_TOKEN: str = ""
 
-    # TOWT Fleet
+    # NEWTOWT Fleet
     FLEET: dict = {
         1: {"name": "Anemos", "code": 1},
         2: {"name": "Artemis", "code": 2},
@@ -38,10 +38,6 @@ class Settings(BaseSettings):
 
     # Shortcut ports
     SHORTCUT_PORTS: list = ["FRFEC", "BRSSO"]
-
-    # Feature flags
-    # Passengers module disabled post-TOWT liquidation. Code preserved for future reactivation.
-    PASSENGERS_ENABLED: bool = False
 
     class Config:
         env_file = ".env"

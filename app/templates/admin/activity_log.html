@@ -74,7 +74,7 @@
                 <td><span class="log-module">{{ e.module }}</span></td>
                 <td>
                     {% set action_class = 'default' %}
-                    {% if e.action in ('create', 'add_batch', 'add_passenger', 'add_payment', 'assign') %}{% set action_class = 'create' %}
+                    {% if e.action in ('create', 'add_batch', 'assign') %}{% set action_class = 'create' %}
                     {% elif e.action in ('update', 'update_port', 'update_cargo', 'update_opex', 'update_language', 'port_status', 'status', 'payment_status', 'doc_status', 'save_doc', 'import_excel') %}{% set action_class = 'update' %}
                     {% elif e.action in ('delete', 'delete_attachment') %}{% set action_class = 'delete' %}
                     {% elif e.action == 'login' %}{% set action_class = 'login' %}

@@ -1,11 +1,14 @@
-# CLAUDE.md — my_TOWT Project Guide
+# CLAUDE.md — my_newtowt Project Guide
 
 ## What is this project?
 
-**my_TOWT** is a maritime operations management platform for TOWT (Transport à la Voile), a French sailing cargo company. It manages vessel planning, commercial orders, cargo logistics, port calls, onboard operations, crew scheduling, passenger bookings, and financial tracking.
+**my_newtowt** is a maritime operations management platform for **NEWTOWT** (TransOceanic Wind Transport, post-restructuration), a French sailing cargo company pioneering decarbonised wind-powered shipping since 2011. It manages vessel planning, commercial orders, cargo logistics, port calls, onboard operations, crew scheduling, MRV emissions reporting, and financial tracking.
+
+> v3.0.0 — Passenger activity has been removed following the corporate restructuring.
 
 **Production URL**: http://51.178.59.174 (VPS OVH)
 **Default login**: admin / towt2025
+**Brand assets**: `Design/` (NEWTOWT logos PNG, design tokens W3C JSON)
 
 ## Tech Stack
 
@@ -15,7 +18,9 @@
 | Database | PostgreSQL 16 via SQLAlchemy async + asyncpg |
 | Frontend | Jinja2 templates + HTMX (no JS framework) |
 | Auth | Cookie sessions, bcrypt, itsdangerous |
-| CSS | Single `app/static/css/app.css` design system |
+| CSS | Single `app/static/css/app.css` design system (NEWTOWT charte) |
+| Fonts | Manrope (UI/print), DM Serif Display (accent) |
+| Branding | Teal #0D5966 · Vert #87BD29 · Cuivre #B47148 · Sable #EFE6D6 |
 | Deployment | Docker on VPS OVH, behind nginx reverse proxy |
 
 ## Project Structure
@@ -39,7 +44,6 @@ mytowt/
 │   │   ├── operation.py      # EscaleOperation + DockerShift
 │   │   ├── packing_list.py   # PackingList + PackingListBatch + PackingListAudit
 │   │   ├── onboard.py        # SofEvent, OnboardNotification, CargoDocument
-│   │   ├── passenger.py      # Booking, Passenger, Payment, Document, CabinPriceGrid
 │   │   ├── crew.py           # CrewMember + CrewAssignment
 │   │   ├── finance.py        # PortConfig, OpexParameter, LegFinance
 │   │   ├── kpi.py            # LegKPI
@@ -63,8 +67,6 @@ mytowt/
 │   │   ├── cargo_router.py       # /cargo + /p/{token} (client portal)
 │   │   ├── escale_router.py      # /escale
 │   │   ├── onboard_router.py     # /onboard
-│   │   ├── passenger_router.py   # /passengers
-│   │   ├── passenger_ext_router.py  # /boarding/{token} (external)
 │   │   ├── crew_router.py        # /crew
 │   │   ├── finance_router.py     # /finance
 │   │   ├── kpi_router.py         # /kpi
@@ -81,20 +83,22 @@ mytowt/
 │   │   ├── base.html         # Layout with sidebar
 │   │   └── {module}/         # Module templates
 │   ├── static/
-│   │   ├── css/app.css       # Full design system
-│   │   ├── img/              # Logos (SVG + PNG)
+│   │   ├── css/app.css       # Full design system (NEWTOWT charte)
+│   │   ├── img/              # NEWTOWT logos PNG + favicon SVG
 │   │   └── BILL_OF_LADING_TEMPLATE.docx
 │   └── utils/
-│       ├── crossing_book.py  # Passenger crossing book PDF
 │       ├── file_validation.py # File upload validation
 │       ├── navigation.py     # Navigation helpers
 │       ├── notifications.py  # Notification system
-│       ├── passenger_pdfs.py # Passenger document PDFs
 │       ├── pipedrive.py      # Pipedrive CRM integration
-│       ├── portal_security.py # Portal token security
-│       ├── revolut.py        # Revolut payment integration
+│       ├── portal_security.py # Portal token security (cargo)
 │       ├── timezones.py      # Timezone utilities
 │       └── activity.py       # Activity logging
+├── Design/                  # NEWTOWT brand assets
+│   ├── logo_NEWTOWT_web.png
+│   ├── logo_NEWTOWT_web_dark.png
+│   ├── logo_NEWTOWT_web_white.png
+│   └── newtowt-design-tokens.json   # W3C draft design tokens (canonical)
 ├── scripts/
 │   ├── backup_db.sh          # Database backup (pg_dump + rotation)
 │   ├── import_crew.py        # Import 44 crew members
@@ -131,8 +135,8 @@ mytowt/
 - Custom filter `|flag` converts country code → emoji flag
 
 ### Permissions
-- 9 roles: administrateur, operation, armement, technique, data_analyst, marins, gestionnaire_passagers, commercial, manager_maritime
-- 10 modules: planning, commercial, escale, finance, kpi, captain, crew, cargo, mrv, passengers
+- 8 roles: administrateur, operation, armement, technique, data_analyst, marins, commercial, manager_maritime
+- 10 modules: planning, commercial, escale, finance, kpi, captain, crew, cargo, claims, mrv
 - Levels: C (consult), M (modify), S (suppress)
 - Route dependency: `Depends(require_permission("module", "C"))` — enforced on ALL routes (GET=C, POST=M, DELETE=S)
 - Sidebar visibility: `has_any_access(user, 'module')` in base.html
@@ -140,15 +144,18 @@ mytowt/
 
 ### Security
 - **SQL injection prevention**: `admin_router.py` uses `ALLOWED_TABLES` whitelist + parameterized queries (`.bindparams()`) for all dynamic table references
-- **Route-level permissions**: ALL endpoints in planning, commercial, escale, cargo, passengers, crew, finance, kpi routers enforce `require_permission()` — GET requires C, POST requires M, DELETE requires S
-- **External routes** (`/p/{token}`, `/boarding/{token}`) are excluded from permission checks (public access via token)
+- **Route-level permissions**: ALL endpoints in planning, commercial, escale, cargo, crew, finance, kpi routers enforce `require_permission()` — GET requires C, POST requires M, DELETE requires S
+- **External routes** (`/p/{token}` — cargo client portal) are excluded from permission checks (public access via token)
 - **CORS**: Configured in `main.py` — restrict `allow_origins` in production
 
-### CSS Design System
-- Font: **Poppins** everywhere (templates, PDF exports, popups)
-- CSS variables: `--towt-blue`, `--towt-green`, `--towt-sky`, `--towt-sky-dark`, `--warning`, etc.
+### CSS Design System (NEWTOWT charte "Nouvelle Étoile")
+- Font: **Manrope** for UI/print, **DM Serif Display** for accents (citations, exergues)
+- Canonical CSS variables: `--newtowt-teal`, `--newtowt-vert`, `--newtowt-cuivre`, `--newtowt-sable`, `--newtowt-bleu-marine`, etc.
+- Backward-compat aliases: `--towt-blue` → `--newtowt-teal`, `--towt-green` → `--newtowt-vert`, etc. (existing inline styles in templates still work, mapped to new palette)
+- Color ratio: 60% teal · 20% vert · 10% cuivre · 10% neutres
 - Utility classes in `app.css`: `.card`, `.card-title`, `.alert`, `.alert-success`, `.alert-error`, `.field-label`, `.field-value`, `.btn-outline`, `.leg-code`, `.account-grid`
 - Prefer CSS classes over inline styles for consistency
+- Source of truth: `Design/newtowt-design-tokens.json`
 
 ### Forms
 - Standard HTML `<form method="POST">`
@@ -156,7 +163,6 @@ mytowt/
 
 ### External (no-auth) routes
 - `/p/{token}` — client cargo packing list portal
-- `/boarding/{token}` — passenger pre-boarding form
 
 ## Deployment
 
@@ -235,4 +241,5 @@ docker exec towt-app-v2 chmod -R 755 /app/app/static/
 - Never hardcode credentials in source — use .env
 - Don't add heavy JS frameworks — the app uses HTMX
 - Never use f-strings to interpolate table/column names in SQL — use `ALLOWED_TABLES` whitelist
-- Don't use `Segoe UI` or `Inter` fonts — always use `Poppins` with `system-ui` fallback
+- Don't use `Segoe UI`, `Inter` or `Poppins` (legacy) — always use `Manrope` with `system-ui` fallback for UI/PDF, `DM Serif Display` for accent serif
+- Don't reintroduce a `passengers` module — passenger activity has been removed in v3.0.0 post-restructuration

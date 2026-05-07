@@ -1,6 +1,8 @@
-# my_TOWT 🚢
+# my_newtowt 🚢
 
-Maritime operations management platform for [TOWT](https://towt.eu) — Transport à la Voile.
+Maritime operations management platform for [NEWTOWT](https://towt.eu) — TransOceanic Wind Transport (post-restructuration). Pioneer of decarbonised wind-powered shipping since 2011.
+
+> *« On garde le cap. Une nouvelle traversée commence. »*
 
 ## Features
 
@@ -11,11 +13,14 @@ Maritime operations management platform for [TOWT](https://towt.eu) — Transpor
 | **Cargo** | Packing lists, Bill of Lading, client portal, Excel import/export |
 | **Escale** | Port calls, operations timeline, docker shifts, SOF |
 | **On Board** | Statement of Facts, cargo documents, notifications |
-| **Passengers** | Bookings, payments, documents, pre-boarding, crossing book |
 | **Crew** | Members, leg assignments, annual calendar heatmap |
 | **Finance** | OPEX, revenue, port costs, profitability analysis |
 | **KPI** | CO₂ emissions, performance indicators |
+| **MRV** | EU MRV emissions reporting |
+| **Claims** | Cargo & crew incident management |
 | **Admin** | Users, roles, vessels, ports, settings |
+
+> **Passengers module** has been removed in v3.0.0 following the corporate restructuring (former passenger activity is no longer operated by NEWTOWT).
 
 ## Quick Start
 
@@ -26,7 +31,7 @@ cd mytowt
 
 # 2. Configure
 cp .env.example .env
-# Edit .env with your values
+# Edit .env with your values (SECRET_KEY, DATABASE_URL, etc.)
 
 # 3. Start
 docker-compose up -d
@@ -38,24 +43,27 @@ docker-compose up -d
 
 ## Tech Stack
 
-- **Backend**: FastAPI + SQLAlchemy async + PostgreSQL
-- **Frontend**: Jinja2 + HTMX
+- **Backend**: FastAPI + SQLAlchemy async + PostgreSQL 16
+- **Frontend**: Jinja2 + HTMX (no JS framework)
 - **Auth**: Cookie sessions + bcrypt
 - **Deploy**: Docker + docker-compose
+- **Branding**: Manrope · DM Serif Display · NEWTOWT palette (teal/vert/cuivre/sable)
 
 ## Architecture
 
 ```
 app/
-├── models/      # 26 SQLAlchemy models
-├── routers/     # 21 FastAPI routers (1 per module)
-├── templates/   # 87 Jinja2 templates
-├── static/      # CSS design system + logos
+├── models/      # SQLAlchemy models
+├── routers/     # FastAPI routers (1 per module)
+├── templates/   # Jinja2 templates
+├── static/      # CSS design system + NEWTOWT logos
 └── utils/       # Shared utilities
+Design/         # NEWTOWT brand assets + design tokens (W3C draft)
+docs/v2/        # Roadmap, audits, tech-debt
 ```
 
-See [CLAUDE.md](CLAUDE.md) for detailed project documentation.
+See [CLAUDE.md](CLAUDE.md) for detailed project documentation, and `Design/newtowt-design-tokens.json` for the canonical design system tokens.
 
 ## License
 
-Private — TOWT © 2025-2026
+Private — NEWTOWT © 2026

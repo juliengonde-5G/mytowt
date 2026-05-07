@@ -22,8 +22,6 @@ _EXEMPT_PREFIXES: tuple[str, ...] = (
     "/admin/my-account/password",  # existing POST endpoint (already updates hash)
     # Public (token-based) portals and APIs — no session cookie in play
     "/p/",
-    "/passenger/",
-    "/boarding/",
     "/planning/share/",
     "/api/tracking/",
 )

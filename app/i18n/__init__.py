@@ -85,7 +85,6 @@ TRANSLATIONS = {
     "f_voyage": {"fr": "Voyage", "en": "Voyage", "es": "Viaje", "pt-br": "Viagem", "vi": "Chuyến đi"},
     "f_vessel": {"fr": "Navire", "en": "Vessel", "es": "Buque", "pt-br": "Navio", "vi": "Tàu"},
     "f_loading_date": {"fr": "Date de chargement", "en": "Loading date", "es": "Fecha de carga", "pt-br": "Data de embarque", "vi": "Ngày xếp hàng"},
-    "f_booking_ref": {"fr": "Réf. booking", "en": "Booking ref.", "es": "Ref. reserva", "pt-br": "Ref. reserva", "vi": "Mã đặt chỗ"},
     "f_freight_rate": {"fr": "Fret/palette", "en": "Freight/pallet", "es": "Flete/paleta", "pt-br": "Frete/palete", "vi": "Cước/pallet"},
     "f_customer_name": {"fr": "Nom client", "en": "Customer name", "es": "Nombre del cliente", "pt-br": "Nome do cliente", "vi": "Tên khách hàng"},
     "f_freight_forwarder": {"fr": "Transitaire", "en": "Freight forwarder", "es": "Transitario", "pt-br": "Agente de carga", "vi": "Đại lý giao nhận"},
@@ -157,8 +156,6 @@ TRANSLATIONS = {
     "page_dashboard": {"fr": "Tableau de bord", "en": "Dashboard", "es": "Panel", "pt-br": "Painel", "vi": "Bảng điều khiển"},
     "page_planning": {"fr": "Planification", "en": "Planning", "es": "Planificación", "pt-br": "Planejamento", "vi": "Kế hoạch"},
     "page_commercial": {"fr": "Ordres de transport", "en": "Freight orders", "es": "Órdenes de transporte", "pt-br": "Ordens de transporte", "vi": "Đơn vận chuyển"},
-    "page_passengers": {"fr": "Passagers", "en": "Passengers", "es": "Pasajeros", "pt-br": "Passageiros", "vi": "Hành khách"},
-    "page_new_booking": {"fr": "Nouvelle réservation", "en": "New booking", "es": "Nueva reserva", "pt-br": "Nova reserva", "vi": "Đặt chỗ mới"},
     "page_escale": {"fr": "Opérations d'escale", "en": "Port call operations", "es": "Operaciones de escala", "pt-br": "Operações de escala", "vi": "Hoạt động cảng"},
     "page_cargo": {"fr": "Gestion documentaire cargo", "en": "Cargo document management", "es": "Gestión documental carga", "pt-br": "Gestão documental carga", "vi": "Quản lý hồ sơ hàng"},
     "page_onboard": {"fr": "On Board", "en": "On Board", "es": "A bordo", "pt-br": "A bordo", "vi": "Trên tàu"},
@@ -199,7 +196,6 @@ TRANSLATIONS = {
     "dash_view": {"fr": "Voir", "en": "View", "es": "Ver", "pt-br": "Ver", "vi": "Xem"},
 
     # ═══ BACKOFFICE — SIDEBAR ═══
-    "nav_passengers": {"fr": "Passagers", "en": "Passengers", "es": "Pasajeros", "pt-br": "Passageiros", "vi": "Hành khách"},
     "nav_onboard": {"fr": "On Board", "en": "On Board", "es": "A bordo", "pt-br": "A bordo", "vi": "Trên tàu"},
     "nav_claims": {"fr": "Claims", "en": "Claims", "es": "Siniestros", "pt-br": "Sinistros", "vi": "Khiếu nại"},
     "nav_my_account": {"fr": "Mon compte", "en": "My account", "es": "Mi cuenta", "pt-br": "Minha conta", "vi": "Tài khoản"},
@@ -220,7 +216,6 @@ TRANSLATIONS = {
     "th_year": {"fr": "Année", "en": "Year", "es": "Año", "pt-br": "Ano", "vi": "Năm"},
     "th_type": {"fr": "Type", "en": "Type", "es": "Tipo", "pt-br": "Tipo", "vi": "Loại"},
     "th_cabin": {"fr": "Cabine", "en": "Cabin", "es": "Camarote", "pt-br": "Cabine", "vi": "Phòng"},
-    "th_passenger": {"fr": "Passager", "en": "Passenger", "es": "Pasajero", "pt-br": "Passageiro", "vi": "Hành khách"},
     "th_total": {"fr": "Total", "en": "Total", "es": "Total", "pt-br": "Total", "vi": "Tổng"},
     "th_provision": {"fr": "Provision", "en": "Provision", "es": "Provisión", "pt-br": "Provisão", "vi": "Dự phòng"},
     "th_distance": {"fr": "Distance NM", "en": "Distance NM", "es": "Distancia MN", "pt-br": "Distância MN", "vi": "Khoảng cách HL"},
@@ -228,7 +223,6 @@ TRANSLATIONS = {
 
     # ═══ BACKOFFICE — COMMON BUTTONS ═══
     "btn_new_order": {"fr": "Nouvelle commande", "en": "New order", "es": "Nuevo pedido", "pt-br": "Novo pedido", "vi": "Đơn mới"},
-    "btn_new_booking": {"fr": "Nouvelle réservation", "en": "New booking", "es": "Nueva reserva", "pt-br": "Nova reserva", "vi": "Đặt chỗ mới"},
     "btn_new_claim": {"fr": "Nouveau Claim", "en": "New Claim", "es": "Nuevo siniestro", "pt-br": "Novo sinistro", "vi": "Khiếu nại mới"},
     "btn_new_leg": {"fr": "Nouveau leg", "en": "New leg", "es": "Nuevo tramo", "pt-br": "Novo trecho", "vi": "Chặng mới"},
     "btn_export": {"fr": "Exporter", "en": "Export", "es": "Exportar", "pt-br": "Exportar", "vi": "Xuất"},
@@ -265,10 +259,8 @@ TRANSLATIONS = {
     # ═══ BACKOFFICE — NOTIFICATIONS ═══
     "notif_new_order": {"fr": "Nouvelle commande client", "en": "New client order", "es": "Nuevo pedido", "pt-br": "Novo pedido", "vi": "Đơn hàng mới"},
     "notif_new_cargo_message": {"fr": "Nouveau message messagerie client", "en": "New client message", "es": "Nuevo mensaje cliente", "pt-br": "Nova mensagem cliente", "vi": "Tin nhắn mới"},
-    "notif_new_passenger_message": {"fr": "Nouveau message messagerie passager", "en": "New passenger message", "es": "Nuevo mensaje pasajero", "pt-br": "Nova mensagem passageiro", "vi": "Tin nhắn mới"},
     "notif_eosp": {"fr": "EOSP (End of Sea Passage)", "en": "EOSP (End of Sea Passage)", "es": "EOSP", "pt-br": "EOSP", "vi": "EOSP"},
     "notif_sosp": {"fr": "SOSP (Start of Sea Passage)", "en": "SOSP (Start of Sea Passage)", "es": "SOSP", "pt-br": "SOSP", "vi": "SOSP"},
-    "notif_new_passenger_booking": {"fr": "Nouvelle réservation passager", "en": "New passenger booking", "es": "Nueva reserva pasajero", "pt-br": "Nova reserva passageiro", "vi": "Đặt chỗ mới"},
 
     # ═══ BACKOFFICE — CLAIMS ═══
     "claim_financial": {"fr": "Suivi financier", "en": "Financial tracking", "es": "Seguimiento financiero", "pt-br": "Acompanhamento financeiro", "vi": "Theo dõi tài chính"},
@@ -280,7 +272,6 @@ TRANSLATIONS = {
     "claim_voyage": {"fr": "Voyage", "en": "Voyage", "es": "Viaje", "pt-br": "Viagem", "vi": "Chuyến đi"},
 
     # ═══ BACKOFFICE — MESSAGES ═══
-    "msg_reply_placeholder": {"fr": "Répondre au passager…", "en": "Reply to passenger…", "es": "Responder al pasajero…", "pt-br": "Responder ao passageiro…", "vi": "Trả lời hành khách…"},
     "msg_reply_cargo_placeholder": {"fr": "Répondre au client…", "en": "Reply to client…", "es": "Responder al cliente…", "pt-br": "Responder ao cliente…", "vi": "Trả lời khách hàng…"},
     "msg_no_messages": {"fr": "Aucun message", "en": "No messages", "es": "Sin mensajes", "pt-br": "Sem mensagens", "vi": "Không có tin nhắn"},
     "msg_unread": {"fr": "non lu(s)", "en": "unread", "es": "no leído(s)", "pt-br": "não lido(s)", "vi": "chưa đọc"},
@@ -345,16 +336,6 @@ TRANSLATIONS = {
     "fin_no_data": {"fr": "Aucune donnée financière", "en": "No financial data", "es": "Sin datos financieros", "pt-br": "Sem dados financeiros", "vi": "Không có dữ liệu"},
 
     # ═══ BACKOFFICE — PASSENGERS ═══
-    "pax_name": {"fr": "Nom", "en": "Name", "es": "Nombre", "pt-br": "Nome", "vi": "Tên"},
-    "pax_cabin": {"fr": "Cabine", "en": "Cabin", "es": "Camarote", "pt-br": "Cabine", "vi": "Phòng"},
-    "pax_embarking": {"fr": "Embarquement", "en": "Boarding", "es": "Embarque", "pt-br": "Embarque", "vi": "Lên tàu"},
-    "pax_disembarking": {"fr": "Débarquement", "en": "Disembarking", "es": "Desembarque", "pt-br": "Desembarque", "vi": "Xuống tàu"},
-    "pax_price": {"fr": "Prix", "en": "Price", "es": "Precio", "pt-br": "Preço", "vi": "Giá"},
-    "pax_paid": {"fr": "Payé", "en": "Paid", "es": "Pagado", "pt-br": "Pago", "vi": "Đã trả"},
-    "pax_balance": {"fr": "Reste dû", "en": "Balance due", "es": "Saldo pendiente", "pt-br": "Saldo devido", "vi": "Còn nợ"},
-    "pax_no_bookings": {"fr": "Aucune réservation", "en": "No bookings", "es": "Sin reservas", "pt-br": "Sem reservas", "vi": "Không có đặt chỗ"},
-    "pax_portal_link": {"fr": "Lien portail", "en": "Portal link", "es": "Enlace portal", "pt-br": "Link portal", "vi": "Liên kết cổng"},
-    "pax_documents": {"fr": "Documents", "en": "Documents", "es": "Documentos", "pt-br": "Documentos", "vi": "Tài liệu"},
 
     # ═══ BACKOFFICE — PLANNING ═══
     "plan_gantt": {"fr": "Gantt", "en": "Gantt", "es": "Gantt", "pt-br": "Gantt", "vi": "Gantt"},
@@ -399,7 +380,6 @@ TRANSLATIONS = {
     "admin_opex": {"fr": "OPEX", "en": "OPEX", "es": "OPEX", "pt-br": "OPEX", "vi": "OPEX"},
     "admin_emissions": {"fr": "Émissions", "en": "Emissions", "es": "Emisiones", "pt-br": "Emissões", "vi": "Khí thải"},
     "admin_insurance": {"fr": "Assurances", "en": "Insurance", "es": "Seguros", "pt-br": "Seguros", "vi": "Bảo hiểm"},
-    "admin_cabin_prices": {"fr": "Tarifs cabines", "en": "Cabin prices", "es": "Tarifas cabinas", "pt-br": "Tarifas cabines", "vi": "Giá phòng"},
     "admin_export_full": {"fr": "Export complet", "en": "Full export", "es": "Exportación completa", "pt-br": "Exportação completa", "vi": "Xuất toàn bộ"},
     "admin_export_selective": {"fr": "Export sélectif", "en": "Selective export", "es": "Exportación selectiva", "pt-br": "Exportação seletiva", "vi": "Xuất chọn lọc"},
     "admin_export_files": {"fr": "Export fichiers", "en": "Export files", "es": "Exportar archivos", "pt-br": "Exportar arquivos", "vi": "Xuất tệp"},
@@ -911,7 +891,6 @@ TRANSLATIONS = {
     "f_notify_party": {"fr": "Notify Party", "en": "Notify Party", "es": "Parte notificada", "pt-br": "Parte notificada", "vi": "Bên thông báo"},
     "f_consignee": {"fr": "Consignee (Destinataire)", "en": "Consignee", "es": "Consignatario", "pt-br": "Consignatário", "vi": "Người nhận hàng"},
     "f_shipper": {"fr": "Shipper (Expéditeur)", "en": "Shipper", "es": "Expedidor", "pt-br": "Embarcador", "vi": "Người gửi hàng"},
-    "nav_passengers": {"fr": "Passagers", "en": "Passengers", "es": "Pasajeros", "pt-br": "Passageiros", "vi": "Hành khách"},
     "nav_onboard": {"fr": "On Board", "en": "On Board", "es": "A bordo", "pt-br": "A bordo", "vi": "Trên tàu"},
 }
 

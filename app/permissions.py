@@ -1,9 +1,9 @@
 """
-Permission system for TOWT Planning App.
+Permission system for my_newtowt App.
 
 Roles: administrateur, operation, armement, technique, data_analyst, marins,
        commercial, manager_maritime
-Modules: planning, commercial, escale, finance, kpi, captain, crew, cargo, mrv, passengers
+Modules: planning, commercial, escale, finance, kpi, captain, crew, cargo, claims, mrv
 Permissions: C (consult), M (modify), S (delete/suppress)
 
 Usage:
@@ -38,11 +38,10 @@ _MATRIX = {
     ("administrateur", "crew"):        {"C", "M", "S"},
     ("administrateur", "cargo"):       {"C", "M", "S"},
     ("administrateur", "mrv"):         {"C", "M", "S"},
-    ("administrateur", "passengers"):  {"C", "M", "S"},
     ("administrateur", "claims"):      {"C", "M", "S"},
 
     # ─── OPERATION ───────────────────────────────────────
-    # Planning, Commercial, Escale, KPI, On board, Passagers, Equipage, Cargo, MRV
+    # Planning, Commercial, Escale, KPI, On board, Equipage, Cargo, MRV
     ("operation", "planning"):    {"C", "M"},
     ("operation", "commercial"):  {"C", "M"},
     ("operation", "escale"):      {"C", "M", "S"},
@@ -51,21 +50,19 @@ _MATRIX = {
     ("operation", "crew"):        {"C", "M"},
     ("operation", "cargo"):       {"C", "M", "S"},
     ("operation", "mrv"):         {"C", "M"},
-    ("operation", "passengers"):  {"C", "M"},
     ("operation", "claims"):      {"C", "M", "S"},
 
     # ─── ARMEMENT (CREW) ────────────────────────────────
-    # Planning, Escale, KPI, Equipage, Passagers
+    # Planning, Escale, KPI, Equipage
     ("armement", "planning"):    {"C"},
     ("armement", "escale"):      {"C"},
     ("armement", "kpi"):         {"C"},
     ("armement", "captain"):     {"C"},
     ("armement", "crew"):        {"C", "M", "S"},
-    ("armement", "passengers"):  {"C", "M"},
     ("armement", "mrv"):         {"C"},
 
     # ─── TECHNIQUE ───────────────────────────────────────
-    # Planning, Commercial, Escale, KPI, On board, Passagers, Equipage, Cargo, MRV
+    # Planning, Commercial, Escale, KPI, On board, Equipage, Cargo, MRV
     ("technique", "planning"):    {"C"},
     ("technique", "commercial"):  {"C"},
     ("technique", "escale"):      {"C", "M", "S"},
@@ -74,7 +71,6 @@ _MATRIX = {
     ("technique", "crew"):        {"C"},
     ("technique", "cargo"):       {"C"},
     ("technique", "mrv"):         {"C", "M"},
-    ("technique", "passengers"):  {"C"},
     ("technique", "claims"):      {"C"},
 
     # ─── DATA ANALYST ────────────────────────────────────
@@ -101,17 +97,16 @@ _MATRIX = {
     ("marins", "mrv"):         {"C"},
 
     # ─── COMMERCIAL ──────────────────────────────────────
-    # Planning, Commercial, Escale, KPI, Passagers, Cargo
+    # Planning, Commercial, Escale, KPI, Cargo
     ("commercial", "planning"):    {"C"},
     ("commercial", "commercial"):  {"C", "M", "S"},
     ("commercial", "escale"):      {"C"},
     ("commercial", "kpi"):         {"C"},
-    ("commercial", "passengers"):  {"C", "M", "S"},
     ("commercial", "cargo"):       {"C", "M"},
     ("commercial", "captain"):     {"C"},
 
     # ─── MANAGER MARITIME ────────────────────────────────
-    # Planning, Commercial, Escale, KPI, On board, Passagers, Equipage, Cargo, MRV
+    # Planning, Commercial, Escale, KPI, On board, Equipage, Cargo, MRV
     ("manager_maritime", "planning"):    {"C", "M"},
     ("manager_maritime", "commercial"):  {"C", "M"},
     ("manager_maritime", "escale"):      {"C", "M"},
@@ -120,7 +115,6 @@ _MATRIX = {
     ("manager_maritime", "crew"):        {"C", "M"},
     ("manager_maritime", "cargo"):       {"C", "M"},
     ("manager_maritime", "mrv"):         {"C", "M"},
-    ("manager_maritime", "passengers"):  {"C", "M"},
     ("manager_maritime", "claims"):      {"C", "M"},
 }
 
@@ -148,7 +142,7 @@ ROLES = [
 # All modules
 MODULES = [
     "planning", "commercial", "escale", "finance",
-    "kpi", "captain", "crew", "cargo", "claims", "mrv", "passengers",
+    "kpi", "captain", "crew", "cargo", "claims", "mrv",
 ]
 
 # Module display names
@@ -162,7 +156,6 @@ MODULE_NAMES = {
     "crew": "Équipage",
     "cargo": "Cargo Docs",
     "mrv": "MRV Fuel",
-    "passengers": "Passagers",
     "claims": "Claims / Sinistres",
 }
 
