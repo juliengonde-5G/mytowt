@@ -73,11 +73,6 @@ SOF_EVENT_TYPES = [
     ("COMPLETED_LOADING", "Completed loading / discharging"),
     ("LOADING_SUSPENDED", "Loading / Discharging suspended - Shore / Ship stop"),
     ("LOADING_RESUMED", "Loading / discharging resumed"),
-    # ─── PASSENGER OPERATIONS ───
-    ("PAX_EMBARK", "Passengers embarked / Embarquement passagers"),
-    ("PAX_DISEMBARK", "Passengers disembarked / Débarquement passagers"),
-    ("PAX_SAFETY_DRILL", "Passenger safety drill / Exercice sécurité passagers"),
-    ("PAX_MUSTER", "Passenger muster / Appel passagers"),
     # ─── CLAIMS ───
     ("CLAIM_DECLARED", "Claim declared / Sinistre déclaré"),
     ("CLAIM_UPDATED", "Claim updated / Sinistre mis à jour"),

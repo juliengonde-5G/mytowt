@@ -13,10 +13,6 @@ from app.models.onboard import (
     SofEvent, OnboardNotification, CargoDocument,
     OnboardMessage, OnboardMessageMention,
 )
-from app.models.passenger import (
-    Passenger, PassengerBooking, PassengerPayment, PassengerDocument,
-    CabinPriceGrid, PreBoardingForm, PassengerAuditLog, SatisfactionResponse,
-)
 from app.models.activity_log import ActivityLog
 from app.models.mrv import MrvEvent, MrvParameter
 from app.models.co2_variable import Co2Variable
@@ -39,8 +35,6 @@ __all__ = [
     "PackingList", "PackingListBatch", "PackingListAudit",
     "SofEvent", "OnboardNotification", "CargoDocument",
     "OnboardMessage", "OnboardMessageMention",
-    "Passenger", "PassengerBooking", "PassengerPayment", "PassengerDocument",
-    "CabinPriceGrid", "PreBoardingForm", "PassengerAuditLog", "SatisfactionResponse",
     "ActivityLog",
     "MrvEvent", "MrvParameter",
     "Co2Variable",

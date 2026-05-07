@@ -66,25 +66,9 @@ async def compute_revenue_from_orders(db: AsyncSession, leg_id: int) -> float:
 
 
 async def compute_pax_revenue_for_leg(db: AsyncSession, leg_id: int) -> float:
-    """Compute passenger revenue for a leg from confirmed/paid bookings.
-
-    Returns 0.0 when PASSENGERS_ENABLED is False (post-TOWT liquidation).
-    """
-    from app.config import get_settings
-    if not get_settings().PASSENGERS_ENABLED:
-        return 0.0
-    from app.models.passenger import PassengerBooking
-    result = await db.execute(
-        select(PassengerBooking).where(
-            PassengerBooking.leg_id == leg_id,
-            PassengerBooking.status.notin_(["cancelled", "draft"]),
-        )
-    )
-    total = 0
-    for b in result.scalars().all():
-        if b.price_total:
-            total += float(b.price_total)
-    return round(total, 2)
+    """Passenger activity removed in v3.0.0. Stub kept to avoid touching every
+    caller and template; always returns 0.0."""
+    return 0.0
 
 
 async def compute_palettes_for_leg(db: AsyncSession, leg_id: int) -> int:

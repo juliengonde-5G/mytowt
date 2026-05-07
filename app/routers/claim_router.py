@@ -17,7 +17,6 @@ from app.models.vessel import Vessel
 from app.models.leg import Leg
 from app.models.order import OrderAssignment, Order
 from app.models.crew import CrewMember
-from app.models.passenger import Passenger, PassengerBooking
 from app.models.onboard import SofEvent
 from app.utils.timezones import TIMEZONE_CHOICES
 from app.models.finance import LegFinance, InsuranceContract
@@ -68,7 +67,7 @@ async def _save_upload(upload, claim_ref, prefix=""):
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 async def claim_list(request: Request, claim_type: Optional[str]=Query(None), status: Optional[str]=Query(None), vessel: Optional[int]=Query(None), user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)):
-    query = select(Claim).options(selectinload(Claim.vessel), selectinload(Claim.leg).selectinload(Leg.departure_port), selectinload(Claim.leg).selectinload(Leg.arrival_port), selectinload(Claim.order_assignment).selectinload(OrderAssignment.order), selectinload(Claim.crew_member), selectinload(Claim.passenger)).order_by(Claim.created_at.desc())
+    query = select(Claim).options(selectinload(Claim.vessel), selectinload(Claim.leg).selectinload(Leg.departure_port), selectinload(Claim.leg).selectinload(Leg.arrival_port), selectinload(Claim.order_assignment).selectinload(OrderAssignment.order), selectinload(Claim.crew_member)).order_by(Claim.created_at.desc())
     if claim_type: query = query.where(Claim.claim_type == claim_type)
     if status: query = query.where(Claim.status == status)
     if vessel:
@@ -92,15 +91,10 @@ async def claim_create_form(request: Request, user: User=Depends(get_current_use
     legs = (await db.execute(select(Leg).options(selectinload(Leg.departure_port),selectinload(Leg.arrival_port),selectinload(Leg.vessel)).where(Leg.status!="cancelled").order_by(Leg.year.desc(),Leg.vessel_id,Leg.sequence))).scalars().all()
     oas = (await db.execute(select(OrderAssignment).options(selectinload(OrderAssignment.order),selectinload(OrderAssignment.leg)).order_by(OrderAssignment.id.desc()))).scalars().all()
     crew = (await db.execute(select(CrewMember).where(CrewMember.is_active==True).order_by(CrewMember.last_name))).scalars().all()
-    from app.config import get_settings as _get_settings
-    if _get_settings().PASSENGERS_ENABLED:
-        pax = (await db.execute(select(Passenger).options(selectinload(Passenger.booking)).order_by(Passenger.last_name))).scalars().all()
-    else:
-        pax = []
-    return templates.TemplateResponse("claims/form.html", {"request":request,"user":user,"claim":None,"vessels":vessels,"legs":legs,"order_assignments":oas,"crew_members":crew,"passengers":pax,"claim_types":CLAIM_TYPES,"claim_contexts":CLAIM_CONTEXTS,"claim_guarantees":CLAIM_GUARANTEES,"claim_responsibility":CLAIM_RESPONSIBILITY,"tz_choices":TIMEZONE_CHOICES,"active_module":"claims"})
+    return templates.TemplateResponse("claims/form.html", {"request":request,"user":user,"claim":None,"vessels":vessels,"legs":legs,"order_assignments":oas,"crew_members":crew,"claim_types":CLAIM_TYPES,"claim_contexts":CLAIM_CONTEXTS,"claim_guarantees":CLAIM_GUARANTEES,"claim_responsibility":CLAIM_RESPONSIBILITY,"tz_choices":TIMEZONE_CHOICES,"active_module":"claims"})
 
 @router.post("/create", response_class=HTMLResponse)
-async def claim_create_submit(request: Request, claim_type:str=Form(...), vessel_id:int=Form(...), leg_id:int=Form(...), context:str=Form(""), incident_date:str=Form(""), incident_location:str=Form(""), description:str=Form(...), guarantee_type:str=Form(""), responsibility:str=Form("pending"), provision_amount:str=Form(""), franchise_amount:str=Form(""), order_assignment_id:Optional[str]=Form(None), crew_member_id:Optional[str]=Form(None), passenger_id:Optional[str]=Form(None), notes:str=Form(""), user:User=Depends(get_current_user), db:AsyncSession=Depends(get_db)):
+async def claim_create_submit(request: Request, claim_type:str=Form(...), vessel_id:int=Form(...), leg_id:int=Form(...), context:str=Form(""), incident_date:str=Form(""), incident_location:str=Form(""), description:str=Form(...), guarantee_type:str=Form(""), responsibility:str=Form("pending"), provision_amount:str=Form(""), franchise_amount:str=Form(""), order_assignment_id:Optional[str]=Form(None), crew_member_id:Optional[str]=Form(None), notes:str=Form(""), user:User=Depends(get_current_user), db:AsyncSession=Depends(get_db)):
     ref = _gen_claim_ref(claim_type)
     inc_date = None
     if incident_date:
@@ -128,7 +122,7 @@ async def claim_create_submit(request: Request, claim_type:str=Form(...), vessel
                             break
         except Exception:
             pass
-    claim = Claim(reference=ref, claim_type=claim_type, status="open", vessel_id=vessel_id, leg_id=leg_id, order_assignment_id=_to_int(order_assignment_id) if claim_type=="cargo" else None, crew_member_id=_to_int(crew_member_id) if claim_type=="crew" else None, passenger_id=_to_int(passenger_id) if claim_type=="crew" else None, context=context or None, incident_date=inc_date, incident_location=incident_location or None, description=description, guarantee_type=guarantee_type or None, responsibility=responsibility, provision_amount=_pf(provision_amount), franchise_amount=_pf(franchise_amount), declared_by=user.full_name, notes=notes or None, cargo_zone=cargo_zone)
+    claim = Claim(reference=ref, claim_type=claim_type, status="open", vessel_id=vessel_id, leg_id=leg_id, order_assignment_id=_to_int(order_assignment_id) if claim_type=="cargo" else None, crew_member_id=_to_int(crew_member_id) if claim_type=="crew" else None, context=context or None, incident_date=inc_date, incident_location=incident_location or None, description=description, guarantee_type=guarantee_type or None, responsibility=responsibility, provision_amount=_pf(provision_amount), franchise_amount=_pf(franchise_amount), declared_by=user.full_name, notes=notes or None, cargo_zone=cargo_zone)
     db.add(claim); await db.flush()
     await log_activity(db, user=user, action="create", module="claims",
                        entity_type="claim", entity_id=claim.id,
@@ -151,7 +145,7 @@ async def claim_create_submit(request: Request, claim_type:str=Form(...), vessel
 # === DETAIL ===
 @router.get("/{claim_id}", response_class=HTMLResponse)
 async def claim_detail(claim_id:int, request:Request, user:User=Depends(get_current_user), db:AsyncSession=Depends(get_db)):
-    result = await db.execute(select(Claim).options(selectinload(Claim.vessel),selectinload(Claim.leg).selectinload(Leg.departure_port),selectinload(Claim.leg).selectinload(Leg.arrival_port),selectinload(Claim.order_assignment).selectinload(OrderAssignment.order),selectinload(Claim.crew_member),selectinload(Claim.passenger),selectinload(Claim.documents),selectinload(Claim.timeline),selectinload(Claim.sof_event)).where(Claim.id==claim_id))
+    result = await db.execute(select(Claim).options(selectinload(Claim.vessel),selectinload(Claim.leg).selectinload(Leg.departure_port),selectinload(Claim.leg).selectinload(Leg.arrival_port),selectinload(Claim.order_assignment).selectinload(OrderAssignment.order),selectinload(Claim.crew_member),selectinload(Claim.documents),selectinload(Claim.timeline),selectinload(Claim.sof_event)).where(Claim.id==claim_id))
     claim = result.scalar_one_or_none()
     if not claim: raise HTTPException(404)
     insurance = None
@@ -250,7 +244,7 @@ async def claim_update_guarantee(claim_id:int, request:Request, guarantee_type:s
 # === PDF DECLARATION ===
 @router.get("/{claim_id}/declaration/pdf")
 async def claim_declaration_pdf(claim_id:int, user:User=Depends(get_current_user), db:AsyncSession=Depends(get_db)):
-    result = await db.execute(select(Claim).options(selectinload(Claim.vessel),selectinload(Claim.leg).selectinload(Leg.departure_port),selectinload(Claim.leg).selectinload(Leg.arrival_port),selectinload(Claim.order_assignment).selectinload(OrderAssignment.order),selectinload(Claim.crew_member),selectinload(Claim.passenger),selectinload(Claim.documents)).where(Claim.id==claim_id))
+    result = await db.execute(select(Claim).options(selectinload(Claim.vessel),selectinload(Claim.leg).selectinload(Leg.departure_port),selectinload(Claim.leg).selectinload(Leg.arrival_port),selectinload(Claim.order_assignment).selectinload(OrderAssignment.order),selectinload(Claim.crew_member),selectinload(Claim.documents)).where(Claim.id==claim_id))
     claim = result.scalar_one_or_none()
     if not claim: raise HTTPException(404)
     insurance = None
@@ -294,7 +288,6 @@ async def claim_declaration_pdf(claim_id:int, user:User=Depends(get_current_user
         dd += [["",""],["MARCHANDISE",""],["Client / Chargeur",o.client_name],["Réf. commande",o.reference],["Description",o.description or "—"],["Quantité",f"{o.quantity_palettes} pal. ({o.palette_format})"],["Poids",f"{o.total_weight or 0:.1f} T"]]
     elif claim.claim_type=="crew":
         if claim.crew_member: dd.append(["Personne",f"{claim.crew_member.full_name} ({claim.crew_member.role_label})"])
-        elif claim.passenger: dd.append(["Passager",claim.passenger.full_name])
     t = Table(dd, colWidths=[140,330])
     t.setStyle(TableStyle([('FONTSIZE',(0,0),(-1,-1),9),('FONTNAME',(0,0),(0,-1),'Helvetica-Bold'),('TEXTCOLOR',(0,0),(0,-1),colors.HexColor('#095561')),('BOTTOMPADDING',(0,0),(-1,-1),4)]))
     story.append(t); story.append(Spacer(1,10))

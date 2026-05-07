@@ -15,8 +15,8 @@ class ActivityLog(Base):
 
     # What
     action = Column(String(20), nullable=False)  # login, logout, create, update, delete, login_fail
-    module = Column(String(50), nullable=False)  # auth, commercial, passengers, cargo, crew, etc.
-    entity_type = Column(String(50), nullable=True)  # order, booking, leg, user, claim, etc.
+    module = Column(String(50), nullable=False)  # auth, commercial, cargo, crew, etc.
+    entity_type = Column(String(50), nullable=True)  # order, leg, user, claim, etc.
     entity_id = Column(String(50), nullable=True)  # PK of the entity
     entity_label = Column(String(200), nullable=True)  # human-readable label (e.g. "ORD-2025-042")
 

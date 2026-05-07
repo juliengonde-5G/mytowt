@@ -7,10 +7,8 @@ from app.database import Base
 NOTIFICATION_TYPES = [
     ("new_order", "Nouvelle commande client"),
     ("new_cargo_message", "Nouveau message messagerie client"),
-    ("new_passenger_message", "Nouveau message messagerie passager"),
     ("eosp", "EOSP (End of Sea Passage)"),
     ("sosp", "SOSP (Start of Sea Passage)"),
-    ("new_passenger_booking", "Nouvelle réservation passager"),
     ("new_claim", "Nouveau claim ouvert"),
     ("eta_shift", "Décalage ETA signalé par le commandant"),
 ]
@@ -18,10 +16,8 @@ NOTIFICATION_TYPES = [
 NOTIFICATION_ICONS = {
     "new_order": "📦",
     "new_cargo_message": "💬",
-    "new_passenger_message": "💬",
     "eosp": "⚓",
     "sosp": "⛵",
-    "new_passenger_booking": "🎫",
     "new_claim": "⚠️",
     "eta_shift": "🕐",
 }
@@ -43,7 +39,6 @@ class Notification(Base):
     # Optional references
     leg_id = Column(Integer, ForeignKey("legs.id", ondelete="SET NULL"), nullable=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
-    booking_id = Column(Integer, ForeignKey("passenger_bookings.id", ondelete="SET NULL"), nullable=True)
     packing_list_id = Column(Integer, ForeignKey("packing_lists.id", ondelete="SET NULL"), nullable=True)
 
     leg = relationship("Leg", lazy="selectin")

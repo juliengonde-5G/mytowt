@@ -151,7 +151,6 @@ async def onboard_home(
     current_leg = None
     crew_onboard = []
     cargo_summary = {}
-    pax_bookings = []
     sof_events = []
     notifications = []
     last_sof = None
@@ -258,22 +257,6 @@ async def onboard_home(
             )
             notifications = notif_result.scalars().all()
 
-            # ─── PASSENGERS for this leg (gated by PASSENGERS_ENABLED feature flag) ───
-            from app.config import get_settings as _get_settings
-            if _get_settings().PASSENGERS_ENABLED:
-                from app.models.passenger import PassengerBooking, Passenger, PassengerDocument, DOCUMENT_TYPES, CABIN_CONFIG
-                pax_result = await db.execute(
-                    select(PassengerBooking).options(
-                        selectinload(PassengerBooking.passengers).selectinload(Passenger.documents),
-                    )
-                    .where(
-                        PassengerBooking.leg_id == current_leg.id,
-                        PassengerBooking.status.notin_(["cancelled"]),
-                    )
-                    .order_by(PassengerBooking.cabin_number)
-                )
-                pax_bookings = pax_result.scalars().all()
-
             # ─── ETA SHIFTS history for this leg + all vessel legs this year ───
             eta_shifts_result = await db.execute(
                 select(ETAShift).where(
@@ -339,7 +322,6 @@ async def onboard_home(
         "cargo_summary": cargo_summary,
         "sof_events": sof_events, "last_sof": last_sof,
         "notifications": notifications,
-        "pax_bookings": pax_bookings,
         "eta_shifts": eta_shifts if current_leg else [],
         "eta_shift_reasons": ETA_SHIFT_REASONS,
         "attachments": attachments if current_leg else [],

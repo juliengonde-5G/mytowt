@@ -40,7 +40,7 @@ async def record_token_attempt(request: Request, db: AsyncSession):
 
 
 async def log_portal_access(db, request: Request, portal_type: str, token: str,
-                            booking_id: int = None, packing_list_id: int = None):
+                            packing_list_id: int = None):
     """Log an access to an external portal for RGPD audit trail.
 
     Only the sha256 of the token is persisted (A2.3 hardening).
@@ -52,7 +52,6 @@ async def log_portal_access(db, request: Request, portal_type: str, token: str,
         ip_address=request.client.host if request.client else None,
         user_agent=(request.headers.get("user-agent", ""))[:500],
         path=str(request.url.path),
-        booking_id=booking_id,
         packing_list_id=packing_list_id,
     )
     db.add(log_entry)

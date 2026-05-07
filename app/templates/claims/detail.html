@@ -63,8 +63,7 @@
         </div>
         {% elif claim.claim_type == 'crew' %}
         <h3>👤 Personne concernée</h3>
-        {% if claim.crew_member %}<div style="display:flex;gap:12px;align-items:center;"><span class="cd-badge">Équipage</span><strong>{{ claim.crew_member.full_name }}</strong><span style="font-size:11px;color:#888;">{{ claim.crew_member.role_label }}</span></div>
-        {% elif claim.passenger %}<div style="display:flex;gap:12px;align-items:center;"><span class="cd-badge" style="background:rgba(168,85,247,0.1);color:#A855F7;">Passager</span><strong>{{ claim.passenger.full_name }}</strong></div>{% endif %}
+        {% if claim.crew_member %}<div style="display:flex;gap:12px;align-items:center;"><span class="cd-badge">Équipage</span><strong>{{ claim.crew_member.full_name }}</strong><span style="font-size:11px;color:#888;">{{ claim.crew_member.role_label }}</span></div>{% endif %}
         {% elif claim.claim_type == 'hull' %}
         <h3>🚢 Navire concerné</h3>
         <div style="display:flex;gap:12px;align-items:center;"><span class="cd-badge" style="background:rgba(220,38,38,0.1);color:#DC2626;">Hull</span><strong>{{ claim.vessel.name }}</strong></div>

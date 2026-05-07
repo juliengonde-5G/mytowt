@@ -1,6 +1,6 @@
 """
-Portal messaging model — threaded conversations between client/passenger and company.
-Used by both passenger external portal and cargo client portal.
+Portal messaging model — threaded conversations between client and company
+on the cargo client portal.
 """
 from sqlalchemy import (
     Column, Integer, String, DateTime, ForeignKey, Text, Boolean, func
@@ -14,9 +14,7 @@ class PortalMessage(Base):
     __tablename__ = "portal_messages"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    # Polymorphic: either booking_id (passenger) or packing_list_id (cargo)
-    booking_id = Column(Integer, ForeignKey("passenger_bookings.id", ondelete="CASCADE"), nullable=True)
-    packing_list_id = Column(Integer, ForeignKey("packing_lists.id", ondelete="CASCADE"), nullable=True)
+    packing_list_id = Column(Integer, ForeignKey("packing_lists.id", ondelete="CASCADE"), nullable=False)
 
     sender_type = Column(String(20), nullable=False)  # "client" or "company"
     sender_name = Column(String(200), nullable=False)
@@ -24,5 +22,4 @@ class PortalMessage(Base):
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    booking = relationship("PassengerBooking", backref="messages", foreign_keys=[booking_id])
     packing_list = relationship("PackingList", backref="messages", foreign_keys=[packing_list_id])

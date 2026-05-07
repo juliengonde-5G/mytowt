@@ -29,20 +29,12 @@ from app.models.co2_variable import Co2Variable, CO2_DEFAULTS
 from app.models.mrv import MrvParameter, MRV_DEFAULTS
 
 ADMIN_ROLES = {"administrateur", "admin", "data_analyst"}
-ADMIN_OR_COMMERCIAL = ADMIN_ROLES | {"commercial"}
 
 
 async def require_admin(user: User = Depends(get_current_user)):
     """Require admin or data_analyst role for settings access."""
     if user.role not in ADMIN_ROLES:
         raise HTTPException(403, detail="Admin access required")
-    return user
-
-
-async def require_admin_or_commercial(user: User = Depends(get_current_user)):
-    """Require admin, data_analyst or commercial role."""
-    if user.role not in ADMIN_OR_COMMERCIAL:
-        raise HTTPException(403, detail="Access denied")
     return user
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -84,7 +76,7 @@ def pf(val, default=0):
 @account_router.get("/settings", response_class=HTMLResponse)
 async def settings_home(
     request: Request,
-    user: User = Depends(require_admin_or_commercial),
+    user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     # Users
@@ -114,13 +106,6 @@ async def settings_home(
         select(func.count(Leg.id)).where(Leg.status == "completed")
     )
     locked_count = locked_result.scalar() or 0
-
-    # Cabin pricing grid
-    from app.models.passenger import CabinPriceGrid, CABIN_TYPE_LABELS
-    pricing_result = await db.execute(
-        select(CabinPriceGrid).order_by(CabinPriceGrid.origin_locode, CabinPriceGrid.destination_locode, CabinPriceGrid.cabin_type)
-    )
-    pricing_grid = pricing_result.scalars().all()
 
     # Existing routes (unique origin→dest pairs from legs)
     from sqlalchemy.orm import selectinload as sl
@@ -190,10 +175,8 @@ async def settings_home(
         "opex_params": opex_params,
         "emission_params": emission_params,
         "locked_count": locked_count,
-        "pricing_grid": pricing_grid,
         "existing_routes": existing_routes,
         "route_ports": route_ports,
-        "cabin_type_labels": CABIN_TYPE_LABELS,
         "insurance_contracts": insurance_contracts,
         "co2_vars": co2_vars, "co2_dict": co2_dict, "co2_history": co2_history,
         "co2_defaults": CO2_DEFAULTS,
@@ -726,7 +709,6 @@ def _date_fmt(val):
 TABLE_DEFS = {
     "legs": {"label": "Legs", "tables": ["legs"]},
     "orders": {"label": "Commandes", "tables": ["orders", "order_assignments"]},
-    "passengers": {"label": "Passagers", "tables": ["passenger_bookings", "passengers", "passenger_payments", "passenger_documents", "preboarding_forms", "passenger_audit_logs"]},
     "cargo": {"label": "Cargo", "tables": ["packing_lists", "packing_list_batches", "packing_list_audit"]},
     "finance": {"label": "Finance", "tables": ["leg_finances"]},
     "claims": {"label": "Claims", "tables": ["claims", "claim_documents", "claim_timeline"]},
@@ -741,7 +723,7 @@ TABLE_DEFS = {
     "clients": {"label": "Clients", "tables": ["clients"]},
     "rates": {"label": "Grilles tarifaires", "tables": ["rate_grids", "rate_grid_lines", "rate_offers"]},
     "kpi": {"label": "KPI", "tables": ["leg_kpis"]},
-    "config": {"label": "Config", "tables": ["vessels", "ports", "port_configs", "opex_parameters", "emission_parameters", "cabin_price_grid", "insurance_contracts", "co2_variables", "mrv_parameters", "mrv_events", "planning_shares", "vessel_positions"]},
+    "config": {"label": "Config", "tables": ["vessels", "ports", "port_configs", "opex_parameters", "emission_parameters", "insurance_contracts", "co2_variables", "mrv_parameters", "mrv_events", "planning_shares", "vessel_positions"]},
     "access_logs": {"label": "Logs d'accès", "tables": ["portal_access_logs"]},
 }
 
@@ -859,7 +841,6 @@ async def export_files(
     now_str = datetime.now().strftime("%Y%m%d_%H%M")
 
     upload_dirs = [
-        ("/app/uploads/passenger_docs", "passenger_docs"),
         ("/app/data/claims", "claims"),
         ("app/static/uploads/orders", "orders"),
         ("/app/uploads/crew_tickets", "crew_tickets"),
@@ -908,7 +889,7 @@ async def purge_selective(
     purge_order = [
         "notifications", "messages", "activity", "access_logs", "sof",
         "onboard", "escale", "claims",
-        "cargo", "passengers", "finance", "rates", "clients",
+        "cargo", "finance", "rates", "clients",
         "crew_assignments", "orders", "kpi", "legs",
     ]
 
@@ -926,11 +907,6 @@ async def purge_selective(
         "escale": ["DELETE FROM escale_operations", "DELETE FROM docker_shifts"],
         "claims": ["DELETE FROM claim_timeline", "DELETE FROM claim_documents", "DELETE FROM claims"],
         "cargo": ["DELETE FROM packing_list_audit", "DELETE FROM packing_list_batches", "DELETE FROM packing_lists"],
-        "passengers": [
-            "DELETE FROM passenger_audit_logs", "DELETE FROM preboarding_forms",
-            "DELETE FROM passenger_documents", "DELETE FROM passenger_payments",
-            "DELETE FROM passengers", "DELETE FROM passenger_bookings",
-        ],
         "orders": ["DELETE FROM order_assignments", "DELETE FROM orders"],
         "finance": ["DELETE FROM leg_finances"],
         "rates": ["DELETE FROM rate_offers", "DELETE FROM rate_grid_lines", "DELETE FROM rate_grids"],
@@ -987,12 +963,6 @@ async def reset_database(
         "DELETE FROM packing_list_audit",
         "DELETE FROM packing_list_batches",
         "DELETE FROM packing_lists",
-        "DELETE FROM passenger_audit_logs",
-        "DELETE FROM preboarding_forms",
-        "DELETE FROM passenger_documents",
-        "DELETE FROM passenger_payments",
-        "DELETE FROM passengers",
-        "DELETE FROM passenger_bookings",
         "DELETE FROM rate_offers",
         "DELETE FROM rate_grid_lines",
         "DELETE FROM rate_grids",
@@ -1079,9 +1049,6 @@ async def cleanup_audit(
     await db.execute(text(
         "DELETE FROM packing_list_audit WHERE created_at < NOW() - INTERVAL '12 months'"
     ))
-    await db.execute(text(
-        "DELETE FROM passenger_audit_logs WHERE created_at < NOW() - INTERVAL '12 months'"
-    ))
     await db.flush()
     return RedirectResponse(url="/admin/settings#database", status_code=303)
 
@@ -1142,78 +1109,6 @@ async def update_language(
     response.set_cookie("towt_lang", language, max_age=365*24*3600,
                         httponly=True, samesite="lax", secure=True)
     return response
-
-
-# ─── CABIN PRICING GRID ──────────────────────────────────────
-def _require_passengers_enabled():
-    """Gate cabin pricing endpoints on the PASSENGERS_ENABLED feature flag."""
-    from app.config import get_settings as _get_settings
-    if not _get_settings().PASSENGERS_ENABLED:
-        raise HTTPException(status_code=404)
-
-
-@account_router.post("/settings/pricing/add", response_class=HTMLResponse)
-async def pricing_add(
-    request: Request,
-    origin_locode: str = Form(...),
-    destination_locode: str = Form(...),
-    cabin_type: str = Form(...),
-    price: float = Form(...),
-    deposit_pct: int = Form(30),
-    notes: str = Form(""),
-    user: User = Depends(require_admin_or_commercial),
-    db: AsyncSession = Depends(get_db),
-    _gate=Depends(_require_passengers_enabled),
-):
-    from app.models.passenger import CabinPriceGrid
-    entry = CabinPriceGrid(
-        origin_locode=origin_locode.strip().upper(),
-        destination_locode=destination_locode.strip().upper(),
-        cabin_type=cabin_type,
-        price=price,
-        deposit_pct=deposit_pct,
-        notes=notes.strip() or None,
-    )
-    db.add(entry)
-    await db.flush()
-    return RedirectResponse(url="/admin/settings#pricing", status_code=303)
-
-
-@account_router.post("/settings/pricing/{price_id}/edit", response_class=HTMLResponse)
-async def pricing_edit(
-    price_id: int, request: Request,
-    price: float = Form(...),
-    deposit_pct: int = Form(30),
-    notes: str = Form(""),
-    is_active: Optional[str] = Form(None),
-    user: User = Depends(require_admin_or_commercial),
-    db: AsyncSession = Depends(get_db),
-    _gate=Depends(_require_passengers_enabled),
-):
-    from app.models.passenger import CabinPriceGrid
-    entry = await db.get(CabinPriceGrid, price_id)
-    if entry:
-        entry.price = price
-        entry.deposit_pct = deposit_pct
-        entry.notes = notes.strip() or None
-        entry.is_active = is_active == "on"
-        await db.flush()
-    return RedirectResponse(url="/admin/settings#pricing", status_code=303)
-
-
-@account_router.delete("/settings/pricing/{price_id}", response_class=HTMLResponse)
-async def pricing_delete(
-    price_id: int, request: Request,
-    user: User = Depends(require_admin_or_commercial),
-    db: AsyncSession = Depends(get_db),
-    _gate=Depends(_require_passengers_enabled),
-):
-    from app.models.passenger import CabinPriceGrid
-    entry = await db.get(CabinPriceGrid, price_id)
-    if entry:
-        await db.delete(entry)
-        await db.flush()
-    return HTMLResponse("", status_code=200)
 
 
 # ─── INSURANCE CONTRACTS ─────────────────────────────────────
@@ -1849,219 +1744,6 @@ async def import_planning_csv(
     if errors:
         msg += f", {len(errors)} erreurs"
     url = f"/admin/settings?import_success={msg.replace(' ', '+')}"
-    if request.headers.get("HX-Request"):
-        return HTMLResponse(content="", headers={"HX-Redirect": url})
-    return RedirectResponse(url=url, status_code=303)
-
-
-# ═══ RGPD DATA EXPORT (DSR) ═════════════════════════════════
-@router.get("/rgpd/export/passenger/{booking_id}")
-async def rgpd_export_passenger(
-    booking_id: int, request: Request,
-    user: User = Depends(require_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """Export all personal data for a passenger booking (GDPR Data Subject Request)."""
-    import json
-    from app.models.passenger import PassengerBooking, Passenger, PreBoardingForm
-    from app.models.portal_message import PortalMessage
-    from app.models.portal_access_log import PortalAccessLog
-
-    result = await db.execute(
-        select(PassengerBooking).options(
-            selectinload(PassengerBooking.passengers),
-            selectinload(PassengerBooking.payments),
-        ).where(PassengerBooking.id == booking_id)
-    )
-    booking = result.scalar_one_or_none()
-    if not booking:
-        raise HTTPException(404)
-
-    data = {
-        "export_type": "RGPD_DSR",
-        "export_date": datetime.now().isoformat(),
-        "exported_by": user.username,
-        "booking": {
-            "reference": booking.reference,
-            "status": booking.status,
-            "booking_date": str(booking.booking_date) if booking.booking_date else None,
-            "contact_email": booking.contact_email,
-            "contact_phone": booking.contact_phone,
-            "created_at": booking.created_at.isoformat() if booking.created_at else None,
-        },
-        "passengers": [],
-        "payments": [],
-        "messages": [],
-        "access_logs": [],
-    }
-
-    for pax in booking.passengers:
-        pax_data = {
-            "first_name": pax.first_name, "last_name": pax.last_name,
-            "email": pax.email, "phone": pax.phone,
-            "date_of_birth": str(pax.date_of_birth) if pax.date_of_birth else None,
-            "nationality": pax.nationality, "passport_number": pax.passport_number,
-            "emergency_contact_name": pax.emergency_contact_name,
-            "emergency_contact_phone": pax.emergency_contact_phone,
-        }
-        # Pre-boarding form
-        form_result = await db.execute(select(PreBoardingForm).where(PreBoardingForm.passenger_id == pax.id))
-        form = form_result.scalar_one_or_none()
-        if form:
-            pax_data["questionnaire"] = {
-                "sailed_before": form.sailed_before, "seasick": form.seasick,
-                "chronic_conditions": form.chronic_conditions, "allergies": form.allergies,
-                "daily_medication": form.daily_medication, "dietary_requirements": form.dietary_requirements,
-                "gdpr_consent": form.gdpr_consent,
-                "gdpr_consent_at": form.gdpr_consent_at.isoformat() if form.gdpr_consent_at else None,
-                "signed_at": form.signed_at.isoformat() if form.signed_at else None,
-            }
-        data["passengers"].append(pax_data)
-
-    for pay in booking.payments:
-        data["payments"].append({
-            "type": pay.payment_type, "amount": str(pay.amount),
-            "status": pay.status, "paid_date": str(pay.paid_date) if pay.paid_date else None,
-        })
-
-    # Messages
-    msg_result = await db.execute(
-        select(PortalMessage).where(PortalMessage.booking_id == booking_id).order_by(PortalMessage.created_at))
-    for msg in msg_result.scalars().all():
-        data["messages"].append({
-            "sender": msg.sender_name, "message": msg.message,
-            "created_at": msg.created_at.isoformat() if msg.created_at else None,
-        })
-
-    # Access logs
-    log_result = await db.execute(
-        select(PortalAccessLog).where(PortalAccessLog.booking_id == booking_id)
-        .order_by(PortalAccessLog.accessed_at.desc()).limit(100))
-    for log in log_result.scalars().all():
-        data["access_logs"].append({
-            "ip": log.ip_address, "path": log.path,
-            "accessed_at": log.accessed_at.isoformat() if log.accessed_at else None,
-        })
-
-    await log_activity(db, user=user, action="rgpd_export", module="admin",
-                       entity_type="passenger_booking", entity_id=booking_id,
-                       entity_label=f"Export RGPD réservation {booking.reference}",
-                       ip_address=get_client_ip(request))
-
-    content = json.dumps(data, indent=2, ensure_ascii=False)
-    return StreamingResponse(
-        io.BytesIO(content.encode("utf-8")),
-        media_type="application/json",
-        headers={"Content-Disposition": f"attachment; filename=RGPD_export_{booking.reference}.json"},
-    )
-
-
-# ─── RGPD: RIGHT TO ERASURE (droit à l'effacement) ─────────
-@router.post("/rgpd/erase/{booking_id}", response_class=HTMLResponse)
-async def rgpd_erase_booking(
-    booking_id: int,
-    request: Request,
-    user: User = Depends(require_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """Anonymize personal data for a passenger booking (RGPD Art. 17 right to erasure).
-
-    Replaces all personal data with anonymized placeholders while preserving
-    booking structure for statistical/financial purposes.
-    """
-    from app.models.passenger import (
-        PassengerBooking, Passenger, PassengerDocument, PassengerPayment,
-        PreBoardingForm, PassengerAuditLog,
-    )
-    import os
-
-    result = await db.execute(
-        select(PassengerBooking).options(
-            selectinload(PassengerBooking.passengers).selectinload(Passenger.documents),
-            selectinload(PassengerBooking.payments),
-        ).where(PassengerBooking.id == booking_id)
-    )
-    booking = result.scalar_one_or_none()
-    if not booking:
-        raise HTTPException(404, detail="Réservation introuvable")
-
-    anon_label = f"ANONYMIZED-{booking_id}"
-
-    # Anonymize booking contact info
-    booking.contact_email = f"{anon_label}@erased.local"
-    booking.contact_phone = "ERASED"
-    booking.notes = "Données personnelles effacées (RGPD Art. 17)"
-    booking.token = f"erased-{booking_id}-{secrets.token_urlsafe(8)}"
-
-    # Anonymize each passenger
-    for pax in booking.passengers:
-        pax.first_name = "ERASED"
-        pax.last_name = anon_label
-        pax.email = f"{anon_label}@erased.local"
-        pax.phone = "ERASED"
-        pax.date_of_birth = None
-        pax.nationality = "XX"
-        pax.passport_number = "ERASED"
-        pax.emergency_contact_name = "ERASED"
-        pax.emergency_contact_phone = "ERASED"
-
-        # Delete uploaded documents (files on disk)
-        for doc in pax.documents:
-            if doc.file_path and os.path.isfile(doc.file_path):
-                try:
-                    os.remove(doc.file_path)
-                except OSError:
-                    pass
-            doc.file_path = None
-            doc.filename = "ERASED"
-            doc.status = "missing"
-
-        # Anonymize pre-boarding forms
-        form_result = await db.execute(
-            select(PreBoardingForm).where(PreBoardingForm.passenger_id == pax.id)
-        )
-        for form in form_result.scalars().all():
-            form.chronic_conditions = "ERASED"
-            form.allergies = "ERASED"
-            form.daily_medication = "ERASED"
-            form.dietary_requirements = "ERASED"
-            form.intolerances = "ERASED"
-
-    # Anonymize payment references
-    for payment in booking.payments:
-        payment.reference = f"ERASED-{payment.id}"
-        payment.notes = "ERASED"
-
-    # Delete audit logs for this booking
-    audit_result = await db.execute(
-        select(PassengerAuditLog).where(PassengerAuditLog.booking_id == booking_id)
-    )
-    for audit in audit_result.scalars().all():
-        audit.user_email = "ERASED"
-        audit.detail = "ERASED (RGPD)"
-
-    # Delete portal access logs (match by sha256 of the booking token — A2.3)
-    try:
-        from app.models.portal_access_log import PortalAccessLog
-        from app.utils.portal_security import hash_portal_token
-        access_result = await db.execute(
-            select(PortalAccessLog).where(
-                PortalAccessLog.token_hash == hash_portal_token(booking.token),
-            )
-        )
-        for log in access_result.scalars().all():
-            log.ip_address = "0.0.0.0"
-            log.user_agent = "ERASED"
-    except Exception:
-        pass  # Table may not exist
-
-    await db.flush()
-    await log_activity(db, user=user, action="rgpd_erase", module="admin",
-                       entity_type="passenger_booking", entity_id=booking_id,
-                       entity_label=f"Effacement RGPD réservation {booking.reference}",
-                       ip_address=get_client_ip(request))
-
-    url = "/admin/settings?section=database"
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="", headers={"HX-Redirect": url})
     return RedirectResponse(url=url, status_code=303)

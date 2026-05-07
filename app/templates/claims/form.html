@@ -120,15 +120,6 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="fg">
-                <label>Ou Passager</label>
-                <select name="passenger_id" class="fi">
-                    <option value="">— Aucun —</option>
-                    {% for p in passengers %}
-                    <option value="{{ p.id }}">{{ p.full_name }}{% if p.booking %} — {{ p.booking.reference }}{% endif %}</option>
-                    {% endfor %}
-                </select>
-            </div>
         </div>
     </div>
 

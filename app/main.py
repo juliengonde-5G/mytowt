@@ -24,8 +24,6 @@ from app.routers.finance_router import router as finance_router
 from app.routers.crew_router import router as crew_router
 from app.routers.cargo_router import router as cargo_router, ext_router as cargo_ext_router
 from app.routers.onboard_router import router as onboard_router
-from app.routers.passenger_router import router as passenger_router
-from app.routers.passenger_ext_router import ext_router as passenger_ext_router, boarding_redirect_router
 from app.routers.mrv_router import router as mrv_router
 from app.routers.claim_router import router as claim_router
 from app.routers.tracking_router import router as tracking_router
@@ -229,12 +227,6 @@ app.include_router(crew_router, dependencies=[Depends(require_permission("crew",
 app.include_router(cargo_router, dependencies=[Depends(require_permission("cargo", "C"))])
 app.include_router(cargo_ext_router)
 app.include_router(onboard_router, dependencies=[Depends(require_permission("captain", "C"))])
-# Passengers module — disabled post-TOWT liquidation.
-# Code preserved; reactivate by setting PASSENGERS_ENABLED=true in .env.
-if settings.PASSENGERS_ENABLED:
-    app.include_router(passenger_router, dependencies=[Depends(require_permission("passengers", "C"))])
-    app.include_router(passenger_ext_router)
-    app.include_router(boarding_redirect_router)  # Legacy /boarding/{token} → /passenger/{token}
 app.include_router(mrv_router, dependencies=[Depends(require_permission("mrv", "C"))])
 app.include_router(claim_router, dependencies=[Depends(require_permission("captain", "C"))])
 app.include_router(pricing_router, dependencies=[Depends(require_permission("commercial", "C"))])
