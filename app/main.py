@@ -2,9 +2,10 @@ import logging
 import os
 import stat
 
+from pathlib import Path
 from fastapi import FastAPI, Request, Depends
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse, PlainTextResponse, JSONResponse
+from fastapi.responses import RedirectResponse, PlainTextResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
@@ -208,6 +209,21 @@ async def security_txt():
         "Expires: 2027-03-09T12:00:00.000Z\n"
         "Preferred-Languages: fr, en\n"
     )
+
+
+# ── Internal docs (workflow diagram) — authenticated users only ──
+from app.auth import get_current_user
+_DOCS_DIR = Path(__file__).resolve().parent.parent / "docs"
+
+
+@app.get("/internal/workflows", include_in_schema=False)
+async def internal_workflows(user=Depends(get_current_user)):
+    return FileResponse(_DOCS_DIR / "workflows.html", media_type="text/html")
+
+
+@app.get("/internal/flows.json", include_in_schema=False)
+async def internal_flows_json(user=Depends(get_current_user)):
+    return FileResponse(_DOCS_DIR / "flows.json", media_type="application/json")
 
 
 from app.permissions import require_permission
